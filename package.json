@@ -1,0 +1,7 @@
+{
+  "name": "voice-tower-cantonese-roguelike",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "粤语语音驱动的移动端爬塔 Roguelike 可玩原型"
+}

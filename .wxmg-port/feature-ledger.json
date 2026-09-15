@@ -1,0 +1,42 @@
+{
+  "task": "声震龙楼 微信小游戏移植（方案D：逻辑零改动+Canvas场景层）",
+  "decided": {
+    "route": "D",
+    "entity": "个人主体",
+    "voice_primary": "WechatSI zh_HK（待P2探针证实）",
+    "voice_fallback": "RecorderManager+服务端ASR"
+  },
+  "items": [
+    {
+      "id": "S0",
+      "name": "预飞探针：P1首屏/P2插件粤语识别/P3存档",
+      "passes": "partial: P1 canvas PASS / P3 storage PASS / P2 voice blocked (tourist appid cannot use plugins; needs real personal minigame appid + WechatSI added in MP console)"
+    },
+    {
+      "id": "S1",
+      "name": "工程骨架：minigame/ + 逻辑三文件进主包 + wx存储后端",
+      "passes": "yes: logic files into minigame/js + wx entry + native wx storage + onHide autosave"
+    },
+    {
+      "id": "S2",
+      "name": "Canvas渲染层：八屏状态机+热区+DPR适配",
+      "passes": "in-progress: 8-screen canvas renderer + hit regions written (212 lines), syntax OK, awaiting simulator visual check"
+    },
+    {
+      "id": "S3",
+      "name": "语音适配层：WechatSI adapter + scoring复用",
+      "passes": "no"
+    },
+    {
+      "id": "S4",
+      "name": "存档与生命周期：onHide存档/onShow恢复",
+      "passes": "no"
+    },
+    {
+      "id": "S5",
+      "name": "联调：wechat-dev MCP自动化验收+真机预览",
+      "passes": "no"
+    }
+  ],
+  "rules": "只许改 passes 字段；每会话只做一个 item；开工先跑 node --test（在 D:/work/wechatgame）确认 9/9"
+}

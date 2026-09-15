@@ -1,0 +1,6 @@
+{
+  "compileType": "game",
+  "appid": "touristappid",
+  "projectname": "shengzhenlonglou-stage0",
+  "setting": { "es6": true, "urlCheck": false }
+}

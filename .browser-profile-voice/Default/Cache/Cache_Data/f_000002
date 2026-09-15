@@ -1,0 +1,775 @@
+import {
+  BOSS,
+  ELITES,
+  ENEMIES,
+  EVENTS,
+  FLOOR_NAMES,
+  ITEMS,
+  MAX_FLOOR,
+  RELICS,
+  SKILLS,
+  clone,
+  getSkill
+} from "./data.js";
+
+const STARTER_DECK = [
+  "ding-ngang-soeng",
+  "ding-ngang-soeng",
+  "m-sai-geng",
+  "hou-sai-lei",
+  "zap-saang-laa"
+];
+
+const NODE_META = {
+  battle: { label: "街巷战", mark: "战", tone: "red", hint: "遭遇随机敌人" },
+  event: { label: "奇遇", mark: "遇", tone: "blue", hint: "选择会改变旅程" },
+  rest: { label: "歇脚处", mark: "歇", tone: "green", hint: "疗伤或练声" },
+  shop: { label: "夜市", mark: "市", tone: "gold", hint: "购买技能和道具" },
+  elite: { label: "强敌关", mark: "险", tone: "violet", hint: "高风险，必得遗物" },
+  boss: { label: "声煞之巅", mark: "首", tone: "gold", hint: "第十层最终试炼" }
+};
+
+function makeSeed() {
+  const time = Date.now() >>> 0;
+  const random = Math.floor(Math.random() * 0xffffffff) >>> 0;
+  return (time ^ random) || 0x6d2b79f5;
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function unique(list) {
+  return [...new Set(list)];
+}
+
+export class GameEngine {
+  constructor(initialState = null) {
+    this.listeners = new Set();
+    this.state = initialState || this.createTitleState();
+  }
+
+  createTitleState() {
+    return {
+      version: 2,
+      phase: "title",
+      seed: 0,
+      rngState: 0,
+      floor: 0,
+      maxFloor: MAX_FLOOR,
+      floorOptions: [],
+      player: null,
+      combat: null,
+      event: null,
+      shop: null,
+      reward: null,
+      notice: null,
+      stats: null
+    };
+  }
+
+  createRunState(seed = makeSeed()) {
+    return {
+      version: 2,
+      phase: "tower",
+      seed,
+      rngState: seed,
+      floor: 0,
+      maxFloor: MAX_FLOOR,
+      floorOptions: [],
+      player: {
+        hp: 72,
+        maxHp: 72,
+        armor: 0,
+        strength: 0,
+        voiceMastery: 0,
+        gold: 26,
+        deck: [...STARTER_DECK],
+        relics: [],
+        items: ["throat-candy"],
+        buffs: []
+      },
+      combat: null,
+      event: null,
+      shop: null,
+      reward: null,
+      notice: "旅程开始。选择第一道门。",
+      stats: {
+        startedAt: new Date().toISOString(),
+        enemiesDefeated: 0,
+        elitesDefeated: 0,
+        voiceAttempts: 0,
+        voiceScoreTotal: 0,
+        bestVoiceScore: 0,
+        damageDealt: 0,
+        damageTaken: 0,
+        skillsLearned: 0
+      }
+    };
+  }
+
+  subscribe(listener) {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  emit(options = {}) {
+    for (const listener of this.listeners) {
+      listener(this.state, options);
+    }
+  }
+
+  startNew(seed) {
+    this.state = this.createRunState(seed);
+    this.prepareFloorOptions();
+    this.emit({ save: true });
+  }
+
+  load(state) {
+    this.state = clone(state);
+    this.state.notice = "已恢复上次进度。";
+    this.emit({ save: false });
+  }
+
+  showTitle() {
+    this.state = this.createTitleState();
+    this.emit({ save: false });
+  }
+
+  random() {
+    this.state.rngState = (Math.imul(this.state.rngState, 1664525) + 1013904223) >>> 0;
+    return this.state.rngState / 4294967296;
+  }
+
+  randomInt(min, max) {
+    return Math.floor(this.random() * (max - min + 1)) + min;
+  }
+
+  pick(list) {
+    return list[Math.floor(this.random() * list.length)];
+  }
+
+  pickDistinct(list, count, excluded = []) {
+    const pool = list.filter((item) => !excluded.includes(item.id));
+    const result = [];
+    while (pool.length && result.length < count) {
+      const index = Math.floor(this.random() * pool.length);
+      result.push(pool.splice(index, 1)[0]);
+    }
+    return result;
+  }
+
+  hasRelic(id) {
+    return this.state.player.relics.includes(id);
+  }
+
+  prepareFloorOptions() {
+    const nextFloor = this.state.floor + 1;
+    if (nextFloor > MAX_FLOOR) return;
+
+    let types;
+    if (nextFloor === MAX_FLOOR) {
+      types = ["boss"];
+    } else if (nextFloor === 5) {
+      types = ["elite"];
+    } else {
+      const pool = nextFloor <= 2
+        ? ["battle", "battle", "event", "rest"]
+        : ["battle", "battle", "battle", "event", "event", "rest", "shop"];
+      const first = this.pick(pool);
+      const secondPool = pool.filter((type) => type !== first);
+      const second = this.pick(secondPool.length ? secondPool : pool);
+      types = unique([first, second]);
+      if (types.length === 1) types.push(first === "battle" ? "event" : "battle");
+    }
+
+    this.state.floorOptions = types.map((type, index) => ({
+      id: `${nextFloor}-${type}-${index}`,
+      floor: nextFloor,
+      type,
+      ...NODE_META[type]
+    }));
+  }
+
+  chooseFloorOption(optionId) {
+    if (this.state.phase !== "tower") return;
+    const option = this.state.floorOptions.find((entry) => entry.id === optionId);
+    if (!option) return;
+
+    this.state.floor = option.floor;
+    this.state.floorOptions = [];
+    this.state.notice = null;
+
+    if (option.type === "battle" || option.type === "elite" || option.type === "boss") {
+      this.startCombat(option.type);
+    } else if (option.type === "event") {
+      this.startEvent();
+    } else if (option.type === "rest") {
+      this.state.phase = "rest";
+    } else if (option.type === "shop") {
+      this.startShop();
+    }
+    this.emit({ save: true });
+  }
+
+  scaledEnemy(source, kind) {
+    const enemy = clone(source);
+    const hpScale = 1 + Math.max(0, this.state.floor - 1) * (kind === "boss" ? 0.035 : 0.075);
+    const attackScale = 1 + Math.max(0, this.state.floor - 1) * 0.055;
+    enemy.maxHp = Math.round(enemy.hp * hpScale);
+    enemy.hp = enemy.maxHp;
+    enemy.baseAttack = Math.max(1, Math.round(enemy.attack * attackScale));
+    enemy.armor = 0;
+    enemy.weakness = 0;
+    enemy.vulnerable = 0;
+    return enemy;
+  }
+
+  startCombat(kind = "battle") {
+    let blueprint;
+    if (kind === "boss") {
+      blueprint = BOSS;
+    } else if (kind === "elite") {
+      blueprint = this.pick(ELITES);
+    } else {
+      const unlocked = ENEMIES.slice(0, clamp(2 + Math.floor(this.state.floor / 2), 2, ENEMIES.length));
+      blueprint = this.pick(unlocked);
+    }
+
+    const openingStrength = this.hasRelic("old-radio") ? 1 : 0;
+    this.state.phase = "battle";
+    this.state.player.armor = 0;
+    this.state.player.strength = openingStrength;
+    this.state.combat = {
+      kind,
+      enemy: this.scaledEnemy(blueprint, kind),
+      turn: 1,
+      energy: 3,
+      hand: this.drawHand(3),
+      log: [`${blueprint.name} 挡住去路。`],
+      firstAttack: true,
+      teaTriggered: false,
+      voiceBoost: 0,
+      scoreHistory: [],
+      lastResult: null,
+      locked: false
+    };
+  }
+
+  drawHand(count, omitIds = []) {
+    const deck = this.state.player.deck.map((id, index) => ({ id, index }));
+    const available = deck.filter((card) => !omitIds.includes(card.index));
+    const hand = [];
+    while (available.length && hand.length < count) {
+      const index = Math.floor(this.random() * available.length);
+      hand.push(available.splice(index, 1)[0]);
+    }
+    return hand;
+  }
+
+  currentIntent() {
+    if (!this.state.combat) return null;
+    const { enemy, turn } = this.state.combat;
+    return enemy.pattern[(turn - 1) % enemy.pattern.length];
+  }
+
+  getIntentPreview() {
+    const intent = this.currentIntent();
+    const combat = this.state.combat;
+    if (!intent || !combat) return null;
+    const attack = Math.max(0, Math.round(combat.enemy.baseAttack * (intent.amount || 0)));
+    const adjusted = combat.enemy.weakness > 0 ? Math.round(attack * 0.65) : attack;
+    if (intent.type === "attack") {
+      return { label: intent.label, detail: `${adjusted}${intent.hits ? ` × ${intent.hits}` : ""} 伤害`, type: "attack" };
+    }
+    if (intent.type === "guardAttack") {
+      return { label: intent.label, detail: `${adjusted} 伤害 / ${intent.guard} 护甲`, type: "mixed" };
+    }
+    if (intent.type === "guard") {
+      return { label: intent.label, detail: `${intent.guard} 护甲`, type: "guard" };
+    }
+    if (intent.type === "silence") {
+      return { label: intent.label, detail: `${adjusted} 伤害 / 扰乱发音`, type: "debuff" };
+    }
+    return { label: intent.label, detail: "施加发音干扰", type: "debuff" };
+  }
+
+  canUseSkill(skillId) {
+    const skill = getSkill(skillId);
+    return Boolean(
+      this.state.phase === "battle" &&
+      this.state.combat &&
+      !this.state.combat.locked &&
+      skill &&
+      this.state.combat.energy >= skill.cost
+    );
+  }
+
+  getScoreTier(score) {
+    if (score >= 85) return { key: "master", label: "正音", multiplier: 1.32 };
+    if (score >= 65) return { key: "clear", label: "清晰", multiplier: 1 };
+    if (score >= 40) return { key: "learning", label: "入门", multiplier: 0.78 };
+    return { key: "shaky", label: "未稳", multiplier: 0.52 };
+  }
+
+  resolveSkill(skillId, rawScore, voiceMeta = {}) {
+    if (!this.canUseSkill(skillId)) return null;
+    const skill = getSkill(skillId);
+    const combat = this.state.combat;
+    const player = this.state.player;
+
+    let bonus = player.voiceMastery + combat.voiceBoost;
+    if (this.hasRelic("metronome")) bonus += 5;
+    const interference = player.buffs.find((buff) => buff.id === "voice-interference")?.value || 0;
+    const score = clamp(Math.round(rawScore + bonus - interference), 0, 100);
+    combat.voiceBoost = 0;
+    player.buffs = player.buffs.filter((buff) => buff.id !== "voice-interference");
+
+    const tier = this.getScoreTier(score);
+    combat.energy -= skill.cost;
+    combat.scoreHistory.push(score);
+    this.state.stats.voiceAttempts += 1;
+    this.state.stats.voiceScoreTotal += score;
+    this.state.stats.bestVoiceScore = Math.max(this.state.stats.bestVoiceScore, score);
+
+    const scaledPower = Math.max(1, Math.round(skill.power * tier.multiplier));
+    const messages = [`你说出「${skill.phrase}」：${tier.label} ${score} 分。`];
+    let damageDone = 0;
+    let armorGained = 0;
+    let healing = 0;
+
+    const dealDamage = (base, options = {}) => {
+      let damage = Math.max(0, base + player.strength);
+      if (combat.firstAttack && this.hasRelic("lion-ribbon")) {
+        damage += 5;
+        messages.push("醒狮红绸令首次攻击 +5。" );
+      }
+      if (combat.enemy.vulnerable > 0) damage = Math.round(damage * 1.25);
+      const bypassArmor = options.bypassArmor || false;
+      const blocked = bypassArmor ? 0 : Math.min(combat.enemy.armor, damage);
+      if (!bypassArmor) combat.enemy.armor -= blocked;
+      const actual = Math.max(0, damage - blocked);
+      combat.enemy.hp = Math.max(0, combat.enemy.hp - actual);
+      combat.firstAttack = false;
+      damageDone += actual;
+      this.state.stats.damageDealt += actual;
+      return actual;
+    };
+
+    const gainArmor = (amount) => {
+      player.armor += amount;
+      armorGained += amount;
+    };
+
+    if (skill.type === "attack") {
+      const bypass = skill.id === "dim-gwo-luk-ze" && score >= 65;
+      dealDamage(scaledPower, { bypassArmor: bypass });
+      if (skill.id === "ding-ngang-soeng" && score >= 85) gainArmor(3);
+    } else if (skill.type === "multi") {
+      for (let i = 0; i < skill.hits; i += 1) dealDamage(scaledPower);
+    } else if (skill.type === "guard") {
+      gainArmor(scaledPower + (score >= 65 && skill.id === "m-sai-geng" ? 2 : 0));
+      if (skill.id === "dak-haan-jam-caa") healing += this.healPlayer(3);
+    } else if (skill.type === "hybrid") {
+      dealDamage(scaledPower);
+      gainArmor(scaledPower);
+    } else if (skill.type === "cleanse") {
+      gainArmor(scaledPower);
+      const before = player.buffs.length;
+      player.buffs = player.buffs.filter((buff) => !["voice-interference", "vulnerable"].includes(buff.id));
+      if (player.buffs.length < before) messages.push("发音干扰已清除。" );
+    } else if (skill.type === "strength") {
+      const amount = Math.max(1, Math.round(skill.power * (0.7 + tier.multiplier / 2)));
+      player.strength += amount;
+      messages.push(`声势提升 ${amount}。`);
+    } else if (skill.type === "tempo") {
+      gainArmor(scaledPower);
+      combat.hand = this.drawHand(3);
+      messages.push("你借势换了一组技能。" );
+    } else if (skill.type === "heal") {
+      healing += this.healPlayer(scaledPower);
+      gainArmor(5);
+    } else if (skill.type === "weaken") {
+      dealDamage(scaledPower);
+      combat.enemy.weakness = Math.max(combat.enemy.weakness, 2);
+      messages.push("敌人进入虚弱状态 2 回合。" );
+    }
+
+    if (score >= 85 && this.hasRelic("tea-cup") && !combat.teaTriggered) {
+      const relicHealing = this.healPlayer(2);
+      healing += relicHealing;
+      combat.teaTriggered = true;
+      messages.push("粤韵茶盅回响，回复 2 点生命。" );
+    }
+
+    if (damageDone) messages.push(`造成 ${damageDone} 点伤害。`);
+    if (armorGained) messages.push(`获得 ${armorGained} 点护甲。`);
+    if (healing) messages.push(`回复 ${healing} 点生命。`);
+
+    combat.lastResult = {
+      skillId,
+      rawScore,
+      score,
+      tier,
+      damage: damageDone,
+      armor: armorGained,
+      healing,
+      transcript: voiceMeta.transcript || "",
+      confidence: voiceMeta.confidence ?? null,
+      similarity: voiceMeta.similarity ?? null,
+      source: voiceMeta.source || "unknown"
+    };
+    combat.log.unshift(...messages.reverse());
+    combat.log = combat.log.slice(0, 10);
+
+    if (combat.enemy.hp <= 0) {
+      this.finishCombatVictory();
+    }
+    this.emit({ save: true, effect: damageDone ? "hit" : "skill" });
+    return combat.lastResult;
+  }
+
+  healPlayer(amount) {
+    const player = this.state.player;
+    const before = player.hp;
+    player.hp = Math.min(player.maxHp, player.hp + Math.max(0, amount));
+    return player.hp - before;
+  }
+
+  applyEnemyHit(amount) {
+    const player = this.state.player;
+    let damage = amount;
+    const vulnerable = player.buffs.find((buff) => buff.id === "vulnerable");
+    if (vulnerable) damage = Math.round(damage * 1.25);
+    const blocked = Math.min(player.armor, damage);
+    player.armor -= blocked;
+    const actual = Math.max(0, damage - blocked);
+    player.hp = Math.max(0, player.hp - actual);
+    this.state.stats.damageTaken += actual;
+    return { actual, blocked };
+  }
+
+  endTurn() {
+    if (this.state.phase !== "battle" || !this.state.combat || this.state.combat.locked) return;
+    const combat = this.state.combat;
+    const player = this.state.player;
+    const enemy = combat.enemy;
+    const intent = this.currentIntent();
+    combat.locked = true;
+
+    const messages = [];
+    const baseAttack = Math.max(1, Math.round(enemy.baseAttack * (intent.amount || 0)));
+    const attack = enemy.weakness > 0 ? Math.max(1, Math.round(baseAttack * 0.65)) : baseAttack;
+
+    if (intent.type === "attack") {
+      let total = 0;
+      let blocked = 0;
+      const hits = intent.hits || 1;
+      for (let i = 0; i < hits; i += 1) {
+        const result = this.applyEnemyHit(attack);
+        total += result.actual;
+        blocked += result.blocked;
+      }
+      messages.push(`${enemy.name}施展「${intent.label}」，造成 ${total} 点伤害${blocked ? `，护甲抵消 ${blocked}` : ""}。`);
+    } else if (intent.type === "guardAttack") {
+      const result = this.applyEnemyHit(attack);
+      enemy.armor += intent.guard;
+      messages.push(`${enemy.name}施展「${intent.label}」，造成 ${result.actual} 点伤害并获得 ${intent.guard} 点护甲。`);
+    } else if (intent.type === "guard") {
+      enemy.armor += intent.guard;
+      messages.push(`${enemy.name}施展「${intent.label}」，获得 ${intent.guard} 点护甲。`);
+    } else if (intent.type === "debuff") {
+      const penalty = 7 * (intent.amount || 1);
+      player.buffs = player.buffs.filter((buff) => buff.id !== "voice-interference");
+      player.buffs.push({ id: "voice-interference", name: "错调干扰", value: penalty, turns: 1 });
+      messages.push(`${enemy.name}施展「${intent.label}」，下次语音得分 -${penalty}。`);
+    } else if (intent.type === "silence") {
+      const result = this.applyEnemyHit(attack);
+      player.buffs = player.buffs.filter((buff) => buff.id !== "voice-interference");
+      player.buffs.push({ id: "voice-interference", name: "吞音", value: 10, turns: 1 });
+      messages.push(`${enemy.name}施展「${intent.label}」，造成 ${result.actual} 点伤害；下次语音得分 -10。`);
+    }
+
+    if (enemy.weakness > 0) enemy.weakness -= 1;
+    if (enemy.vulnerable > 0) enemy.vulnerable -= 1;
+    combat.log.unshift(...messages);
+    combat.log = combat.log.slice(0, 10);
+
+    if (player.hp <= 0) {
+      this.state.phase = "defeat";
+      combat.locked = false;
+      this.emit({ save: true, effect: "defeat" });
+      return;
+    }
+
+    combat.turn += 1;
+    combat.energy = 3;
+    player.armor = 0;
+    combat.teaTriggered = false;
+    combat.hand = this.drawHand(3);
+    combat.locked = false;
+    this.emit({ save: true, effect: "enemy" });
+  }
+
+  finishCombatVictory() {
+    const combat = this.state.combat;
+    const isBoss = combat.kind === "boss";
+    const isElite = combat.kind === "elite";
+    this.state.stats.enemiesDefeated += 1;
+    if (isElite) this.state.stats.elitesDefeated += 1;
+
+    if (isBoss) {
+      this.state.phase = "victory";
+      this.state.reward = null;
+      return;
+    }
+
+    const gold = this.randomInt(10, 16) + (isElite ? 10 : 0);
+    this.state.player.gold += gold;
+    const choices = this.pickDistinct(SKILLS, 3).map((skill) => skill.id);
+    let bonus = null;
+
+    if (isElite) {
+      const relic = this.pickDistinct(RELICS, 1, this.state.player.relics)[0];
+      if (relic) {
+        this.state.player.relics.push(relic.id);
+        bonus = { type: "relic", id: relic.id };
+      }
+    } else if (this.random() < 0.35) {
+      const item = this.pick(ITEMS);
+      this.state.player.items.push(item.id);
+      bonus = { type: "item", id: item.id };
+    }
+
+    this.state.reward = { gold, choices, bonus };
+    this.state.phase = "reward";
+  }
+
+  chooseReward(skillId = null) {
+    if (this.state.phase !== "reward") return;
+    if (skillId && this.state.reward.choices.includes(skillId)) {
+      this.state.player.deck.push(skillId);
+      this.state.stats.skillsLearned += 1;
+      this.state.notice = `学会了「${getSkill(skillId).name}」。`;
+    } else {
+      this.state.notice = "你保留现有招式，继续登楼。";
+    }
+    this.state.reward = null;
+    this.state.combat = null;
+    this.state.phase = "tower";
+    this.prepareFloorOptions();
+    this.emit({ save: true });
+  }
+
+  startEvent() {
+    this.state.phase = "event";
+    this.state.event = {
+      ...clone(this.pick(EVENTS)),
+      resolved: false,
+      outcome: ""
+    };
+    if (this.hasRelic("jade-token")) {
+      this.state.player.gold += 6;
+      this.state.event.outcome = "街坊玉牌在门前一亮，附近街坊送来 6 两。";
+    }
+  }
+
+  resolveEvent(choiceId) {
+    const event = this.state.event;
+    if (this.state.phase !== "event" || !event || event.resolved) return;
+    const choice = event.choices.find((entry) => entry.id === choiceId);
+    if (!choice) return;
+
+    const player = this.state.player;
+    let outcome = "";
+    if (choice.action === "heal") {
+      const healed = this.healPlayer(choice.value);
+      outcome = `茶气入喉，回复了 ${healed} 点生命。`;
+    } else if (choice.action === "buySkill") {
+      if (player.gold >= choice.value) {
+        player.gold -= choice.value;
+        const learned = this.pick(SKILLS);
+        player.deck.push(learned.id);
+        this.state.stats.skillsLearned += 1;
+        outcome = `你花了 ${choice.value} 两，学会「${learned.name}」。`;
+      } else {
+        outcome = "钱袋太轻，掌柜只送你一杯清茶。";
+        this.healPlayer(4);
+      }
+    } else if (choice.action === "quizCorrect") {
+      player.voiceMastery = Math.min(15, player.voiceMastery + 2);
+      outcome = "答对了。永久声韵加成 +2。";
+    } else if (choice.action === "quizWrong") {
+      player.hp = Math.max(1, player.hp - choice.value);
+      outcome = `字墙震出一道回声，你失去 ${choice.value} 点生命。正确答案是“没有问题”。`;
+    } else if (choice.action === "maxHp") {
+      player.maxHp += choice.value;
+      player.hp += choice.value;
+      outcome = `呼吸更稳，最大生命提高 ${choice.value}。`;
+    } else if (choice.action === "gold") {
+      player.gold += choice.value;
+      outcome = `整理完唱片，你获得 ${choice.value} 两。`;
+    } else if (choice.action === "relicForHp") {
+      player.hp = Math.max(1, player.hp - choice.value);
+      const relic = this.pickDistinct(RELICS, 1, player.relics)[0];
+      if (relic) {
+        player.relics.push(relic.id);
+        outcome = `手上磨出血泡，失去 ${choice.value} 点生命；老师傅送你「${relic.name}」。`;
+      } else {
+        player.gold += 24;
+        outcome = `你已集齐这里的旧物，老师傅改送 24 两。`;
+      }
+    } else if (choice.action === "item") {
+      const item = this.pick(ITEMS);
+      player.items.push(item.id);
+      outcome = `雨停时，你在檐角发现「${item.name}」。`;
+    } else if (choice.action === "gamble") {
+      if (this.random() < 0.5) {
+        player.gold += choice.value;
+        outcome = `近道尽头藏着钱箱，你获得 ${choice.value} 两。`;
+      } else {
+        const damage = 11;
+        player.hp = Math.max(1, player.hp - damage);
+        outcome = `黑巷里机关骤响，你失去 ${damage} 点生命。`;
+      }
+    }
+
+    event.resolved = true;
+    event.outcome = [event.outcome, outcome].filter(Boolean).join(" ");
+    this.emit({ save: true });
+  }
+
+  leaveEvent() {
+    if (this.state.phase !== "event" || !this.state.event?.resolved) return;
+    this.state.event = null;
+    this.state.phase = "tower";
+    this.prepareFloorOptions();
+    this.emit({ save: true });
+  }
+
+  rest(action) {
+    if (this.state.phase !== "rest") return;
+    const player = this.state.player;
+    if (action === "heal") {
+      const amount = Math.ceil(player.maxHp * 0.3);
+      const healed = this.healPlayer(amount);
+      this.state.notice = `歇息完毕，回复 ${healed} 点生命。`;
+    } else if (action === "practice") {
+      player.voiceMastery = Math.min(15, player.voiceMastery + 3);
+      this.state.notice = "你对着空楼练声，永久声韵加成 +3。";
+    } else if (action === "fortify") {
+      player.maxHp += 5;
+      player.hp += 5;
+      this.state.notice = "调匀气息，最大生命 +5。";
+    }
+    this.state.phase = "tower";
+    this.prepareFloorOptions();
+    this.emit({ save: true });
+  }
+
+  startShop() {
+    const skillOffers = this.pickDistinct(SKILLS, 2).map((skill, index) => ({
+      key: `skill-${index}`,
+      type: "skill",
+      id: skill.id,
+      price: skill.rarity === "rare" ? 34 : 22,
+      sold: false
+    }));
+    const item = this.pick(ITEMS);
+    const relic = this.pickDistinct(RELICS, 1, this.state.player.relics)[0];
+    const offers = [
+      ...skillOffers,
+      { key: "item-0", type: "item", id: item.id, price: 18, sold: false }
+    ];
+    if (relic) offers.push({ key: "relic-0", type: "relic", id: relic.id, price: 52, sold: false });
+    this.state.shop = { offers };
+    this.state.phase = "shop";
+  }
+
+  buyOffer(key) {
+    if (this.state.phase !== "shop") return;
+    const offer = this.state.shop.offers.find((entry) => entry.key === key);
+    if (!offer || offer.sold) return;
+    if (this.state.player.gold < offer.price) {
+      this.state.notice = "银两不足。";
+      this.emit({ save: false });
+      return;
+    }
+
+    this.state.player.gold -= offer.price;
+    offer.sold = true;
+    if (offer.type === "skill") {
+      this.state.player.deck.push(offer.id);
+      this.state.stats.skillsLearned += 1;
+    } else if (offer.type === "item") {
+      this.state.player.items.push(offer.id);
+    } else if (offer.type === "relic") {
+      this.state.player.relics.push(offer.id);
+    }
+    this.state.notice = "交易完成。";
+    this.emit({ save: true });
+  }
+
+  leaveShop() {
+    if (this.state.phase !== "shop") return;
+    this.state.shop = null;
+    this.state.phase = "tower";
+    this.prepareFloorOptions();
+    this.emit({ save: true });
+  }
+
+  useItem(index) {
+    const player = this.state.player;
+    const itemId = player.items[index];
+    const item = ITEMS.find((entry) => entry.id === itemId);
+    if (!item) return;
+
+    if (item.effect === "heal") {
+      const healed = this.healPlayer(item.power);
+      this.state.notice = `使用「${item.name}」，回复 ${healed} 点生命。`;
+    } else if (item.effect === "voiceBoost") {
+      if (this.state.phase !== "battle") {
+        this.state.notice = "喉糖要在战斗中使用。";
+        this.emit({ save: false });
+        return;
+      }
+      this.state.combat.voiceBoost += item.power;
+      this.state.notice = `下一次语音判定 +${item.power}。`;
+    } else if (item.effect === "weakenEnemy") {
+      if (this.state.phase !== "battle") {
+        this.state.notice = "铜锣要在战斗中使用。";
+        this.emit({ save: false });
+        return;
+      }
+      this.state.combat.enemy.weakness = Math.max(this.state.combat.enemy.weakness, item.power);
+      this.state.notice = "锣声扰乱敌人，它的下一轮攻击减弱。";
+    }
+
+    player.items.splice(index, 1);
+    this.emit({ save: true, effect: "item" });
+  }
+
+  getAverageVoiceScore() {
+    const stats = this.state.stats;
+    if (!stats || !stats.voiceAttempts) return 0;
+    return Math.round(stats.voiceScoreTotal / stats.voiceAttempts);
+  }
+
+  getFloorName(floor = this.state.floor) {
+    return FLOOR_NAMES[Math.max(0, floor - 1)] || "塔门";
+  }
+
+  getRunSummary() {
+    return {
+      floor: this.state.floor,
+      enemies: this.state.stats?.enemiesDefeated || 0,
+      elites: this.state.stats?.elitesDefeated || 0,
+      averageScore: this.getAverageVoiceScore(),
+      bestScore: this.state.stats?.bestVoiceScore || 0,
+      damage: this.state.stats?.damageDealt || 0,
+      skills: this.state.player?.deck.length || 0
+    };
+  }
+}
+
+export { NODE_META, clamp };
