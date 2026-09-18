@@ -1,7 +1,8 @@
 # 《声震龙楼》v2.0 · Web 闯关游戏完整重构与扩展方案
 
 > 版本：v1.0（2026-09-18） · 状态：**已批准（P0–P3 / Cloudflare Pages / 保底即玩自愿下载）**
-> 进度：✅ P0 完成（基建重构，9/9 契约测试绿）✅ P1 完成（SenseVoice 端侧语音链 + 破阵拍 + TTS + 设置页，24/24 测试绿，已推送）→ 下一步 P2 闯关战役地图
+> 进度：✅ P0 完成（基建重构，9/9 契约测试绿）✅ P1 完成（SenseVoice 端侧语音链 + 破阵拍 + TTS + 设置页，24/24 测试绿）✅ P2 完成（闯关战役：7×15 分支地图生成 + 节点★评价 + 宝箱/问答节点 + 第一幕，68/68 测试绿，已推送）→ 下一步 P3 声调引擎 + 学习闭环
+> P2 备注：① 地图生成器 `src/core/levelgen.ts`（mulberry32 独立种子流，形状约束由 `validateActMap` 守护并被契约测试直接复用）；② 经典线性塔保留（9 黄金契约不动），战役经 `startCampaign(act, seed)` 双轨驱动，存档仍为 v2（campaign 为可选增量字段，旧档无缝继续）；③ ★跨局累计于元存档 `voice-tower-campaign-meta-v1`（同幕同种子，只升不降）；④ 浏览器层 Playwright 通关 E2E 留待 CI 环境（引擎层全程通关已由 `tests/contract/campaign.test.ts` 锁定，`__VOICE_TOWER__.startCampaign` 调试钩子已就位）。
 > 前文决策：放弃微信小游戏方向，以当前 Web 原型（`index.html` + `js/`）为基座，
 > 演化为**可发布、可离线安装、端侧 AI 驱动**的完整粤语声攻爬塔闯关游戏。
 

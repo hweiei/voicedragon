@@ -2107,3 +2107,208 @@ body.reduce-motion *::after {
   transition-duration: 0.01ms !important;
   scroll-behavior: auto !important;
 }
+
+/* ─── P2 战役：分支地图与问答节点 ─────────────────────────────────────────── */
+
+.map-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 18px 0 12px;
+}
+
+.map-total {
+  display: grid;
+  justify-items: center;
+  min-width: 68px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(33, 26, 24, 0.72);
+}
+
+.map-total strong {
+  color: var(--gold-bright);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.map-total small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.map-scroll {
+  max-height: min(62vh, 640px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: radial-gradient(circle at 50% 0%, rgba(214, 169, 77, 0.08), transparent 45%),
+    rgba(20, 16, 15, 0.66);
+  padding: 10px;
+}
+
+.map-canvas {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  aspect-ratio: 700 / 720;
+}
+
+.map-edges {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.map-edges line {
+  stroke: rgba(232, 209, 167, 0.16);
+  stroke-width: 3;
+}
+
+.map-edges line.lit {
+  stroke: rgba(240, 207, 131, 0.55);
+  stroke-width: 3.5;
+}
+
+.map-rows {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: repeat(15, 1fr);
+}
+
+.map-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  align-items: center;
+}
+
+.map-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-height: 0;
+}
+
+.map-node {
+  display: grid;
+  place-items: center;
+  width: clamp(30px, 6.2vw, 44px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  background: var(--ink-2);
+  color: var(--muted);
+  font-size: clamp(14px, 2.6vw, 19px);
+  cursor: default;
+  opacity: 0.55;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.map-node.is-boss {
+  width: clamp(38px, 8vw, 56px);
+  border-width: 3px;
+}
+
+.map-node.is-available {
+  opacity: 1;
+  cursor: pointer;
+  color: var(--paper);
+  border-color: var(--gold);
+  background: radial-gradient(circle at 50% 30%, rgba(214, 169, 77, 0.28), var(--ink-3) 70%);
+  animation: map-node-pulse 1.8s ease-in-out infinite;
+}
+
+.map-node.is-available:active {
+  transform: scale(0.92);
+}
+
+.map-node.is-cleared {
+  opacity: 1;
+  color: var(--gold-bright);
+  border-color: rgba(240, 207, 131, 0.65);
+  background: var(--ink-3);
+  cursor: default;
+}
+
+.map-node.tone-red.is-available {
+  border-color: var(--red);
+}
+.map-node.tone-violet.is-available {
+  border-color: var(--violet);
+}
+.map-node.tone-green.is-available {
+  border-color: var(--jade);
+}
+.map-node.tone-blue.is-available {
+  border-color: var(--cyan);
+}
+
+@keyframes map-node-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(240, 207, 131, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgba(240, 207, 131, 0);
+  }
+}
+
+.map-pips {
+  font-size: 9px;
+  line-height: 1;
+  letter-spacing: 1px;
+  color: var(--gold-bright);
+  min-height: 10px;
+  white-space: nowrap;
+}
+
+.map-pips.dim {
+  color: var(--muted);
+  font-size: 8.5px;
+  letter-spacing: 0;
+}
+
+.map-legend {
+  margin: 10px 2px calc(6px + var(--safe-bottom));
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* 问答节点 */
+
+.quiz-question {
+  font-size: 22px;
+  line-height: 1.5;
+  margin: 18px 0;
+}
+
+.quiz-option.is-correct {
+  border-color: var(--jade);
+  background: rgba(79, 154, 125, 0.16);
+}
+
+.quiz-option.is-correct > span:last-child {
+  color: #8fd4ae;
+}
+
+.quiz-option.is-wrong {
+  border-color: var(--danger);
+  background: rgba(230, 94, 85, 0.12);
+}
+
+.quiz-option.is-wrong > span:last-child {
+  color: var(--danger);
+}
+
+.quiz-option:disabled {
+  cursor: default;
+}

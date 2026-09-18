@@ -18,7 +18,9 @@ import type { ModelStatus } from "../adapters/voice/sensevoice/model-store";
 import type { DownloadProgress } from "../adapters/voice/sensevoice/model-store";
 import { ITEMS, RELICS, getSkill } from "../core/data";
 import type { Skill } from "../core/data";
+import { NODE_META } from "../core/engine";
 import type { EmitOptions, GameEngine, GameState } from "../core/engine";
+import type { ActNode } from "../core/levelgen";
 import { scoreLabel, scorePronunciation } from "../core/scoring";
 import { VocalQte } from "./qte";
 
@@ -129,6 +131,7 @@ function titleTemplate(): string {
       <div class="title-actions">
         ${resume ? `<button class="primary-button full-button" type="button" data-action="continue-run">继续登楼</button>` : ""}
         <button class="${resume ? "secondary-button" : "primary-button"} full-button" type="button" data-action="new-run">${resume ? "重新开局" : "开始登楼"}</button>
+        <button class="${resume ? "ghost-button" : "secondary-button"} full-button" type="button" data-action="new-campaign">战役 · 第一幕（7×15 分支地图）</button>
         <button class="ghost-button full-button" type="button" data-action="show-help">玩法与语音说明</button>
         <button class="ghost-button full-button" type="button" data-action="open-settings">设置 · 语音引擎</button>
         <p class="title-note">语音识别全部可选：经在线兜底引擎、可下载端侧模型（完全离线）、无声破阵拍三种方式施法。</p>
@@ -181,6 +184,123 @@ function towerTemplate(state: GameState, engine: GameEngine): string {
           <small>${escapeHtml(lesson.jyutping)} · ${escapeHtml(lesson.lesson)}</small>
         </div>
       </div>
+    </section>`;
+}
+
+// ─── P2 战役地图（7×15 分支） ─────────────────────────────────────────────────
+
+function mapNodeCell(state: GameState, node: ActNode): string {
+  const campaign = state.campaign!;
+  const meta = NODE_META[node.type];
+  const available = new Set(state.floorOptions.map((option) => option.id));
+  const isAvailable = available.has(node.id);
+  const isCleared = campaign.clearedIds.includes(node.id);
+  const stars = campaign.stars[node.id] ?? 0;
+  const classes = [
+    "map-node",
+    `tone-${meta.tone}`,
+    node.type === "boss" ? "is-boss" : "",
+    isAvailable ? "is-available" : "",
+    isCleared ? "is-cleared" : ""
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const attrs = isAvailable
+    ? `data-action="choose-floor" data-option-id="${escapeHtml(node.id)}"`
+    : "disabled";
+  const caption =
+    stars > 0
+      ? `<small class="map-pips">${"★".repeat(Math.min(3, stars))}${"☆".repeat(3 - Math.min(3, stars))}</small>`
+      : `<small class="map-pips dim">${escapeHtml(isAvailable ? meta.label : "")}</small>`;
+  return `<div class="map-cell" style="grid-column:${node.col + 1}"><button class="${classes}" type="button" ${attrs} aria-label="${escapeHtml(meta.label)} ${escapeHtml(node.id)}">${escapeHtml(meta.mark)}</button>${caption}</div>`;
+}
+
+function campaignMapTemplate(state: GameState): string {
+  const campaign = state.campaign!;
+  const map = campaign.map;
+  const cleared = new Set(campaign.clearedIds);
+  const totalStars = Object.values(campaign.stars).reduce((sum, value) => sum + value, 0);
+  const nodeIndex = new Map(map.nodes.map((node) => [node.id, node]));
+  const rowHeight = 48;
+
+  const rows: string[] = [];
+  for (let row = map.rows - 1; row >= 0; row -= 1) {
+    const cells = map.nodes
+      .filter((node) => node.row === row)
+      .sort((a, b) => a.col - b.col)
+      .map((node) => mapNodeCell(state, node))
+      .join("");
+    rows.push(`<div class="map-row">${cells}</div>`);
+  }
+
+  const edgeLines = map.edges
+    .map((edge) => {
+      const from = nodeIndex.get(edge.from)!;
+      const to = nodeIndex.get(edge.to)!;
+      const x1 = (from.col + 0.5) * (700 / map.cols);
+      const y1 = (map.rows - 1 - from.row + 0.5) * rowHeight;
+      const x2 = (to.col + 0.5) * (700 / map.cols);
+      const y2 = (map.rows - 1 - to.row + 0.5) * rowHeight;
+      return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" class="${cleared.has(edge.from) ? "lit" : ""}" />`;
+    })
+    .join("");
+
+  return `
+    <section class="screen map-screen">
+      ${hud(state)}
+      <div class="map-head">
+        <div>
+          <p class="eyebrow">第一幕 · 骑楼长街</p>
+          <h1 class="screen-title">沿分支路线登上声煞之巅</h1>
+        </div>
+        <div class="map-total"><strong>${totalStars}</strong><small>累计星辉</small></div>
+      </div>
+      ${state.notice ? `<div class="notice-strip">${escapeHtml(state.notice)}</div>` : ""}
+      <div class="map-scroll">
+        <div class="map-canvas">
+          <svg class="map-edges" viewBox="0 0 700 ${map.rows * rowHeight}" preserveAspectRatio="none" aria-hidden="true">${edgeLines}</svg>
+          <div class="map-rows">${rows.join("")}</div>
+        </div>
+      </div>
+      <p class="map-legend">战 战斗 · 遇 奇遇 · 歇 歇脚 · 市 夜市 · 险 强敌 · 宝 宝箱 · 问 问答 · 首 首领</p>
+    </section>`;
+}
+
+function quizTemplate(state: GameState): string {
+  const quiz = state.quiz!;
+  const question = quiz.questions[quiz.index];
+  const answered = quiz.selected !== null;
+  const options = question.options
+    .map((option, index) => {
+      let cls = "choice-button quiz-option";
+      let mark = "›";
+      if (answered) {
+        if (index === question.answerIndex) {
+          cls += " is-correct";
+          mark = "✓";
+        } else if (index === quiz.selected) {
+          cls += " is-wrong";
+          mark = "✗";
+        }
+      }
+      return `
+        <button class="${cls}" type="button" data-action="quiz-answer" data-option-index="${index}" ${answered ? "disabled" : ""}>
+          <span><strong>${escapeHtml(option)}</strong></span><span>${mark}</span>
+        </button>`;
+    })
+    .join("");
+  return `
+    <section class="screen story-screen">
+      ${hud(state)}
+      <p class="eyebrow">街坊问答 · 第 ${quiz.index + 1} / ${quiz.questions.length} 题 · 已答对 ${quiz.correct} 题</p>
+      <h1 class="screen-title quiz-question">${escapeHtml(question.question)}</h1>
+      <div class="choice-list">${options}</div>
+      ${
+        answered
+          ? `<div class="panel outcome-card">${escapeHtml(question.explain)}</div>
+             <button class="primary-button full-button" type="button" data-action="quiz-next">${quiz.index + 1 < quiz.questions.length ? "下一题" : "收星离开"}</button>`
+          : `<p class="screen-subtitle">答对题数即本节点星数，答错也会继续。</p>`
+      }
     </section>`;
 }
 
@@ -371,11 +491,18 @@ function rewardTemplate(state: GameState): string {
 
 function endTemplate(state: GameState, engine: GameEngine, victory: boolean): string {
   const summary = engine.getRunSummary();
+  const campaignStars = state.campaign
+    ? Object.values(state.campaign.stars).reduce((sum, value) => sum + value, 0)
+    : 0;
+  const campaignLine = state.campaign
+    ? `<p class="screen-subtitle">第一幕战役星辉累计 <strong>${campaignStars} 颗</strong>（已刻入地图，重打同一幕只会刷新最高纪录）。</p>`
+    : "";
   return `
     <section class="screen end-screen ${victory ? "victory" : "defeat"}">
       <div class="end-seal">${victory ? "胜" : "落"}</div>
-      <p class="eyebrow">${victory ? "十层尽破" : `止步第 ${summary.floor} 层`}</p>
+      <p class="eyebrow">${victory ? (state.campaign ? "第一幕通关" : "十层尽破") : `止步第 ${summary.floor} 层`}</p>
       <h1 class="screen-title">${victory ? "你的声音响彻龙楼" : "声气未绝，下次再来"}</h1>
+      ${campaignLine}
       <p class="screen-subtitle">${victory ? "九龙声煞已散。你带着一路学会的粤语短句走下天台。" : "本局路线与收获会被结算，重新开局将生成新的楼层。"}</p>
       <div class="summary-grid">
         <div class="summary-card"><strong>${summary.enemies}</strong><small>击败敌人</small></div>
@@ -415,6 +542,8 @@ export class GameUI {
   private pendingVoice: PendingVoice | null = null;
   private activeQte: VocalQte | null = null;
   private modelUnsubscribe: (() => void) | null = null;
+  private lastPhase: string | null = null;
+  private combatStartHp: number | null = null;
 
   constructor({
     engine,
@@ -462,11 +591,14 @@ export class GameUI {
     if (!button || (button as HTMLButtonElement).disabled) return;
     const action = button.dataset.action!;
     if (action === "new-run") this.confirmNewRun();
+    if (action === "new-campaign") this.engine.startCampaign();
     if (action === "continue-run") {
       const payload = loadGame();
       if (payload) this.engine.load(payload.state);
       else this.engine.startNew();
     }
+    if (action === "quiz-answer") this.engine.answerQuizOption(Number(button.dataset.optionIndex));
+    if (action === "quiz-next") this.engine.advanceQuiz();
     if (action === "show-help") this.openHelp();
     if (action === "open-settings") this.openSettings();
     if (action === "choose-floor") this.engine.chooseFloorOption(button.dataset.optionId!);
@@ -515,6 +647,12 @@ export class GameUI {
   }
 
   render(state: GameState, options: EmitOptions = {}): void {
+    // 战斗入场埋点：战役结算需要「本场开始时的生命」快照
+    if (state.phase !== this.lastPhase) {
+      this.lastPhase = state.phase;
+      if (state.phase === "battle") this.combatStartHp = state.player?.hp ?? null;
+    }
+
     const isTitle = state.phase === "title";
     this.topbar.hidden = isTitle;
     if (!isTitle) {
@@ -524,12 +662,16 @@ export class GameUI {
     }
 
     if (state.phase === "title") this.root.innerHTML = titleTemplate();
-    else if (state.phase === "tower") this.root.innerHTML = towerTemplate(state, this.engine);
+    else if (state.phase === "tower")
+      this.root.innerHTML = state.campaign
+        ? campaignMapTemplate(state)
+        : towerTemplate(state, this.engine);
     else if (state.phase === "battle") this.root.innerHTML = battleTemplate(state, this.engine);
     else if (state.phase === "event") this.root.innerHTML = eventTemplate(state);
     else if (state.phase === "rest") this.root.innerHTML = restTemplate(state);
     else if (state.phase === "shop") this.root.innerHTML = shopTemplate(state);
     else if (state.phase === "reward") this.root.innerHTML = rewardTemplate(state);
+    else if (state.phase === "quiz") this.root.innerHTML = quizTemplate(state);
     else if (state.phase === "victory") this.root.innerHTML = endTemplate(state, this.engine, true);
     else if (state.phase === "defeat") this.root.innerHTML = endTemplate(state, this.engine, false);
 

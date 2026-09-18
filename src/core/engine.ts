@@ -6,11 +6,13 @@
  * - 确定性：LCG 种子随机，同一命令流必然同一结局（测试与回放的基石）；
  * - 行为与原版逐行等价，由 tests/contract 九个契约测试守护。
  *
- * 后续演进（见 docs/REDESIGN-PLAN.md）：
- * - P2 将 prepareFloorOptions 替换为分支地图生成器（LevelMapGenerator 端口）；
- * - 命令对象化（Command）+ 事件流（GameEvent[]），支撑回放与平衡仿真。
+ * P2 演进（见 docs/REDESIGN-PLAN.md）：新增战役模式 startCampaign——
+ * 楼层选择由 LevelMapGenerator 生成的分支地图驱动（prepareFloorOptions 双轨：
+ * 无 campaign 时走原线性池，9 个黄金契约不动；有 campaign 时走地图前线）。
+ * 节点 ★ 评价（无伤/声韵≥85/限时）与宝箱/问答节点纯函数规则见 levelgen.ts。
  */
 
+import { DIFFICULTY_CURVE, QUIZ_PER_NODE, TREASURE } from "./config/balance";
 import {
   BOSS,
   ELITES,
@@ -19,12 +21,15 @@ import {
   FLOOR_NAMES,
   ITEMS,
   MAX_FLOOR,
+  QUIZ_QUESTIONS,
   RELICS,
   SKILLS,
   clone,
   getSkill
 } from "./data";
-import type { EnemyBlueprint, EnemyIntent, GameEventContent, Skill } from "./data";
+import type { EnemyBlueprint, EnemyIntent, GameEventContent, QuizQuestion, Skill } from "./data";
+import { availableNodeIds, evaluateCombatStars, generateActMap, nodeById } from "./levelgen";
+import type { ActMap, MapNodeType } from "./levelgen";
 
 export type Phase =
   | "title"
@@ -34,10 +39,12 @@ export type Phase =
   | "rest"
   | "shop"
   | "reward"
+  | "quiz"
   | "victory"
   | "defeat";
 
-export type NodeType = "battle" | "event" | "rest" | "shop" | "elite" | "boss";
+/** P2 起：节点类型全集由 levelgen 定义（新增 treasure/quiz），引擎按类型派发生成。 */
+export type NodeType = MapNodeType;
 export type CombatKind = "battle" | "elite" | "boss";
 
 export interface NodeMeta {
@@ -124,6 +131,8 @@ export interface CombatState {
   teaTriggered: boolean;
   voiceBoost: number;
   scoreHistory: number[];
+  /** 本场战斗受到的生命伤害累计（P2 无伤★评价依据；护甲抵消不计）。 */
+  damageTaken: number;
   lastResult: ResolvedSkillResult | null;
   locked: boolean;
 }
@@ -168,6 +177,27 @@ export interface RunStats {
   skillsLearned: number;
 }
 
+/** P2 战役进度（内嵌于存档 GameState；可选字段，旧版经典局不受影响）。 */
+export interface CampaignState {
+  act: number;
+  map: ActMap;
+  clearedIds: string[];
+  /** 节点 ★ 最高纪录（重打覆盖只升不降） */
+  stars: Record<string, number>;
+  /** 正在进行的战斗节点（战斗胜利结算后清空） */
+  currentNodeId: string | null;
+}
+
+/** P2 问答节点进行中状态。 */
+export interface QuizState {
+  nodeId: string;
+  questions: QuizQuestion[];
+  index: number;
+  correct: number;
+  /** 已选项下标（null=未作答）；作答后停留展示解析，advanceQuiz 推进 */
+  selected: number | null;
+}
+
 export interface GameState {
   version: 2;
   phase: Phase;
@@ -183,6 +213,8 @@ export interface GameState {
   reward: RewardState | null;
   notice: string | null;
   stats: RunStats | null;
+  campaign?: CampaignState | null;
+  quiz?: QuizState | null;
 }
 
 export interface IntentPreview {
@@ -227,7 +259,9 @@ export const NODE_META: Record<NodeType, NodeMeta> = {
   rest: { label: "歇脚处", mark: "歇", tone: "green", hint: "疗伤或练声" },
   shop: { label: "夜市", mark: "市", tone: "gold", hint: "购买技能和道具" },
   elite: { label: "强敌关", mark: "险", tone: "violet", hint: "高风险，必得遗物" },
-  boss: { label: "声煞之巅", mark: "首", tone: "gold", hint: "第十层最终试炼" }
+  boss: { label: "声煞之巅", mark: "首", tone: "gold", hint: "幕顶最终试炼" },
+  treasure: { label: "藏宝箱", mark: "宝", tone: "gold", hint: "纯收益：银两与旧物" },
+  quiz: { label: "街坊问答", mark: "问", tone: "blue", hint: "粤语常识评星" }
 };
 
 function makeSeed(): number {
@@ -267,7 +301,9 @@ export class GameEngine {
       shop: null,
       reward: null,
       notice: null,
-      stats: null
+      stats: null,
+      campaign: null,
+      quiz: null
     };
   }
 
@@ -307,7 +343,9 @@ export class GameEngine {
         damageDealt: 0,
         damageTaken: 0,
         skillsLearned: 0
-      }
+      },
+      campaign: null,
+      quiz: null
     };
   }
 
@@ -326,6 +364,26 @@ export class GameEngine {
 
   startNew(seed?: number): void {
     this.state = this.createRunState(seed);
+    this.prepareFloorOptions();
+    this.emit({ save: true });
+  }
+
+  /**
+   * P2 闯关战役：以给定种子生成第一幕分支地图并开新一局。
+   * 同一 act 种子 = 同一张地图（★最高纪录可跨局累计，由组合根注入/同步）。
+   */
+  startCampaign(act = 1, seed: number = makeSeed()): void {
+    this.state = this.createRunState();
+    const map = generateActMap(seed, act);
+    this.state.campaign = {
+      act,
+      map,
+      clearedIds: [],
+      stars: {},
+      currentNodeId: null
+    };
+    this.state.maxFloor = map.rows - 1;
+    this.state.notice = "第一幕 · 骑楼长街：从底层任意起点登楼，直取声煞之巅。";
     this.prepareFloorOptions();
     this.emit({ save: true });
   }
@@ -369,6 +427,16 @@ export class GameEngine {
   }
 
   prepareFloorOptions(): void {
+    // P2 战役轨：候选节点 = 地图前线（未清理且父节点已清理；未开局时为首行起点）
+    const campaign = this.state.campaign;
+    if (campaign) {
+      this.state.floorOptions = availableNodeIds(campaign.map, campaign.clearedIds).map((id) => {
+        const node = nodeById(campaign.map, id)!;
+        return { id: node.id, floor: node.row, type: node.type, ...NODE_META[node.type] };
+      });
+      return;
+    }
+
     const nextFloor = this.state.floor + 1;
     if (nextFloor > MAX_FLOOR) return;
 
@@ -406,6 +474,9 @@ export class GameEngine {
     this.state.floorOptions = [];
     this.state.notice = null;
 
+    // 战役：记下当前节点，节点内容完成时（战斗胜利/离开事件/歇脚/离店）标记清理
+    if (this.state.campaign) this.state.campaign.currentNodeId = option.id;
+
     if (option.type === "battle" || option.type === "elite" || option.type === "boss") {
       this.startCombat(option.type);
     } else if (option.type === "event") {
@@ -414,14 +485,88 @@ export class GameEngine {
       this.state.phase = "rest";
     } else if (option.type === "shop") {
       this.startShop();
+    } else if (option.type === "treasure") {
+      this.openTreasure(option.id);
+    } else if (option.type === "quiz") {
+      this.startQuiz(option.id);
     }
+    this.emit({ save: true });
+  }
+
+  /** P2 节点结算：标记清理 + ★纪录只升不降。 */
+  completeMapNode(nodeId: string, stars: number): void {
+    const campaign = this.state.campaign;
+    if (!campaign) return;
+    if (!campaign.clearedIds.includes(nodeId)) campaign.clearedIds.push(nodeId);
+    campaign.stars[nodeId] = Math.max(campaign.stars[nodeId] ?? 0, stars);
+    campaign.currentNodeId = null;
+  }
+
+  /** P2 宝箱节点：纯收益（银两 + 概率道具/遗物），固定 1★。 */
+  openTreasure(nodeId: string): void {
+    const player = this.state.player!;
+    const gold = this.randomInt(TREASURE.goldMin, TREASURE.goldMax);
+    player.gold += gold;
+    const finds: string[] = [`${gold} 两`];
+    if (this.random() < TREASURE.itemChance) {
+      const item = this.pick(ITEMS);
+      player.items.push(item.id);
+      finds.push(`「${item.name}」`);
+    }
+    if (this.random() < TREASURE.relicChance) {
+      const relic = this.pickDistinct(RELICS, 1, player.relics)[0];
+      if (relic) {
+        player.relics.push(relic.id);
+        finds.push(`遗物「${relic.name}」`);
+      }
+    }
+    this.completeMapNode(nodeId, 1);
+    this.state.notice = `藏宝箱开启：获得 ${finds.join("、")}。`;
+    this.state.phase = "tower";
+    this.prepareFloorOptions();
+  }
+
+  /** P2 问答节点：3 道粤语常识题，答对题数即★数。 */
+  startQuiz(nodeId: string): void {
+    const questions = this.pickDistinct(QUIZ_QUESTIONS, QUIZ_PER_NODE);
+    this.state.quiz = { nodeId, questions, index: 0, correct: 0, selected: null };
+    this.state.phase = "quiz";
+  }
+
+  answerQuizOption(optionIndex: number): void {
+    const quiz = this.state.quiz;
+    if (this.state.phase !== "quiz" || !quiz || quiz.selected !== null) return;
+    const question = quiz.questions[quiz.index];
+    quiz.selected = optionIndex;
+    if (optionIndex === question.answerIndex) quiz.correct += 1;
+    this.emit({ save: true });
+  }
+
+  advanceQuiz(): void {
+    const quiz = this.state.quiz;
+    if (this.state.phase !== "quiz" || !quiz || quiz.selected === null) return;
+    if (quiz.index + 1 < quiz.questions.length) {
+      quiz.index += 1;
+      quiz.selected = null;
+      this.emit({ save: true });
+      return;
+    }
+    const total = quiz.questions.length;
+    this.completeMapNode(quiz.nodeId, Math.max(1, Math.min(3, quiz.correct)));
+    this.state.quiz = null;
+    this.state.notice = `问答结束：答对 ${quiz.correct}/${total}，星辉已刻入地图。`;
+    this.state.phase = "tower";
+    this.prepareFloorOptions();
     this.emit({ save: true });
   }
 
   scaledEnemy(source: EnemyBlueprint, kind: CombatKind): RuntimeEnemy {
     const enemy = clone(source) as unknown as RuntimeEnemy;
-    const hpScale = 1 + Math.max(0, this.state.floor - 1) * (kind === "boss" ? 0.035 : 0.075);
-    const attackScale = 1 + Math.max(0, this.state.floor - 1) * 0.055;
+    const hpScale =
+      1 +
+      Math.max(0, this.state.floor - 1) *
+        (kind === "boss" ? DIFFICULTY_CURVE.bossHpPerFloor : DIFFICULTY_CURVE.enemyHpPerFloor);
+    const attackScale = 1 + Math.max(0, this.state.floor - 1) * DIFFICULTY_CURVE.attackPerFloor;
     enemy.maxHp = Math.round(enemy.hp * hpScale);
     enemy.hp = enemy.maxHp;
     enemy.baseAttack = Math.max(1, Math.round(enemy.attack * attackScale));
@@ -461,6 +606,7 @@ export class GameEngine {
       teaTriggered: false,
       voiceBoost: 0,
       scoreHistory: [],
+      damageTaken: 0,
       lastResult: null,
       locked: false
     };
@@ -671,6 +817,7 @@ export class GameEngine {
     const actual = Math.max(0, damage - blocked);
     player.hp = Math.max(0, player.hp - actual);
     this.state.stats!.damageTaken += actual;
+    if (this.state.combat) this.state.combat.damageTaken += actual;
     return { actual, blocked };
   }
 
@@ -748,6 +895,23 @@ export class GameEngine {
     const isElite = combat.kind === "elite";
     this.state.stats!.enemiesDefeated += 1;
     if (isElite) this.state.stats!.elitesDefeated += 1;
+
+    // P2 战役：胜利即评★（无伤 / 平均声韵≥85 / 限时）并清理节点
+    const campaign = this.state.campaign;
+    if (campaign?.currentNodeId) {
+      const history = combat.scoreHistory;
+      const averageScore = history.length
+        ? Math.round(history.reduce((sum, score) => sum + score, 0) / history.length)
+        : 0;
+      const breakdown = evaluateCombatStars({
+        victory: true,
+        kind: combat.kind,
+        turns: combat.turn,
+        damageTaken: combat.damageTaken,
+        averageScore
+      });
+      this.completeMapNode(campaign.currentNodeId, breakdown.total);
+    }
 
     if (isBoss) {
       this.state.phase = "victory";
@@ -874,6 +1038,9 @@ export class GameEngine {
   leaveEvent(): void {
     if (this.state.phase !== "event" || !this.state.event?.resolved) return;
     this.state.event = null;
+    if (this.state.campaign?.currentNodeId) {
+      this.completeMapNode(this.state.campaign.currentNodeId, 1);
+    }
     this.state.phase = "tower";
     this.prepareFloorOptions();
     this.emit({ save: true });
@@ -893,6 +1060,9 @@ export class GameEngine {
       player.maxHp += 5;
       player.hp += 5;
       this.state.notice = "调匀气息，最大生命 +5。";
+    }
+    if (this.state.campaign?.currentNodeId) {
+      this.completeMapNode(this.state.campaign.currentNodeId, 1);
     }
     this.state.phase = "tower";
     this.prepareFloorOptions();
@@ -945,6 +1115,9 @@ export class GameEngine {
   leaveShop(): void {
     if (this.state.phase !== "shop") return;
     this.state.shop = null;
+    if (this.state.campaign?.currentNodeId) {
+      this.completeMapNode(this.state.campaign.currentNodeId, 1);
+    }
     this.state.phase = "tower";
     this.prepareFloorOptions();
     this.emit({ save: true });

@@ -6,7 +6,13 @@
 
 import "./ui/styles.css";
 import { setKeepScreenOn } from "./adapters/platform";
-import { loadSettings, saveGame, saveSettings } from "./adapters/storage";
+import {
+  loadCampaignMeta,
+  loadSettings,
+  saveCampaignMeta,
+  saveGame,
+  saveSettings
+} from "./adapters/storage";
 import { SpeechTts } from "./adapters/tts";
 import { createVoiceAdapter } from "./adapters/voice";
 import type { VoiceAdapter, VoiceMode } from "./adapters/voice";
@@ -28,6 +34,32 @@ document.body.classList.toggle("reduce-motion", settings.reduceMotion);
 
 const engine = new GameEngine();
 const tts = new SpeechTts();
+
+// ─── P2 战役元存档：同一幕的节点★最高纪录跨局累计 ─────────────────────────────
+
+/** 开新战役时，把本地同种子同幕的历史★注入新局（重打刷新只升不降）。 */
+const startCampaignBase = engine.startCampaign.bind(engine);
+engine.startCampaign = (act = 1, seed?: number) => {
+  const meta = loadCampaignMeta();
+  const resolvedSeed = seed ?? meta?.mapSeed;
+  startCampaignBase(act, resolvedSeed);
+  const campaign = engine.state.campaign;
+  if (campaign && meta && meta.act === campaign.act && meta.mapSeed === campaign.map.seed) {
+    Object.assign(campaign.stars, meta.stars);
+  }
+};
+
+/** 每次状态广播都把战役★同步进元存档（含败北——星辉不随倒下丢失）。 */
+function syncCampaignMeta(state: GameState): void {
+  const campaign = state.campaign;
+  if (!campaign) return;
+  saveCampaignMeta({
+    act: campaign.act,
+    mapSeed: campaign.map.seed,
+    stars: { ...campaign.stars },
+    updatedAt: new Date().toISOString()
+  });
+}
 
 // ─── 语音编排 ────────────────────────────────────────────────────────────────
 
@@ -90,6 +122,7 @@ const ui = new GameUI({
 });
 
 engine.subscribe((state: GameState, options: EmitOptions) => {
+  syncCampaignMeta(state);
   if (options.save && state.phase !== "title") saveGame(state);
   ui.render(state, options);
 });
@@ -109,5 +142,6 @@ void buildAdapter(settings.voiceMode).then((adapter) => {
     return voiceAdapter;
   },
   getState: () => engine.state,
+  startCampaign: (act?: number, seed?: number) => engine.startCampaign(act, seed),
   voiceServices
 };

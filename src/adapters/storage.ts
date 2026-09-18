@@ -105,3 +105,40 @@ export function saveSettings(settings: GameSettings): void {
     console.warn("Unable to save settings", error);
   }
 }
+
+// ─── P2 战役元存档：节点 ★ 最高纪录跨局累计（与局内存档键分离） ─────────────────
+
+const CAMPAIGN_META_KEY = "voice-tower-campaign-meta-v1";
+
+export interface CampaignMeta {
+  act: number;
+  mapSeed: number;
+  /** nodeId → 历史最高★（只升不降） */
+  stars: Record<string, number>;
+  updatedAt: string;
+}
+
+export function loadCampaignMeta(): CampaignMeta | null {
+  try {
+    const raw = platformStorage().get(CAMPAIGN_META_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<CampaignMeta>;
+    if (!parsed || typeof parsed.mapSeed !== "number" || !parsed.stars) return null;
+    return {
+      act: parsed.act ?? 1,
+      mapSeed: parsed.mapSeed,
+      stars: { ...parsed.stars },
+      updatedAt: parsed.updatedAt ?? ""
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function saveCampaignMeta(meta: CampaignMeta): void {
+  try {
+    platformStorage().set(CAMPAIGN_META_KEY, JSON.stringify(meta));
+  } catch (error) {
+    console.warn("Unable to save campaign meta", error);
+  }
+}

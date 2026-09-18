@@ -540,6 +540,80 @@ export const FLOOR_NAMES: string[] = [
   "天台声阵"
 ];
 
+// ─── 问答节点题库（P2）：粤语常识 / 粤拼 / 用法，评星加分 ─────────────────────
+
+export interface QuizQuestion {
+  id: string;
+  question: string;
+  options: string[];
+  answerIndex: number;
+  explain: string;
+}
+
+export const QUIZ_QUESTIONS: QuizQuestion[] = [
+  {
+    id: "q-zousan",
+    question: "粤语日常打招呼的「早晨」，到底是什么意思？",
+    options: ["吃早餐", "早上好", "晨练", "早点出发"],
+    answerIndex: 1,
+    explain: "「早晨」是粤语早上见面的问候语，相当于“早上好”。"
+  },
+  {
+    id: "q-mgoi",
+    question: "什么时候说「唔该」最自然？",
+    options: ["麻烦别人帮忙或道谢时", "与人吵架时", "考试成绩公布后", "签合同的时候"],
+    answerIndex: 0,
+    explain: "「唔该」既可表示“劳驾/麻烦你”，也可用来道谢（唔该晒 = 非常感谢）。"
+  },
+  {
+    id: "q-jyutping-j",
+    question: "粤拼方案中，声母 j 的发音最接近下面哪一个？",
+    options: [
+      "普通话拼音的 j（鸡）",
+      "英语 yes 开头的 y 音",
+      "普通话拼音的 zh（知）",
+      "普通话拼音的 r（日）"
+    ],
+    answerIndex: 1,
+    explain: "粤拼的 j 是滑音 /j/，如「日 jat6」「人 jan4」的开头，接近英语 yes 的 y。"
+  },
+  {
+    id: "q-entering-tone",
+    question: "粤语保留、而普通话已基本消失的「入声」，特点是？",
+    options: ["音又平又长", "以 -p / -t / -k 急促收尾", "声调一定上扬", "必须带鼻音"],
+    answerIndex: 1,
+    explain: "入声字以不除阻的 -p/-t/-k 收尾，短促急收藏，是粤语九声六调的重要组成。"
+  },
+  {
+    id: "q-lengzai",
+    question: "街市档主笑着叫你「靓仔」，他的意思是？",
+    options: ["帅哥 / 年轻男子", "你欠他钱", "请你让开", "你挑货太慢"],
+    answerIndex: 0,
+    explain: "「靓仔」是对年轻男性的客气称呼，靓（leng3）指好看。"
+  },
+  {
+    id: "q-aa-a",
+    question: "粤拼中 aa 与 a 的区别是？",
+    options: ["只是声调不同", "发音完全没区别", "长短/音质不同的两个元音", "a 是鼻音"],
+    answerIndex: 2,
+    explain: "aa 是长元音（如「花 faa1」），a 是短元音（如「歇脚」里的短促 a），混淆会影响听懂。"
+  },
+  {
+    id: "q-hea",
+    question: "粤语俗写「Hea」通常用来形容什么状态？",
+    options: ["拼命加班", "懒散晃荡、无所事事", "跑得飞快", "特别精明"],
+    answerIndex: 1,
+    explain: "「Hea」形容漫无目的、悠闲到发懒的状态，常见于年轻人口语。"
+  },
+  {
+    id: "q-faanmei",
+    question: "「食咗饭未呀？」在粤语里最接近什么功能？",
+    options: ["质问对方为什么吃饭", "日常寒暄：吃饭了吗", "餐厅催单用语", "宣布开饭"],
+    answerIndex: 1,
+    explain: "这是广府最常见的寒暄之一，重点不在“饭”，在于打招呼。"
+  }
+];
+
 export function getSkill(id: string): Skill | undefined {
   return SKILL_INDEX[id];
 }
