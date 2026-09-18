@@ -1,6 +1,0 @@
-step1 connect OK
-step2 systemInfo FAIL: timeout waiting for automator response
-step3 screenshot FAIL: RACE_TIMEOUT_shot
-step4 evaluate FAIL: timeout waiting for automator response
-step5 probe FAIL: timeout waiting for automator response
-FATAL: Cannot read properties of undefined (reading 'catch')
