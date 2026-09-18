@@ -24,6 +24,7 @@ import {
   isModelReady
 } from "./adapters/voice/sensevoice/model-store";
 import type { DownloadProgress } from "./adapters/voice/sensevoice/model-store";
+import { SCORING_WEIGHTS_V2 } from "./core/config/balance";
 import { GameEngine } from "./core/engine";
 import type { EmitOptions, GameState } from "./core/engine";
 import { GameUI } from "./ui/ui";
@@ -68,7 +69,13 @@ const modelListeners = new Set<(progress: DownloadProgress | null) => void>();
 
 async function buildAdapter(mode: VoiceMode): Promise<VoiceAdapter> {
   const modelCached = await isModelReady().catch(() => false);
-  return createVoiceAdapter(mode, { modelCached });
+  return createVoiceAdapter(
+    mode,
+    { modelCached },
+    {
+      toneWeight: () => settings.toneWeight ?? SCORING_WEIGHTS_V2.tone
+    }
+  );
 }
 
 const voiceServices: VoiceServices = {

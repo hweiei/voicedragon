@@ -5,6 +5,8 @@
 
 export interface RecorderCallbacks {
   onFrame(samples: Int16Array, sampleRate: number): void;
+  /** P3：原始 Float32 帧（F0 提取用；Int16 量化损失对基频检测不友好）。 */
+  onFloat?(samples: Float32Array, sampleRate: number): void;
   onVolume?(rms: number): void;
   onError(error: Error): void;
 }
@@ -64,6 +66,8 @@ export class MicRecorder {
       this.node = new AudioWorkletNode(this.context, "vd-pcm-capture");
       this.node.port.onmessage = (event: MessageEvent<Float32Array>) => {
         const float = event.data;
+        const sampleRate = this.context?.sampleRate ?? 48000;
+        if (callbacks.onFloat) callbacks.onFloat(float, sampleRate);
         // Int16 量化 + RMS
         const int16 = new Int16Array(float.length);
         let sum = 0;
@@ -72,7 +76,7 @@ export class MicRecorder {
           int16[i] = s < 0 ? s * 32768 : s * 32767;
           sum += s * s;
         }
-        callbacks.onFrame(int16, this.context?.sampleRate ?? 48000);
+        callbacks.onFrame(int16, sampleRate);
         callbacks.onVolume?.(Math.sqrt(sum / Math.max(1, float.length)));
       };
       source.connect(this.node);

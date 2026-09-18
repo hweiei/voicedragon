@@ -6,13 +6,16 @@
  */
 
 import { VOICE_CAPTURE_MAX_MS } from "../../../core/config/balance";
-import { scorePronunciation } from "../../../core/scoring";
+import { SCORING_WEIGHTS_V2 } from "../../../core/config/balance";
+import { composeFinalScore, scorePronunciation } from "../../../core/scoring";
+import { scoreToneContour } from "../../../core/tone";
 import type {
   VoiceAdapter,
   VoiceAdapterState,
   VoiceScoreResult,
   VoiceStartOptions
 } from "../../voice";
+import { PitchTracker } from "../pitch-tracker";
 import { SENSEVOICE_MANIFEST, runtimeBaseUrl } from "./manifest";
 import { getModelHandles, isModelReady } from "./model-store";
 import { MicRecorder } from "./recorder";
@@ -53,6 +56,14 @@ export class SenseVoiceAdapter implements VoiceAdapter {
 
   private wasmReady = false;
   private modelReady = false;
+
+  /** P3 声调权重提供者（设置页滑杆，组合根注入，逐次施法实时读取）。 */
+  private toneWeightProvider: () => number;
+  private pitchTracker: PitchTracker | null = null;
+
+  constructor(options: { toneWeight?: () => number } = {}) {
+    this.toneWeightProvider = options.toneWeight ?? (() => SCORING_WEIGHTS_V2.tone);
+  }
 
   get ready(): boolean {
     return this.supported && this.wasmReady && this.modelReady;
@@ -148,11 +159,19 @@ export class SenseVoiceAdapter implements VoiceAdapter {
     const state: PeekWord = { kind: "idle" };
     void state;
     this.recorder = new MicRecorder();
+    this.pitchTracker = new PitchTracker();
+    const tracker = this.pitchTracker;
     void this.recorder.start({
       onFrame: (samples, sampleRate) => {
         if (!this.worker || !this.wasmReady) return;
         const msg: UpstreamMessage = { type: "audio", samples, sampleRate };
         this.worker.postMessage(msg, [samples.buffer]);
+      },
+      onFloat: (float, sampleRate) => {
+        tracker.push(float, sampleRate, options.onPitchFrame);
+      },
+      onVolume: (rms) => {
+        tracker.noteVolume(rms);
       },
       onError: (error) => {
         this.finishWithError(error);
@@ -170,7 +189,23 @@ export class SenseVoiceAdapter implements VoiceAdapter {
       this.pending = null;
       this.stopQuietly();
       const scored = scorePronunciation(pending.targets, msg.text, ENGINE_CONFIDENCE_PROXY);
-      const result: VoiceScoreResult = { ...scored, source: this.id };
+      // P3 双通道：声调层可空回退——无 F0 数据时评分与 V1 完全一致
+      const toneDetail = pending.jyutping
+        ? scoreToneContour(this.pitchTracker?.frames ?? [], pending.jyutping)
+        : null;
+      const finalScore = composeFinalScore(
+        scored.score,
+        toneDetail?.score ?? null,
+        this.toneWeightProvider()
+      );
+      const result: VoiceScoreResult = {
+        ...scored,
+        score: finalScore,
+        toneScore: toneDetail?.score ?? null,
+        toneDetail,
+        source: this.id
+      };
+      this.pitchTracker = null;
       pending.onResult(result);
     } else if (msg.type === "error") {
       this.finishWithError(new Error(msg.error));
@@ -189,6 +224,8 @@ export class SenseVoiceAdapter implements VoiceAdapter {
     this.maxTimer = null;
     this.recorder?.stop();
     this.recorder = null;
+    // 注意：pitchTracker 的 frames 在 result 合成后由 handleWorkerMessage 清空；
+    // 提前取消时 tracker 随下次 beginCapture 重建。
   }
 
   /** 主动停止收音并触发判定（等价 PTT 松开）。 */

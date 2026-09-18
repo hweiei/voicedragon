@@ -6,7 +6,15 @@
  */
 
 import { getPlatformLabel, vibrate } from "../adapters/platform";
-import { clearSave, hasSave, loadGame } from "../adapters/storage";
+import {
+  clearSave,
+  hasSave,
+  loadDailyRecords,
+  loadGame,
+  loadSrsStore,
+  saveDailyRecord,
+  saveSrsStore
+} from "../adapters/storage";
 import type { GameSettings } from "../adapters/storage";
 import type {
   VoiceAdapter,
@@ -16,12 +24,23 @@ import type {
 } from "../adapters/voice";
 import type { ModelStatus } from "../adapters/voice/sensevoice/model-store";
 import type { DownloadProgress } from "../adapters/voice/sensevoice/model-store";
-import { ITEMS, RELICS, getSkill } from "../core/data";
+import { dailySeedForKey, dateKeyFor } from "../core/daily";
+import { ITEMS, RELICS, SKILLS, getSkill } from "../core/data";
 import type { Skill } from "../core/data";
 import { NODE_META } from "../core/engine";
 import type { EmitOptions, GameEngine, GameState } from "../core/engine";
 import type { ActNode } from "../core/levelgen";
 import { scoreLabel, scorePronunciation } from "../core/scoring";
+import { buildLearningReport, dailyPicks, recordAttempt } from "../core/srs";
+import {
+  type PitchFrame,
+  TONE_TEMPLATES,
+  expectedToneGuides,
+  normalizeContour,
+  parseJyutpingTones,
+  previewTemplateCurve,
+  resamplePoints
+} from "../core/tone";
 import { VocalQte } from "./qte";
 
 // ─── 注入服务（组合根提供） ───────────────────────────────────────────────────
@@ -77,6 +96,81 @@ function skillTypeMark(skill: Skill): string {
   return marks[skill.type] || "技";
 }
 
+/** P3 练习场：期望调型（金）与用户基频轮廓（青）双曲线绘制。 */
+function drawPitchCurves(
+  canvas: HTMLCanvasElement,
+  template: number[] | null,
+  user: number[] | null,
+  perSyllable: number[] | null,
+  syllableCount: number
+): void {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const dpr = window.devicePixelRatio || 1;
+  const width = canvas.clientWidth || canvas.parentElement?.clientWidth || 320;
+  const height = canvas.clientHeight || 150;
+  canvas.width = width * dpr;
+  canvas.height = height * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+
+  const extent = 6; // 纵轴 ±6 半音
+  const yOf = (value: number) => height / 2 - (value / extent) * (height / 2 - 10);
+
+  // 网格：中线 + ±3/±6 半音线
+  ctx.strokeStyle = "rgba(232, 209, 167, 0.12)";
+  ctx.lineWidth = 1;
+  for (const mark of [-6, -3, 0, 3, 6]) {
+    ctx.beginPath();
+    ctx.moveTo(0, yOf(mark));
+    ctx.lineTo(width, yOf(mark));
+    ctx.stroke();
+  }
+
+  // 音节分界
+  if (syllableCount > 1) {
+    ctx.strokeStyle = "rgba(232, 209, 167, 0.08)";
+    for (let i = 1; i < syllableCount; i += 1) {
+      const x = (i / syllableCount) * width;
+      ctx.beginPath();
+      ctx.moveTo(x, 4);
+      ctx.lineTo(x, height - 4);
+      ctx.stroke();
+    }
+  }
+
+  const paint = (curve: number[], color: string, dashed: boolean) => {
+    if (curve.length < 2) return;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.4;
+    ctx.setLineDash(dashed ? [6, 5] : []);
+    ctx.beginPath();
+    curve.forEach((value, index) => {
+      const x = curve.length === 1 ? width / 2 : (index / (curve.length - 1)) * width;
+      const y = yOf(value);
+      if (index === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+  };
+
+  if (template) paint(template, "rgba(240, 207, 131, 0.85)", true);
+  if (user) paint(user, "#63aab0", false);
+
+  // 音节级评分圆点（颜色即档位，与战斗 tier 一致）
+  if (perSyllable?.length) {
+    perSyllable.forEach((value, index) => {
+      const x = ((index + 0.5) / perSyllable.length) * width;
+      const color = value >= 85 ? "#79b892" : value >= 65 ? "#f0cf83" : "#f36a55";
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(x, 12, 6, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+}
+
 function skillCard(skill: Skill, options: { action?: string; disabled?: boolean } = {}): string {
   const action = options.action || "cast-skill";
   const disabled = Boolean(options.disabled);
@@ -106,6 +200,37 @@ function hud(state: GameState): string {
     </div>`;
 }
 
+/** P3 每日挑战状态的展示文案。 */
+function dailyStatusLabel(): string {
+  const todayKey = dateKeyFor(new Date());
+  const record = loadDailyRecords()[todayKey];
+  if (!record) return "今日未挑战";
+  if (record.victory) return `今日已通关 · 综合 ${record.averageScore}`;
+  return `今日已到第 ${record.floor} 层 · 综合 ${record.averageScore}`;
+}
+
+/** 标题屏的「每日三句」错词复习卡（无错词时不渲染）。 */
+function titleReviewStrip(): string {
+  const picks = dailyPicks(loadSrsStore(), new Date(), 3);
+  if (!picks.length) return "";
+  const chips = picks
+    .map((entry) => {
+      const skill = getSkill(entry.id);
+      if (!skill) return "";
+      return `<button class="review-chip" type="button" data-action="practice-select" data-skill-id="${escapeHtml(skill.id)}">
+        <strong>${escapeHtml(skill.phrase)}</strong>
+        <small>${escapeHtml(skill.jyutping)}</small>
+        <span class="review-score">${entry.lastScore}分</span>
+      </button>`;
+    })
+    .join("");
+  return `
+    <div class="panel review-strip">
+      <div class="review-strip-head"><strong>每日三句</strong><small>错词本按记忆曲线推送，点一句直接练</small></div>
+      <div class="review-chips">${chips}</div>
+    </div>`;
+}
+
 function titleTemplate(): string {
   const resume = hasSave();
   return `
@@ -132,6 +257,12 @@ function titleTemplate(): string {
         ${resume ? `<button class="primary-button full-button" type="button" data-action="continue-run">继续登楼</button>` : ""}
         <button class="${resume ? "secondary-button" : "primary-button"} full-button" type="button" data-action="new-run">${resume ? "重新开局" : "开始登楼"}</button>
         <button class="${resume ? "ghost-button" : "secondary-button"} full-button" type="button" data-action="new-campaign">战役 · 第一幕（7×15 分支地图）</button>
+        <button class="ghost-button full-button" type="button" data-action="daily-challenge">每日挑战 · ${escapeHtml(dailyStatusLabel())}</button>
+        <div class="title-quick">
+          <button class="ghost-button" type="button" data-action="open-practice">练习场 · 调准曲线</button>
+          <button class="ghost-button" type="button" data-action="open-report">学习报告</button>
+        </div>
+        ${titleReviewStrip()}
         <button class="ghost-button full-button" type="button" data-action="show-help">玩法与语音说明</button>
         <button class="ghost-button full-button" type="button" data-action="open-settings">设置 · 语音引擎</button>
         <p class="title-note">语音识别全部可选：经在线兜底引擎、可下载端侧模型（完全离线）、无声破阵拍三种方式施法。</p>
@@ -544,6 +675,15 @@ export class GameUI {
   private modelUnsubscribe: (() => void) | null = null;
   private lastPhase: string | null = null;
   private combatStartHp: number | null = null;
+  /** P3：标题层视图（游戏界面 / 练习场 / 学习报告） */
+  private view: "game" | "practice" | "report" = "game";
+  private practiceSkillId: string | null = null;
+  private practiceRecording = false;
+  private practiceLiveFrames: PitchFrame[] = [];
+  private practiceResult: VoiceScoreResult | null = null;
+  private practiceRaf: number | null = null;
+  /** P3：本局为每日挑战时记录其日期键（结算时写入战绩） */
+  private sessionDaily: string | null = null;
 
   constructor({
     engine,
@@ -599,6 +739,18 @@ export class GameUI {
     }
     if (action === "quiz-answer") this.engine.answerQuizOption(Number(button.dataset.optionIndex));
     if (action === "quiz-next") this.engine.advanceQuiz();
+    // ─── P3 标题层动作 ───
+    if (action === "daily-challenge") this.startDailyChallenge();
+    if (action === "open-practice") this.openPractice();
+    if (action === "practice-select") this.openPractice(button.dataset.skillId);
+    if (action === "practice-tts") {
+      const skill = this.currentPracticeSkill();
+      if (skill) this.services.tts.speak(skill.phrase);
+    }
+    if (action === "practice-record") this.practiceRecord();
+    if (action === "practice-stop") this.adapter?.stop();
+    if (action === "open-report") this.openReport();
+    if (action === "close-view") this.closeView();
     if (action === "show-help") this.openHelp();
     if (action === "open-settings") this.openSettings();
     if (action === "choose-floor") this.engine.chooseFloorOption(button.dataset.optionId!);
@@ -647,6 +799,20 @@ export class GameUI {
   }
 
   render(state: GameState, options: EmitOptions = {}): void {
+    // P3 每日挑战记账：本局挑战在通关/倒下瞬间写入本地战绩（取更优者保留）
+    if (this.sessionDaily && (state.phase === "victory" || state.phase === "defeat")) {
+      const summary = this.engine.getRunSummary();
+      saveDailyRecord({
+        dateKey: this.sessionDaily,
+        seed: dailySeedForKey(this.sessionDaily),
+        floor: state.floor,
+        victory: state.phase === "victory",
+        averageScore: summary.averageScore,
+        finishedAt: new Date().toISOString()
+      });
+      this.sessionDaily = null;
+    }
+
     // 战斗入场埋点：战役结算需要「本场开始时的生命」快照
     if (state.phase !== this.lastPhase) {
       this.lastPhase = state.phase;
@@ -655,6 +821,14 @@ export class GameUI {
 
     const isTitle = state.phase === "title";
     this.topbar.hidden = isTitle;
+
+    // P3 标题层视图：练习场 / 学习报告（引擎停留在 title 相，视图由 UI 自管）
+    if (isTitle && this.view !== "game") {
+      this.root.innerHTML =
+        this.view === "practice" ? this.practiceTemplate() : this.reportTemplate();
+      if (this.view === "practice") this.paintPracticeCanvas();
+      return;
+    }
     if (!isTitle) {
       const count = state.player ? state.player.items.length + state.player.relics.length : 0;
       const badge = this.inventoryButton.querySelector("b");
@@ -864,7 +1038,11 @@ export class GameUI {
           ${
             isQte
               ? `<div><strong>破阵拍</strong><small>施法方式</small></div><div><strong>${result.score}分</strong><small>命中精度</small></div>`
-              : `<div><strong>${result.similarity ?? 0}%</strong><small>短句相似度</small></div><div><strong>${confidence}%</strong><small>识别置信度</small></div>`
+              : `<div><strong>${result.similarity ?? 0}%</strong><small>字准相似度</small></div>${
+                  result.toneScore != null
+                    ? `<div><strong>${result.toneScore}分</strong><small>调准分</small></div>`
+                    : `<div><strong>${confidence}%</strong><small>识别置信度</small></div>`
+                }<div><strong>${result.score}分</strong><small>综合录入</small></div>`
           }
         </div>
         <button class="primary-button full-button" type="button" data-action="apply-voice">发动「${escapeHtml(skill.name)}」</button>
@@ -877,6 +1055,8 @@ export class GameUI {
     const { skill, result } = this.pendingVoice;
     this.pendingVoice = null;
     this.closeModal(false);
+    // P3：真实语音尝试进入学习闭环（错词本 / 学习报告 / 每日三句）
+    this.recordVoiceAttempt(skill.id, result);
     this.engine.resolveSkill(skill.id, result.score, result);
   }
 
@@ -896,6 +1076,12 @@ export class GameUI {
         <div class="settings-group">
           <h3>语音引擎</h3>
           ${radio("auto")}${radio("sensevoice")}${radio("webspeech")}
+        </div>
+        <div class="settings-group">
+          <h3>声调评分（P3）</h3>
+          <div class="range-line"><label for="set-tone-weight">调准占比 <strong id="tone-weight-value">${Math.round((settings.toneWeight ?? 0.4) * 100)}%</strong></label><span id="tone-word-label">字准 ${100 - Math.round((settings.toneWeight ?? 0.4) * 100)}%</span></div>
+          <input id="set-tone-weight" type="range" min="0" max="80" step="10" value="${Math.round((settings.toneWeight ?? 0.4) * 100)}" />
+          <p class="settings-note">仅端侧引擎可输出调准分；无调准时自动按纯字准计。默认 40%，即字 60% / 调 40%。</p>
         </div>
         <div class="settings-group" id="model-panel">
           <h3>端侧模型</h3>
@@ -925,6 +1111,16 @@ export class GameUI {
         });
       });
     }
+    // 声调权重
+    const toneSlider = this.modalRoot.querySelector<HTMLInputElement>("#set-tone-weight");
+    const toneValue = this.modalRoot.querySelector<HTMLElement>("#tone-weight-value");
+    const toneWordLabel = this.modalRoot.querySelector<HTMLElement>("#tone-word-label");
+    toneSlider?.addEventListener("input", () => {
+      const percent = Number(toneSlider.value);
+      this.services.settings.save({ toneWeight: percent / 100 });
+      if (toneValue) toneValue.textContent = `${percent}%`;
+      if (toneWordLabel) toneWordLabel.textContent = `字准 ${100 - percent}%`;
+    });
     // 体验开关
     this.modalRoot
       .querySelector<HTMLInputElement>("#set-sound")
@@ -1041,11 +1237,264 @@ export class GameUI {
         <div class="help-steps">
           <div class="help-step"><b>1</b><div><strong>逐层择路</strong><small>普通楼层随机出现战斗、事件、歇脚处与夜市；第五层为强敌，第十层为最终首领。</small></div></div>
           <div class="help-step"><b>2</b><div><strong>开声出招 / 破阵拍</strong><small>说出卡牌上的粤语短句即可施法；无声环境改用「破阵拍」节奏判定，随时可在设置页切换引擎。</small></div></div>
-          <div class="help-step"><b>3</b><div><strong>发音影响威力</strong><small>未稳 0.52 倍、入门 0.78 倍、清晰 1 倍、正音 1.32 倍。听不准就点「听一听」跟读示范。</small></div></div>
+          <div class="help-step"><b>3</b><div><strong>发音影响威力</strong><small>未稳 0.52 倍、入门 0.78 倍、清晰 1 倍、正音 1.32 倍。端侧引擎额外按粤语六调评「调准」；标题屏「练习场」可看基频曲线逐句校准。</small></div></div>
           <div class="help-step"><b>4</b><div><strong>构筑与存档</strong><small>战后从三张技能中选一张，收集遗物和道具。每次行动都会自动保存到当前设备。</small></div></div>
+          <div class="help-step"><b>5</b><div><strong>开口有回响</strong><small>低分短句自动进「错词本」，标题屏每日推三句复习；「学习报告」看字准/调准/信心/词汇四维。</small></div></div>
         </div>
         <div class="notice-strip">端侧模型（约 230MB，可断点续传）下载一次即可完全离线游玩：设置 → 端侧模型。</div>
       </div>`;
+  }
+
+  // ─── P3 学习闭环：练习场 / 学习报告 / 每日挑战 / 错词记录 ─────────────────
+
+  private startDailyChallenge(): void {
+    this.sessionDaily = dateKeyFor(new Date());
+    this.closeModal();
+    clearSave();
+    this.engine.startNew(dailySeedForKey(this.sessionDaily));
+    this.showToast("今日挑战开局：全服同一局，比比谁走得远");
+  }
+
+  private currentPracticeSkill(): Skill | null {
+    return (this.practiceSkillId ? getSkill(this.practiceSkillId) : null) ?? null;
+  }
+
+  private openPractice(skillId?: string): void {
+    this.view = "practice";
+    if (skillId && getSkill(skillId)) this.practiceSkillId = skillId;
+    if (!this.currentPracticeSkill()) this.practiceSkillId = SKILLS[0].id;
+    this.practiceResult = null;
+    this.practiceLiveFrames = [];
+    this.render(this.engine.state);
+  }
+
+  private openReport(): void {
+    this.view = "report";
+    this.render(this.engine.state);
+  }
+
+  private closeView(): void {
+    this.view = "game";
+    this.adapter?.cancel();
+    this.services.tts.stop();
+    this.practiceRecording = false;
+    this.render(this.engine.state);
+  }
+
+  /** 真实语音尝试计入学习闭环（QTE/键盘判定不算发音练习）。 */
+  private recordVoiceAttempt(skillId: string, result: VoiceScoreResult): void {
+    if (result.source === "qte" || result.source === "manual-test") return;
+    const store = loadSrsStore();
+    recordAttempt(store, skillId, {
+      score: result.score,
+      wordScore: result.similarity ?? result.score,
+      toneScore: result.toneScore ?? null,
+      confidence: result.confidence ?? null
+    });
+    saveSrsStore(store);
+  }
+
+  private practiceTemplate(): string {
+    const skill = this.currentPracticeSkill()!;
+    const guides = expectedToneGuides(skill.jyutping);
+    const chips = SKILLS.map(
+      (entry) =>
+        `<button class="practice-chip${entry.id === skill.id ? " active" : ""}" type="button" data-action="practice-select" data-skill-id="${escapeHtml(entry.id)}">${escapeHtml(entry.phrase)}</button>`
+    ).join("");
+    const toneChips = guides
+      .map(
+        (guide) =>
+          `<span class="tone-chip" title="${escapeHtml(guide.hint)}"><b>${guide.tone}</b>${escapeHtml(guide.name)}</span>`
+      )
+      .join("");
+    const result = this.practiceResult;
+    const detail = result?.toneDetail;
+    const breakdown = result
+      ? `
+      <div class="score-breakdown practice-breakdown">
+        <div><strong>${result.similarity ?? 0}%</strong><small>字准相似度</small></div>
+        <div><strong>${result.toneScore != null ? `${result.toneScore}分` : "—"}</strong><small>调准${result.toneScore == null ? "（无基频通道）" : ""}</small></div>
+        <div><strong>${result.score}分</strong><small>综合 · ${escapeHtml(scoreLabel(result.score))}</small></div>
+      </div>
+      ${
+        detail
+          ? `<p class="settings-note">音节调准（对应上方圆点）：${detail.perSyllable
+              .map(
+                (value, index) =>
+                  `第${index + 1}音节 ${value}分（${detail.expectedTones[index]}调 ${TONE_TEMPLATES[detail.expectedTones[index]].name}）`
+              )
+              .join(" · ")}</p>`
+          : ""
+      }`
+      : "";
+    const toneCapable = this.adapter?.id === "sensevoice";
+    return `
+    <section class="screen practice-screen">
+      <header class="practice-head">
+        <button class="ghost-button" type="button" data-action="close-view">← 返回</button>
+        <div>
+          <p class="eyebrow">练习场 · 调准可视化</p>
+          <h1 class="screen-title">跟读校准</h1>
+        </div>
+      </header>
+      <div class="practice-chips">${chips}</div>
+      <div class="panel practice-target">
+        <div class="practice-phrase">
+          <strong>${escapeHtml(skill.phrase)}</strong>
+          <button class="mini-button" type="button" data-action="practice-tts">🔊 示范</button>
+        </div>
+        <small>${escapeHtml(skill.jyutping)} · ${escapeHtml(skill.lesson)}</small>
+        <div class="tone-chips">${toneChips}</div>
+      </div>
+      <div class="panel pitch-panel">
+        <canvas id="pitch-canvas" height="150"></canvas>
+        <div class="pitch-legend">
+          <span class="legend-template">--- 期望调型</span>
+          <span class="legend-user">—— 你的基频</span>
+          <span>圆点 = 每音节调准档位</span>
+        </div>
+      </div>
+      ${breakdown}
+      <div class="practice-actions">
+        <button class="primary-button full-button" type="button" data-action="practice-record" ${this.practiceRecording ? "disabled" : ""}>
+          ${this.practiceRecording ? "收音中…读出上方短句" : result ? "再读一次" : "开始跟读"}
+        </button>
+        ${this.practiceRecording ? `<button class="ghost-button full-button" type="button" data-action="practice-stop">结束并判定</button>` : ""}
+        ${!toneCapable ? `<p class="settings-note">当前引擎（${escapeHtml(this.adapter?.id ?? "加载中")}）无基频通道，仅出字准；启用端侧模型可显示调准曲线。</p>` : ""}
+      </div>
+    </section>`;
+  }
+
+  private practiceRecord(): void {
+    const skill = this.currentPracticeSkill();
+    const adapter = this.adapter;
+    if (!skill || !adapter || this.practiceRecording) return;
+    this.practiceResult = null;
+    this.practiceLiveFrames = [];
+    this.practiceRecording = true;
+    this.render(this.engine.state);
+    adapter.start({
+      targets: skill.alternatives || [skill.phrase],
+      jyutping: skill.jyutping,
+      onPitchFrame: (frame) => {
+        this.practiceLiveFrames.push(frame);
+        this.schedulePracticePaint();
+      },
+      onInterim: () => {},
+      onState: () => {},
+      onResult: (result) => {
+        this.practiceRecording = false;
+        this.practiceResult = result;
+        this.recordVoiceAttempt(skill.id, result);
+        vibrate("light");
+        this.render(this.engine.state);
+      },
+      onError: (error) => {
+        this.practiceRecording = false;
+        this.practiceResult = null;
+        this.showToast(error.message);
+        this.render(this.engine.state);
+      }
+    });
+  }
+
+  private schedulePracticePaint(): void {
+    if (this.practiceRaf !== null) return;
+    this.practiceRaf = requestAnimationFrame(() => {
+      this.practiceRaf = null;
+      this.paintPracticeCanvas();
+    });
+  }
+
+  private paintPracticeCanvas(): void {
+    const canvas = this.root.querySelector<HTMLCanvasElement>("#pitch-canvas");
+    const skill = this.currentPracticeSkill();
+    if (!canvas || !skill) return;
+    const detail = this.practiceResult?.toneDetail ?? null;
+    const template = detail?.template ?? previewTemplateCurve(skill.jyutping);
+    let user = detail?.userCurve ?? null;
+    if (!user && this.practiceLiveFrames.length > 4) {
+      const points = normalizeContour(this.practiceLiveFrames);
+      if (points.length > 4) user = resamplePoints(points, template?.length ?? 72);
+    }
+    const syllableCount =
+      detail?.expectedTones.length ?? parseJyutpingTones(skill.jyutping).length ?? 1;
+    drawPitchCurves(canvas, template, user, detail?.perSyllable ?? null, syllableCount);
+  }
+
+  private reportTemplate(): string {
+    const report = buildLearningReport(loadSrsStore(), new Date());
+    const axes: { label: string; value: number; muted?: string }[] = [
+      { label: "字准", value: report.wordAvg },
+      {
+        label: "调准",
+        value: report.toneAvg ?? 0,
+        muted: report.toneAvg == null ? "暂无基频数据" : undefined
+      },
+      { label: "信心", value: report.confidenceAvg },
+      { label: "词汇", value: Math.min(100, Math.round((report.vocab / SKILLS.length) * 100)) }
+    ];
+    const cx = 100;
+    const cy = 100;
+    const radius = 76;
+    const pointOf = (axis: number, value: number): string => {
+      const angle = (-90 + axis * 90) * (Math.PI / 180);
+      const r = (Math.max(0, Math.min(100, value)) / 100) * radius;
+      return `${(cx + r * Math.cos(angle)).toFixed(1)},${(cy + r * Math.sin(angle)).toFixed(1)}`;
+    };
+    const rings = [25, 50, 75, 100]
+      .map((level) => {
+        const points = [0, 1, 2, 3].map((axis) => pointOf(axis, level)).join(" ");
+        return `<polygon points="${points}" class="radar-ring" />`;
+      })
+      .join("");
+    const shape = [0, 1, 2, 3].map((axis) => pointOf(axis, axes[axis].value)).join(" ");
+    const labels = axes
+      .map((axis, index) => {
+        const angle = (-90 + index * 90) * (Math.PI / 180);
+        const x = cx + (radius + 18) * Math.cos(angle);
+        const y = cy + (radius + 14) * Math.sin(angle);
+        return `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" class="radar-label">${escapeHtml(axis.label)} ${axis.muted ? "" : `${axis.value}`}</text>`;
+      })
+      .join("");
+    const mistakes = report.mistakes.slice(0, 8).map((entry) => {
+      const skill = getSkill(entry.id);
+      if (!skill) return "";
+      const dueDays = Math.max(0, Math.ceil((Date.parse(entry.dueAt) - Date.now()) / 86400000));
+      return `<div class="inventory-item">
+        <span class="item-mark">${escapeHtml(skill.phrase.slice(0, 1))}</span>
+        <div><strong>${escapeHtml(skill.phrase)} <small>${escapeHtml(skill.jyutping)}</small></strong>
+        <small>上次 ${entry.lastScore} 分 · 最佳 ${entry.bestScore} 分 · ${dueDays === 0 ? "今日到期" : `${dueDays} 天后复习`} · 已练 ${entry.attempts} 次</small></div>
+        <button class="mini-button" type="button" data-action="practice-select" data-skill-id="${escapeHtml(entry.id)}">去练</button>
+      </div>`;
+    });
+    const todayRecord = loadDailyRecords()[dateKeyFor(new Date())];
+    return `
+    <section class="screen report-screen">
+      <header class="practice-head">
+        <button class="ghost-button" type="button" data-action="close-view">← 返回</button>
+        <div>
+          <p class="eyebrow">学习报告 · 粤语开口档案</p>
+          <h1 class="screen-title">练到哪，错在哪</h1>
+        </div>
+      </header>
+      <div class="panel radar-panel">
+        <svg viewBox="0 0 200 200" class="radar" role="img" aria-label="四维能力雷达图">
+          ${rings}
+          <polygon points="${shape}" class="radar-shape" />
+          ${labels}
+        </svg>
+        <div class="radar-notes">
+          <p>开口练习 <strong>${report.voiceAttempts}</strong> 次 · 覆盖短句 <strong>${report.vocab}</strong> / ${SKILLS.length}</p>
+          ${axes[1].muted ? `<p class="settings-note">调准轴：${escapeHtml(axes[1].muted)}（端侧模型可产出）</p>` : ""}
+          <p class="settings-note">今日挑战：${escapeHtml(todayRecord ? (todayRecord.victory ? `已通关 · 综合 ${todayRecord.averageScore}` : `到第 ${todayRecord.floor} 层 · 综合 ${todayRecord.averageScore}`) : "未挑战")}</p>
+        </div>
+      </div>
+      <div class="section-label"><h2>错词本</h2><p>${report.mistakes.length} 句 · ${report.dueCount} 句到期</p></div>
+      <div class="inventory-list">
+        ${mistakes.length ? mistakes.join("") : `<div class="notice-strip">错词本是空的——综合分低于 65 的短句会自动钉进来。</div>`}
+      </div>
+    </section>`;
   }
 
   private closeModal(cancelVoice = true): void {

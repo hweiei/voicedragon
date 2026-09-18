@@ -10,12 +10,17 @@
 
 import { scorePronunciation } from "../core/scoring";
 import type { PronunciationScore } from "../core/scoring";
+import type { PitchFrame, ToneScoreDetail } from "../core/tone";
 
 export type VoiceAdapterState = "idle" | "listening" | "processing";
 
 export interface VoiceScoreResult extends PronunciationScore {
   source: string;
   rawConfidence?: number;
+  /** P3 声调层：调准分（无 F0 通道/浊音不足时为 null，评分已自动回退纯字准）。 */
+  toneScore?: number | null;
+  /** P3 声调层：调准明细（音节级分数与轮廓曲线，练习场叠图用）。 */
+  toneDetail?: ToneScoreDetail | null;
 }
 
 export interface VoiceStartOptions {
@@ -25,6 +30,8 @@ export interface VoiceStartOptions {
   onResult: (result: VoiceScoreResult) => void;
   onError?: (error: Error) => void;
   onState?: (state: VoiceAdapterState) => void;
+  /** P3 练习场：实时 F0 帧回调（仅支持 F0 通道的适配器会触发）。 */
+  onPitchFrame?: (frame: PitchFrame) => void;
 }
 
 export interface VoiceAdapter {
@@ -201,12 +208,13 @@ export function selectAdapterKind(
 /** 工厂：按模式构造适配器（异步：SenseVoice 适配器动态加载以免拖慢首包）。 */
 export async function createVoiceAdapter(
   mode: VoiceMode,
-  probe: { modelCached: boolean } = { modelCached: false }
+  probe: { modelCached: boolean } = { modelCached: false },
+  deps: { toneWeight?: () => number } = {}
 ): Promise<VoiceAdapter> {
   const kind = selectAdapterKind(mode, probe);
   if (kind === "sensevoice") {
     const { SenseVoiceAdapter } = await import("./voice/sensevoice/adapter");
-    return new SenseVoiceAdapter();
+    return new SenseVoiceAdapter({ toneWeight: deps.toneWeight });
   }
   return new BrowserVoiceAdapter();
 }

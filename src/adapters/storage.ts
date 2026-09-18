@@ -4,7 +4,12 @@
  * 后续 P2 起在此文件追加 migrations（v2→v3 迁移链，见 REDESIGN-PLAN §9）。
  */
 
+import { SCORING_WEIGHTS_V2 } from "../core/config/balance";
+import type { DailyRecord } from "../core/daily";
+import { compareDailyRecords } from "../core/daily";
 import type { GameState } from "../core/engine";
+import { emptySrsStore } from "../core/srs";
+import type { SrsStore } from "../core/srs";
 import type { VoiceMode } from "./voice";
 
 export const SAVE_KEY = "voice-tower-save-v2";
@@ -23,6 +28,8 @@ export interface GameSettings {
   tutorialSeen: boolean;
   /** 语音引擎选择（P1 起）：auto=自动降级链 / sensevoice=端侧 / webspeech=在线 */
   voiceMode: VoiceMode;
+  /** P3 声调权重（调准占比 0–0.8，默认 0.4 = 字 60% / 调 40%）。 */
+  toneWeight?: number;
 }
 
 interface KVStore {
@@ -86,7 +93,8 @@ export function loadSettings(): GameSettings {
     sound: true,
     reduceMotion: false,
     tutorialSeen: false,
-    voiceMode: "auto"
+    voiceMode: "auto",
+    toneWeight: SCORING_WEIGHTS_V2.tone
   };
   try {
     const raw = platformStorage().get(SETTINGS_KEY);
@@ -140,5 +148,57 @@ export function saveCampaignMeta(meta: CampaignMeta): void {
     platformStorage().set(CAMPAIGN_META_KEY, JSON.stringify(meta));
   } catch (error) {
     console.warn("Unable to save campaign meta", error);
+  }
+}
+
+// ─── P3 学习闭环：错词本（SRS）与每日挑战战绩 ─────────────────────────────────
+
+const SRS_KEY = "voice-tower-srs-v1";
+const DAILY_KEY = "voice-tower-daily-v1";
+
+export function loadSrsStore(): SrsStore {
+  try {
+    const raw = platformStorage().get(SRS_KEY);
+    if (!raw) return emptySrsStore();
+    const parsed = JSON.parse(raw) as Partial<SrsStore>;
+    const base = emptySrsStore();
+    return {
+      entries: parsed.entries && typeof parsed.entries === "object" ? parsed.entries : {},
+      stats: { ...base.stats, ...(parsed.stats ?? {}) }
+    };
+  } catch {
+    return emptySrsStore();
+  }
+}
+
+export function saveSrsStore(store: SrsStore): void {
+  try {
+    platformStorage().set(SRS_KEY, JSON.stringify(store));
+  } catch (error) {
+    console.warn("Unable to save srs store", error);
+  }
+}
+
+export function loadDailyRecords(): Record<string, DailyRecord> {
+  try {
+    const raw = platformStorage().get(DAILY_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, DailyRecord>;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveDailyRecord(record: DailyRecord): void {
+  try {
+    const records = loadDailyRecords();
+    const existing = records[record.dateKey];
+    if (!existing || compareDailyRecords(record, existing) > 0) {
+      records[record.dateKey] = record;
+      platformStorage().set(DAILY_KEY, JSON.stringify(records));
+    }
+  } catch (error) {
+    console.warn("Unable to save daily record", error);
   }
 }

@@ -106,3 +106,20 @@ export function scoreLabel(score: number): string {
   if (score >= 40) return "入门";
   return "未稳";
 }
+
+/**
+ * P3 最终合成评分（双通道汇总，确定性）。
+ * - toneScore 为 null/undefined（WebSpeech、无声、浊音不足）→ 纯字准，与 V1 完全一致；
+ * - 有调准分 → final = 字准综合·(1-toneWeight) + 调准·toneWeight（默认 60/40，可调）。
+ */
+export function composeFinalScore(
+  textScore: number,
+  toneScore: number | null | undefined,
+  toneWeight: number
+): number {
+  if (toneScore == null || !Number.isFinite(toneScore)) {
+    return Math.max(0, Math.min(100, Math.round(textScore)));
+  }
+  const weight = Math.max(0, Math.min(0.8, toneWeight));
+  return Math.max(0, Math.min(100, Math.round(textScore * (1 - weight) + toneScore * weight)));
+}

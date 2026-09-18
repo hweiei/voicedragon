@@ -12,6 +12,50 @@ export const SCORING_WEIGHTS = {
   tone: 0
 } as const;
 
+/**
+ * P3 声调权重（REDESIGN-PLAN §4.2：默认 字 60% / 调 40%，可在设置调整）。
+ * 合成规则（composeFinalScore）：有调准分时 final = 字准综合·(1-toneWeight) + 调准·toneWeight；
+ * 无调准分（WebSpeech / 无声 / 能量不足）恒回退 V1 权重，行为与 P0 黄金契约一致。
+ */
+export const SCORING_WEIGHTS_V2 = {
+  text: 0.6,
+  tone: 0.4,
+  confidence: 0
+} as const;
+
+/** 声调引擎调参（核心层纯函数引用）。 */
+export const TONE_TUNING = {
+  /** 有效浊音帧占比下限，不足则判“无声/噪声”返回 null */
+  minVoicedRatio: 0.32,
+  /** 有效发声最短时长（毫秒） */
+  minVoicedMs: 260,
+  /** pitchy 清晰度门限（0~1，低于视为噪音帧） */
+  clarityGate: 0.72,
+  /** 每音节重采样点数（DTW 对齐粒度） */
+  resamplePoints: 14,
+  /** DTW 平均路径距离（半音）：≤此值满分 */
+  distFullScore: 1.1,
+  /** DTW 平均路径距离（半音）：≥此值零分 */
+  distZero: 4.6,
+  /** 期望调型并非所有调型中最优时的惩罚系数 */
+  mismatchPenalty: 0.62,
+  /** F0 合法区间（Hz），过滤倍频/半频异常帧 */
+  minHz: 70,
+  maxHz: 600,
+  /** 调型“升降/水平”判别的最小半音斜率差：模板间差异须明显才可惩罚错调 */
+  slopeSeparation: 0.8
+} as const;
+
+/** 六调调型模板数值（核心层 tone.ts 引用）。 */
+export const TONE_SHAPES = {
+  1: { offset: 3.2, slope: -0.6 },
+  2: { offset: 1.2, slope: 5.0 },
+  3: { offset: 0.2, slope: 0 },
+  4: { offset: -3.2, slope: -2.4 },
+  5: { offset: -1.7, slope: 3.4 },
+  6: { offset: -0.9, slope: 0 }
+} as const;
+
 /** 语音模型分片下载参数：每片 8 MiB。 */
 export const MODEL_PART_SIZE = 8 * 1024 * 1024;
 
