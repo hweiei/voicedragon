@@ -1,44 +1,47 @@
 <!doctype html>
 <html lang="zh-Hans">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
-  <meta name="theme-color" content="#171311">
-  <meta name="description" content="粤语语音驱动的十层 Roguelike 爬塔试玩原型">
-  <title>声震龙楼 · 粤语声攻 Roguelike</title>
-  <link rel="stylesheet" href="./styles.css">
-</head>
-<body>
-  <div class="ambient ambient-a" aria-hidden="true"></div>
-  <div class="ambient ambient-b" aria-hidden="true"></div>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no"
+    />
+    <meta name="theme-color" content="#171311" />
+    <meta name="description" content="粤语语音驱动的爬塔闯关 Roguelike。讲得准，打得狠；一路开声，一路登楼。" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
+    <title>声震龙楼 · 粤语声攻 Roguelike</title>
+  </head>
+  <body>
+    <div class="ambient ambient-a" aria-hidden="true"></div>
+    <div class="ambient ambient-b" aria-hidden="true"></div>
 
-  <div id="game-shell" class="game-shell">
-    <header id="topbar" class="topbar" hidden>
-      <div class="brand-mini">
-        <span class="brand-seal">声</span>
-        <div>
-          <strong>声震龙楼</strong>
-          <small id="platform-label">网页试玩</small>
+    <div id="game-shell" class="game-shell">
+      <header id="topbar" class="topbar" hidden>
+        <div class="brand-mini">
+          <span class="brand-seal">声</span>
+          <div>
+            <strong>声震龙楼</strong>
+            <small id="platform-label">网页试玩</small>
+          </div>
         </div>
-      </div>
-      <div class="topbar-actions">
-        <button class="icon-button" id="inventory-button" type="button" aria-label="查看行囊">
-          <span aria-hidden="true">囊</span>
-          <b id="inventory-count">0</b>
-        </button>
-        <button class="icon-button" id="help-button" type="button" aria-label="查看玩法说明">
-          <span aria-hidden="true">?</span>
-        </button>
-      </div>
-    </header>
+        <div class="topbar-actions">
+          <button class="icon-button" id="inventory-button" type="button" aria-label="查看行囊">
+            <span aria-hidden="true">囊</span>
+            <b id="inventory-count">0</b>
+          </button>
+          <button class="icon-button" id="help-button" type="button" aria-label="查看玩法说明">
+            <span aria-hidden="true">?</span>
+          </button>
+        </div>
+      </header>
 
-    <main id="app" class="app" aria-live="polite"></main>
+      <main id="app" class="app" aria-live="polite"></main>
 
-    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-    <div id="modal-root" class="modal-root" aria-live="assertive"></div>
-  </div>
+      <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+      <div id="modal-root" class="modal-root" aria-live="assertive"></div>
+    </div>
 
-  <script src="./js/config.js"></script>
-  <script type="module" src="./js/main.js"></script>
-</body>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
 </html>

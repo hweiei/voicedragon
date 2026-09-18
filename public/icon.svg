@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#171311"/>
+  <circle cx="256" cy="222" r="152" fill="none" stroke="#e05a43" stroke-width="10" opacity=".3"/>
+  <circle cx="256" cy="222" r="108" fill="none" stroke="#e05a43" stroke-width="10" opacity=".55"/>
+  <circle cx="256" cy="222" r="64" fill="none" stroke="#e05a43" stroke-width="10"/>
+  <text x="256" y="250" font-size="88" text-anchor="middle" fill="#f2b16d" font-family="serif">声</text>
+  <rect x="112" y="316" width="288" height="96" rx="20" fill="#e05a43"/>
+  <text x="256" y="380" font-size="52" text-anchor="middle" fill="#fff8f0" font-family="serif">龙楼</text>
+</svg>

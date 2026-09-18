@@ -1,0 +1,32 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npx biome ci .
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Unit & contract tests
+        run: npx vitest run
+
+      - name: Build (PWA)
+        run: npm run build

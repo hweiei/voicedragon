@@ -1,7 +1,24 @@
 {
   "name": "voice-tower-cantonese-roguelike",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "粤语语音驱动的移动端爬塔 Roguelike 可玩原型"
+  "description": "粤语语音驱动的 Web 爬塔闯关 Roguelike（《声震龙楼》v2）",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
+    "ci": "biome ci . && tsc --noEmit && vitest run && vite build"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4",
+    "typescript": "~5.6.2",
+    "vite": "^6.0.0",
+    "vite-plugin-pwa": "^0.21.2",
+    "vitest": "^3.0.0"
+  }
 }
