@@ -1,7 +1,7 @@
 # 《声震龙楼》v2.0 · Web 闯关游戏完整重构与扩展方案
 
 > 版本：v1.0（2026-09-18） · 状态：**已批准（P0–P3 / Cloudflare Pages / 保底即玩自愿下载）**
-> 进度：✅ P0 完成 ✅ P1 完成 ✅ P2 完成（68 测）✅ P3 完成（声调引擎 + 学习闭环，88/88 测试绿，已推送）→ 下一步 P4 留存与打磨
+> 进度：✅ P0 完成 ✅ P1 完成 ✅ P2 完成（68 测）✅ P3 完成（声调引擎 + 学习闭环，88/88 测试绿，已推送）✅ P4 完成（留存与打磨：成就 13 枚 + 图鉴 5 类 + 3 主题皮肤 + 无尽塔 + 战绩海报分享 + 自适应难度 ±5%/−8% + og/twitter 分享图与 PWA PNG 图标；113/113 测试绿，biome/tsc/build 全绿。Lighthouse 实测需部署后在 Cloudflare Pages 上跑）→ 下一步 P5 音效与演出
 > P3 备注：① 声调引擎 `src/core/tone.ts`——粤拼调母→六调调型模板（中位数归一、说话人音域无关）→ 音节分段 DTW → 几何平均聚合，全部纯函数确定性；合成权重默认字 60% / 调 40%（设置页滑杆 0–80% 可调），无 F0 通道恒回退 V1 纯字准（黄金契约不动）；② F0 由 pitchy（McLeod）在 SenseVoice 采集链并行抽取（2048 窗/512 步进），WebSpeech 无 PCM 通道按设计回退；③ 学习闭环 `src/core/srs.ts`：综合分 <65 自动进错词本、SM-2 简化调度（1→3→×ease）、「每日三句」到期优先、四维学习报告（字准/调准/信心/词汇 SVG 雷达）；④ 每日挑战 = djb2(本地日期) 种子经典局 + 本地最优战绩；⑤ 练习场实时双曲线（期望调型 vs 用户基频 + 音节级评分圆点）走 onPitchFrame 回调，跟读成绩同样进 SRS。
 > P2 备注：① 地图生成器 `src/core/levelgen.ts`（mulberry32 独立种子流，形状约束由 `validateActMap` 守护并被契约测试直接复用）；② 经典线性塔保留（9 黄金契约不动），战役经 `startCampaign(act, seed)` 双轨驱动，存档仍为 v2（campaign 为可选增量字段，旧档无缝继续）；③ ★跨局累计于元存档 `voice-tower-campaign-meta-v1`（同幕同种子，只升不降）；④ 浏览器层 Playwright 通关 E2E 留待 CI 环境（引擎层全程通关已由 `tests/contract/campaign.test.ts` 锁定，`__VOICE_TOWER__.startCampaign` 调试钩子已就位）。
 > 前文决策：放弃微信小游戏方向，以当前 Web 原型（`index.html` + `js/`）为基座，

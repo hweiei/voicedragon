@@ -8,6 +8,7 @@ import "./ui/styles.css";
 import { setKeepScreenOn } from "./adapters/platform";
 import {
   loadCampaignMeta,
+  loadProfile,
   loadSettings,
   saveCampaignMeta,
   saveGame,
@@ -27,14 +28,21 @@ import type { DownloadProgress } from "./adapters/voice/sensevoice/model-store";
 import { SCORING_WEIGHTS_V2 } from "./core/config/balance";
 import { GameEngine } from "./core/engine";
 import type { EmitOptions, GameState } from "./core/engine";
+import { adaptiveBoostFor } from "./core/profile";
 import { GameUI } from "./ui/ui";
 import type { VoiceServices } from "./ui/ui";
 
 const settings = loadSettings();
 document.body.classList.toggle("reduce-motion", settings.reduceMotion);
+// P4 主题皮肤：data-theme 由设置档驱动（ink 为根变量默认，无需覆盖）
+document.body.dataset.theme = settings.theme ?? "ink";
 
 const engine = new GameEngine();
 const tts = new SpeechTts();
+
+// P4 自适应难度注入：连胜略加难 / 连败略减压（设置页可关），随每局开局采样
+engine.adaptiveProvider = () =>
+  settings.adaptiveEnabled !== false ? adaptiveBoostFor(loadProfile().stats.adaptiveStreak) : 0;
 
 // ─── P2 战役元存档：同一幕的节点★最高纪录跨局累计 ─────────────────────────────
 

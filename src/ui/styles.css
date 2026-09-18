@@ -2547,3 +2547,189 @@ body.reduce-motion *::after {
   color: var(--paper-soft);
   font-size: 13px;
 }
+
+/* ═══════════════ P4 留存层：主题皮肤 · 成就 · 图鉴 · 自适应徽标 ═══════════════ */
+
+/* 霓虹（赛博纸醉）：电光青 × 品红金 */
+body[data-theme="neon"] {
+  --ink: #0a0d1a;
+  --ink-2: #11162b;
+  --ink-3: #1a2140;
+  --paper: #e8f4ff;
+  --paper-soft: #b9d2ea;
+  --muted: #7f95b8;
+  --line: rgba(99, 220, 255, 0.22);
+  --red: #ff4fa3;
+  --red-bright: #ff7ac0;
+  --gold: #63dcff;
+  --gold-bright: #a5f1ff;
+  --jade: #4fffc4;
+  --cyan: #63dcff;
+  color-scheme: dark;
+  background: radial-gradient(circle at 50% -10%, rgba(255, 79, 163, 0.16), transparent 40%),
+    linear-gradient(155deg, #070912 0%, #101530 55%, #0a0f22 100%);
+}
+
+/* 宣纸（米白粉彩）：浅色纸面 × 朱砂印 */
+body[data-theme="paper"] {
+  --ink: #efe4cd;
+  --ink-2: #f7eedd;
+  --ink-3: #fff8ea;
+  --paper: #3c2c20;
+  --paper-soft: #5d4832;
+  --muted: #93795d;
+  --line: rgba(120, 88, 52, 0.26);
+  --red: #c53b2c;
+  --red-bright: #e0563f;
+  --gold: #a67c2e;
+  --gold-bright: #c9a24f;
+  --jade: #2f7a5f;
+  --cyan: #3d8b93;
+  color-scheme: light;
+  background: radial-gradient(circle at 50% -10%, rgba(197, 59, 44, 0.1), transparent 36%),
+    linear-gradient(155deg, #e6d9bf 0%, #f3ead6 52%, #e9dfc9 100%);
+}
+body[data-theme="paper"] .panel,
+body[data-theme="paper"] .hud-card,
+body[data-theme="paper"] .summary-card,
+body[data-theme="paper"] .modal-sheet,
+body[data-theme="paper"] .ach-card,
+body[data-theme="paper"] .codex-card {
+  box-shadow: 0 10px 34px rgba(90, 62, 30, 0.16);
+}
+
+/* 自适应难度徽标 */
+.adaptive-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(214, 169, 77, 0.1);
+  color: var(--gold-bright);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+
+/* 成就页 */
+.ach-list {
+  display: grid;
+  gap: 10px;
+}
+.ach-card {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--ink-2);
+  opacity: 0.62;
+}
+.ach-card.lit {
+  opacity: 1;
+  border-color: rgba(214, 169, 77, 0.4);
+  background: linear-gradient(120deg, rgba(214, 169, 77, 0.12), var(--ink-2) 60%);
+}
+.ach-card strong {
+  display: block;
+  font-size: 14.5px;
+}
+.ach-card strong small {
+  margin-left: 8px;
+  color: var(--gold-bright);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+.ach-card small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.ach-seal {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--gold);
+  border-radius: 10px;
+  color: var(--gold-bright);
+  font-size: 20px;
+  background: rgba(216, 78, 63, 0.12);
+  box-shadow: inset 0 0 0 2px rgba(216, 78, 63, 0.18);
+}
+.ach-card:not(.lit) .ach-seal {
+  border-color: var(--line);
+  color: var(--muted);
+  background: transparent;
+  box-shadow: none;
+}
+.ach-state {
+  margin-left: auto;
+  color: var(--jade);
+  font-weight: 700;
+}
+
+/* 图鉴页 */
+.codex-section {
+  margin-bottom: 12px;
+}
+.codex-section summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14.5px;
+}
+.codex-section summary small {
+  color: var(--muted);
+  font-weight: 500;
+}
+.codex-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+.codex-card {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--ink-2);
+  opacity: 0.55;
+}
+.codex-card.lit {
+  opacity: 1;
+}
+.codex-card strong {
+  display: block;
+  font-size: 13.5px;
+}
+.codex-card small {
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+.codex-mark {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--gold-bright);
+  font-size: 15px;
+  background: rgba(214, 169, 77, 0.08);
+}
+
+/* 设置页锁定主题行 */
+.radio-line.locked span {
+  color: var(--muted);
+}

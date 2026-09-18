@@ -9,10 +9,13 @@ import { getPlatformLabel, vibrate } from "../adapters/platform";
 import {
   clearSave,
   hasSave,
+  loadCampaignMeta,
   loadDailyRecords,
   loadGame,
+  loadProfile,
   loadSrsStore,
   saveDailyRecord,
+  saveProfile,
   saveSrsStore
 } from "../adapters/storage";
 import type { GameSettings } from "../adapters/storage";
@@ -24,12 +27,22 @@ import type {
 } from "../adapters/voice";
 import type { ModelStatus } from "../adapters/voice/sensevoice/model-store";
 import type { DownloadProgress } from "../adapters/voice/sensevoice/model-store";
+import {
+  ACHIEVEMENTS,
+  ACHIEVEMENT_POINTS_TOTAL,
+  achievementPoints,
+  newlyUnlocked
+} from "../core/achievements";
+import type { AchievementContext } from "../core/achievements";
 import { dailySeedForKey, dateKeyFor } from "../core/daily";
-import { ITEMS, RELICS, SKILLS, getSkill } from "../core/data";
+import { BOSS, ELITES, ENEMIES, EVENTS, ITEMS, RELICS, SKILLS, getSkill } from "../core/data";
 import type { Skill } from "../core/data";
 import { NODE_META } from "../core/engine";
-import type { EmitOptions, GameEngine, GameState } from "../core/engine";
+import type { EmitOptions, GameEngine, GameState, RunSummary } from "../core/engine";
+import { generateActMap } from "../core/levelgen";
 import type { ActNode } from "../core/levelgen";
+import { countSrsGraduated, markCodexSeen, recordRunEnd, recordVoiceCast } from "../core/profile";
+import type { ProfileStore } from "../core/profile";
 import { scoreLabel, scorePronunciation } from "../core/scoring";
 import { buildLearningReport, dailyPicks, recordAttempt } from "../core/srs";
 import {
@@ -41,7 +54,33 @@ import {
   previewTemplateCurve,
   resamplePoints
 } from "../core/tone";
+import { drawRunPoster, sharePoster } from "./poster";
 import { VocalQte } from "./qte";
+
+// ─── P4 玩家档案缓存（读档/语音/结算时持久化） ───────────────────────────────
+
+const profileCache: ProfileStore = loadProfile();
+
+function persistProfile(mutate: (profile: ProfileStore) => void): void {
+  mutate(profileCache);
+  saveProfile(profileCache);
+}
+
+/** 由战役种子确定性重算问答节点 id 集（用于成就「问答状元」计数）。 */
+function mapQuizNodeIds(mapSeed: number): string[] {
+  return generateActMap(mapSeed)
+    .nodes.filter((node) => node.type === "quiz")
+    .map((node) => node.id);
+}
+
+/** P4 主题档：extended 主题需成就点解锁 */
+const THEME_DEFS = [
+  { id: "ink", name: "墨色", requirement: 0, desc: "默认 · 水墨金印" },
+  { id: "neon", name: "霓虹", requirement: 60, desc: "成就点 60 解锁 · 赛博纸醉" },
+  { id: "paper", name: "宣纸", requirement: 120, desc: "成就点 120 解锁 · 米白粉彩" }
+] as const;
+
+type ThemeId = (typeof THEME_DEFS)[number]["id"];
 
 // ─── 注入服务（组合根提供） ───────────────────────────────────────────────────
 
@@ -194,7 +233,7 @@ function hud(state: GameState): string {
         <strong>${player.hp} / ${player.maxHp}</strong>
         <div class="hp-meter"><span style="width:${percent(player.hp, player.maxHp)}%"></span></div>
       </div>
-      <div class="hud-card"><small>楼层</small><strong>${state.floor} / ${state.maxFloor}</strong></div>
+      <div class="hud-card"><small>楼层</small><strong>${state.endless ? `第 ${state.floor} 层 · ∞` : `${state.floor} / ${state.maxFloor}`}</strong></div>
       <div class="hud-card"><small>银两</small><strong>${player.gold} 两</strong></div>
       <div class="hud-card"><small>声韵</small><strong>+${player.voiceMastery}</strong></div>
     </div>`;
@@ -258,9 +297,12 @@ function titleTemplate(): string {
         <button class="${resume ? "secondary-button" : "primary-button"} full-button" type="button" data-action="new-run">${resume ? "重新开局" : "开始登楼"}</button>
         <button class="${resume ? "ghost-button" : "secondary-button"} full-button" type="button" data-action="new-campaign">战役 · 第一幕（7×15 分支地图）</button>
         <button class="ghost-button full-button" type="button" data-action="daily-challenge">每日挑战 · ${escapeHtml(dailyStatusLabel())}</button>
+        <button class="ghost-button full-button" type="button" data-action="endless-run">无尽塔 · 深塔回廊（最佳 ${profileCache.stats.endlessBest} 层）</button>
         <div class="title-quick">
           <button class="ghost-button" type="button" data-action="open-practice">练习场 · 调准曲线</button>
           <button class="ghost-button" type="button" data-action="open-report">学习报告</button>
+          <button class="ghost-button" type="button" data-action="open-achievements">成就</button>
+          <button class="ghost-button" type="button" data-action="open-codex">图鉴</button>
         </div>
         ${titleReviewStrip()}
         <button class="ghost-button full-button" type="button" data-action="show-help">玩法与语音说明</button>
@@ -275,11 +317,13 @@ function towerTemplate(state: GameState, engine: GameEngine): string {
   const player = state.player!;
   const lessonId = player.deck[(state.floor + 1) % player.deck.length];
   const lesson = getSkill(lessonId)!;
-  const dots = Array.from({ length: state.maxFloor }, (_, index) => {
-    const floor = index + 1;
-    const status = floor <= state.floor ? "done" : floor === nextFloor ? "active" : "";
-    return `<div class="floor-dot ${status}"><i></i><small>${floor}</small></div>`;
-  }).join("");
+  const dots = state.endless
+    ? ""
+    : Array.from({ length: state.maxFloor }, (_, index) => {
+        const floor = index + 1;
+        const status = floor <= state.floor ? "done" : floor === nextFloor ? "active" : "";
+        return `<div class="floor-dot ${status}"><i></i><small>${floor}</small></div>`;
+      }).join("");
   const gates = state.floorOptions
     .map(
       (option) => `
@@ -297,7 +341,7 @@ function towerTemplate(state: GameState, engine: GameEngine): string {
   return `
     <section class="screen tower-screen">
       ${hud(state)}
-      <div class="floor-progress">${dots}</div>
+      ${state.endless ? "" : `<div class="floor-progress">${dots}</div>`}
       <div class="floor-heading">
         <div>
           <p class="eyebrow">选择下一道门</p>
@@ -306,6 +350,7 @@ function towerTemplate(state: GameState, engine: GameEngine): string {
         </div>
         <div class="floor-number">${String(nextFloor).padStart(2, "0")}</div>
       </div>
+      ${(state.adaptiveBoost ?? 0) !== 0 ? `<div class="adaptive-chip">自适应难度已${state.adaptiveBoost! > 0 ? "上调" : "减压"} ${(Math.abs(state.adaptiveBoost!) * 100).toFixed(0)}%</div>` : ""}
       ${state.notice ? `<div class="notice-strip">${escapeHtml(state.notice)}</div>` : ""}
       <div class="gate-list">${gates}</div>
       <div class="panel lesson-card">
@@ -628,12 +673,15 @@ function endTemplate(state: GameState, engine: GameEngine, victory: boolean): st
   const campaignLine = state.campaign
     ? `<p class="screen-subtitle">第一幕战役星辉累计 <strong>${campaignStars} 颗</strong>（已刻入地图，重打同一幕只会刷新最高纪录）。</p>`
     : "";
+  const endlessLine = state.endless
+    ? `<p class="screen-subtitle">无尽塔最佳纪录：<strong>${Math.max(loadProfile().stats.endlessBest, summary.floor)} 层</strong>（倒下即刻结算，纪录本地保留）。</p>`
+    : "";
   return `
     <section class="screen end-screen ${victory ? "victory" : "defeat"}">
       <div class="end-seal">${victory ? "胜" : "落"}</div>
-      <p class="eyebrow">${victory ? (state.campaign ? "第一幕通关" : "十层尽破") : `止步第 ${summary.floor} 层`}</p>
+      <p class="eyebrow">${victory ? (state.campaign ? "第一幕通关" : "十层尽破") : state.endless ? `无尽塔止步第 ${summary.floor} 层` : `止步第 ${summary.floor} 层`}</p>
       <h1 class="screen-title">${victory ? "你的声音响彻龙楼" : "声气未绝，下次再来"}</h1>
-      ${campaignLine}
+      ${campaignLine}${endlessLine}
       <p class="screen-subtitle">${victory ? "九龙声煞已散。你带着一路学会的粤语短句走下天台。" : "本局路线与收获会被结算，重新开局将生成新的楼层。"}</p>
       <div class="summary-grid">
         <div class="summary-card"><strong>${summary.enemies}</strong><small>击败敌人</small></div>
@@ -643,6 +691,7 @@ function endTemplate(state: GameState, engine: GameEngine, victory: boolean): st
       </div>
       <div class="button-row">
         <button class="ghost-button" type="button" data-action="back-title">返回标题</button>
+        <button class="ghost-button" type="button" data-action="share-poster">生成战绩海报</button>
         <button class="primary-button" type="button" data-action="restart-run">再闯一局</button>
       </div>
     </section>`;
@@ -675,8 +724,8 @@ export class GameUI {
   private modelUnsubscribe: (() => void) | null = null;
   private lastPhase: string | null = null;
   private combatStartHp: number | null = null;
-  /** P3：标题层视图（游戏界面 / 练习场 / 学习报告） */
-  private view: "game" | "practice" | "report" = "game";
+  /** P3/P4：标题层视图（游戏界面 / 练习场 / 学习报告 / 成就 / 图鉴） */
+  private view: "game" | "practice" | "report" | "achievements" | "codex" = "game";
   private practiceSkillId: string | null = null;
   private practiceRecording = false;
   private practiceLiveFrames: PitchFrame[] = [];
@@ -684,6 +733,10 @@ export class GameUI {
   private practiceRaf: number | null = null;
   /** P3：本局为每日挑战时记录其日期键（结算时写入战绩） */
   private sessionDaily: string | null = null;
+  /** P4：本局档案结算去重键（同一局结束只写一次档案） */
+  private recordedRunKey: string | null = null;
+  /** P4：复用的海报画布（结算屏分享按钮生成） */
+  private posterCanvas: HTMLCanvasElement | null = null;
 
   constructor({
     engine,
@@ -750,6 +803,14 @@ export class GameUI {
     if (action === "practice-record") this.practiceRecord();
     if (action === "practice-stop") this.adapter?.stop();
     if (action === "open-report") this.openReport();
+    // ─── P4 标题层动作 ───
+    if (action === "endless-run") {
+      clearSave();
+      this.engine.startEndless();
+    }
+    if (action === "open-achievements") this.openView("achievements");
+    if (action === "open-codex") this.openView("codex");
+    if (action === "share-poster") void this.shareRunPoster();
     if (action === "close-view") this.closeView();
     if (action === "show-help") this.openHelp();
     if (action === "open-settings") this.openSettings();
@@ -765,7 +826,9 @@ export class GameUI {
     if (action === "reward-skip") this.engine.chooseReward();
     if (action === "restart-run") {
       clearSave();
-      this.engine.startNew();
+      // P4：无尽局结算后「再闯一局」仍回无尽塔，其余按经典开局
+      if (this.engine.state.endless) this.engine.startEndless();
+      else this.engine.startNew();
     }
     if (action === "back-title") {
       clearSave();
@@ -813,6 +876,17 @@ export class GameUI {
       this.sessionDaily = null;
     }
 
+    // P4 档案结算：同一局结束只写一次（种+层+相 去重）
+    if (state.phase === "victory" || state.phase === "defeat") {
+      const runKey = `${state.seed}:${state.floor}:${state.phase}`;
+      if (this.recordedRunKey !== runKey) {
+        this.recordedRunKey = runKey;
+        this.recordRunToProfile(state);
+      }
+      // 图鉴点亮：本局见过的卡牌 / 敌人 / 事件 / 遗物 / 道具（幂等）
+      this.markCodexFromState(state);
+    }
+
     // 战斗入场埋点：战役结算需要「本场开始时的生命」快照
     if (state.phase !== this.lastPhase) {
       this.lastPhase = state.phase;
@@ -822,11 +896,18 @@ export class GameUI {
     const isTitle = state.phase === "title";
     this.topbar.hidden = isTitle;
 
-    // P3 标题层视图：练习场 / 学习报告（引擎停留在 title 相，视图由 UI 自管）
+    // P3/P4 标题层视图：练习场 / 学习报告 / 成就 / 图鉴（引擎停留在 title 相）
     if (isTitle && this.view !== "game") {
-      this.root.innerHTML =
-        this.view === "practice" ? this.practiceTemplate() : this.reportTemplate();
-      if (this.view === "practice") this.paintPracticeCanvas();
+      if (this.view === "practice") {
+        this.root.innerHTML = this.practiceTemplate();
+        this.paintPracticeCanvas();
+      } else if (this.view === "report") {
+        this.root.innerHTML = this.reportTemplate();
+      } else if (this.view === "achievements") {
+        this.root.innerHTML = this.achievementsTemplate();
+      } else {
+        this.root.innerHTML = this.codexTemplate();
+      }
       return;
     }
     if (!isTitle) {
@@ -1057,7 +1138,130 @@ export class GameUI {
     this.closeModal(false);
     // P3：真实语音尝试进入学习闭环（错词本 / 学习报告 / 每日三句）
     this.recordVoiceAttempt(skill.id, result);
+    // P4：真声施法累计进档案（连珠/最佳/次数），并即时点亮成就
+    if (result.source !== "qte" && result.source !== "manual-test") {
+      persistProfile((p) => recordVoiceCast(p, result.score));
+      this.checkNewAchievements();
+    }
     this.engine.resolveSkill(skill.id, result.score, result);
+  }
+
+  // ─── P4 档案 / 成就 / 图鉴接线 ─────────────────────────────────────────────
+
+  /** 一局终局计入档案（战绩 / 无尽最佳 / 自适应节律），并点亮新成就。 */
+  private recordRunToProfile(state: GameState): void {
+    const summary = this.engine.getRunSummary();
+    persistProfile((p) =>
+      recordRunEnd(p, {
+        victory: state.phase === "victory",
+        endless: Boolean(state.endless),
+        campaign: Boolean(state.campaign),
+        floor: state.floor,
+        summary
+      })
+    );
+    this.checkNewAchievements();
+  }
+
+  /** 成就判定上下文：档案统计 + 战役星辉（由种子重算节点类型）+ 每日战绩 + SRS 驯服数。 */
+  private profileContext(): AchievementContext {
+    const stats = profileCache.stats;
+    const meta = loadCampaignMeta();
+    const campaignStarsTotal = meta
+      ? Object.values(meta.stars).reduce((sum, value) => sum + value, 0)
+      : 0;
+    const quizNodeIds = new Set(meta ? mapQuizNodeIds(meta.mapSeed) : []);
+    let quizPerfects = 0;
+    if (meta) {
+      for (const [nodeId, stars] of Object.entries(meta.stars)) {
+        if (stars >= 3 && quizNodeIds.has(nodeId)) quizPerfects += 1;
+      }
+    }
+    return {
+      voiceAttempts: stats.voiceAttempts,
+      bestVoice: stats.bestVoice,
+      maxCombo85: stats.maxCombo85,
+      runs: stats.runs,
+      victories: stats.victories,
+      classicVictories: stats.classicVictories,
+      kills: stats.kills,
+      elites: stats.elites,
+      endlessBest: stats.endlessBest,
+      campaignStarsTotal,
+      campaignBossKills: stats.campaignBossKills,
+      quizPerfects,
+      dailyWins: Object.values(loadDailyRecords()).filter((record) => record.victory).length,
+      srsGraduated: countSrsGraduated(loadSrsStore())
+    };
+  }
+
+  /** 判定并toast新解锁成就（顺序按定义）。 */
+  private checkNewAchievements(): void {
+    const fresh = newlyUnlocked(this.profileContext(), profileCache.unlocked);
+    if (!fresh.length) return;
+    persistProfile((p) => {
+      for (const def of fresh) p.unlocked.push(def.id);
+    });
+    const names = fresh.map((def) => `「${def.name}」`).join(" ");
+    const points = fresh.reduce((sum, def) => sum + def.points, 0);
+    this.showToast(`成就解锁 ${names} · +${points} 点`);
+  }
+
+  /** 本局足迹点亮图鉴（卡牌 / 遗物 / 道具 / 敌人 / 事件，幂等）。 */
+  private markCodexFromState(state: GameState): void {
+    persistProfile((p) => {
+      const player = state.player;
+      if (player) {
+        markCodexSeen(p, "skills", player.deck);
+        markCodexSeen(p, "relics", player.relics);
+        markCodexSeen(p, "items", player.items);
+      }
+      if (state.combat) markCodexSeen(p, "enemies", [state.combat.enemy.id]);
+      if (state.event) markCodexSeen(p, "events", [state.event.id]);
+      // 终局必见关底：胜利 = 击败过 boss（经典塔与战役共用九龙声煞）
+      if (state.phase === "victory") markCodexSeen(p, "enemies", [BOSS.id]);
+    });
+  }
+
+  /** 结算屏战绩海报：生成→系统分享（缺席时自动下载）。 */
+  private async shareRunPoster(): Promise<void> {
+    const state = this.engine.state;
+    const summary = this.engine.getRunSummary();
+    const victory = state.phase === "victory";
+    if (!this.posterCanvas) {
+      this.posterCanvas = document.createElement("canvas");
+    }
+    const campaignStars = state.campaign
+      ? Object.values(state.campaign.stars).reduce((sum, value) => sum + value, 0)
+      : 0;
+    const modeLabel = state.endless ? "无尽塔" : state.campaign ? "战役第一幕" : "经典十层";
+    drawRunPoster(this.posterCanvas, {
+      victory,
+      title: victory ? "声震龙楼" : "下次再会",
+      subtitle: state.endless
+        ? `${modeLabel} · 止步第 ${state.floor} 层`
+        : victory
+          ? `${modeLabel} · 一路登顶`
+          : `${modeLabel} · 止步第 ${state.floor} 层`,
+      seal: victory ? "胜" : "落",
+      stats: [
+        {
+          label: "楼层",
+          value: state.endless ? `${state.floor} ∞` : `${state.floor} / ${state.maxFloor}`
+        },
+        { label: "击败敌人", value: String(summary.enemies) },
+        { label: "平均声韵", value: String(summary.averageScore) },
+        { label: "最高声韵", value: String(summary.bestScore) },
+        { label: "技能总数", value: String(summary.skills) },
+        { label: "无尽最佳", value: `${profileCache.stats.endlessBest} 层` }
+      ],
+      starsLabel: state.campaign ? `战役星辉 × ${campaignStars}` : undefined,
+      dateLabel: dateKeyFor(new Date())
+    });
+    const result = await sharePoster(this.posterCanvas, "voicedragon-run.png");
+    if (result === "shared") this.showToast("已拉起系统分享");
+    else if (result === "downloaded") this.showToast("已下载海报 PNG");
+    else this.showToast("分享失败，请重试");
   }
 
   // ─── 设置页 ────────────────────────────────────────────────────────────────
@@ -1093,9 +1297,23 @@ export class GameUI {
           </div>
         </div>
         <div class="settings-group">
+          <h3>外观主题（P4）</h3>
+          ${THEME_DEFS.map((def) => {
+            const points = achievementPoints(profileCache.unlocked);
+            const locked = points < def.requirement;
+            const active = (settings.theme ?? "ink") === def.id;
+            return `
+              <label class="radio-line ${locked ? "locked" : ""}">
+                <input type="radio" name="theme" value="${def.id}" ${active ? "checked" : ""} ${locked ? "disabled" : ""} />
+                <span>${escapeHtml(def.name)} · ${escapeHtml(def.desc)}${locked ? `（当前 ${points} 点）` : ""}</span>
+              </label>`;
+          }).join("")}
+        </div>
+        <div class="settings-group">
           <h3>体验</h3>
-          <label class="radio-line"><input type="checkbox" id="set-sound" ${settings.sound ? "checked" : ""} /><span>音效（施工中，P4 上线）</span></label>
+          <label class="radio-line"><input type="checkbox" id="set-sound" ${settings.sound ? "checked" : ""} /><span>音效（施工中，P5 上线）</span></label>
           <label class="radio-line"><input type="checkbox" id="set-reduce-motion" ${settings.reduceMotion ? "checked" : ""} /><span>减弱动效</span></label>
+          <label class="radio-line"><input type="checkbox" id="set-adaptive" ${settings.adaptiveEnabled !== false ? "checked" : ""} /><span>自适应难度（连胜略加难、连败略减压，可在开局前随时关闭）</span></label>
         </div>
         <div class="notice-strip">隐私承诺：端侧模式下语音全部留在本机；在线模式只上传你施法的几秒收音，绝不收集其它数据。</div>
       </div>`;
@@ -1131,6 +1349,21 @@ export class GameUI {
       .querySelector<HTMLInputElement>("#set-reduce-motion")
       ?.addEventListener("change", (e) => {
         this.services.settings.save({ reduceMotion: (e.target as HTMLInputElement).checked });
+      });
+    // 主题皮肤（P4）
+    for (const input of this.modalRoot.querySelectorAll<HTMLInputElement>('input[name="theme"]')) {
+      input.addEventListener("change", () => {
+        this.services.settings.save({ theme: input.value as ThemeId });
+        document.body.dataset.theme = input.value;
+        const picked = THEME_DEFS.find((def) => def.id === input.value);
+        this.showToast(`主题已切换：${picked?.name ?? input.value}`);
+      });
+    }
+    // 自适应难度开关（P4）
+    this.modalRoot
+      .querySelector<HTMLInputElement>("#set-adaptive")
+      ?.addEventListener("change", (e) => {
+        this.services.settings.save({ adaptiveEnabled: (e.target as HTMLInputElement).checked });
       });
 
     this.refreshModelPanel();
@@ -1270,6 +1503,12 @@ export class GameUI {
 
   private openReport(): void {
     this.view = "report";
+    this.render(this.engine.state);
+  }
+
+  /** P4 标题层二级页（成就 / 图鉴） */
+  private openView(view: "achievements" | "codex"): void {
+    this.view = view;
     this.render(this.engine.state);
   }
 
@@ -1420,6 +1659,104 @@ export class GameUI {
     const syllableCount =
       detail?.expectedTones.length ?? parseJyutpingTones(skill.jyutping).length ?? 1;
     drawPitchCurves(canvas, template, user, detail?.perSyllable ?? null, syllableCount);
+  }
+
+  /** P4 成就页：点亮 / 未点亮 / 隐藏卡，附总点与主题解锁提示 */
+  private achievementsTemplate(): string {
+    const unlocked = new Set(profileCache.unlocked);
+    const points = achievementPoints(unlocked);
+    const cards = ACHIEVEMENTS.map((def) => {
+      const got = unlocked.has(def.id);
+      const masked = !got && def.secret;
+      return `
+        <div class="ach-card ${got ? "lit" : ""}">
+          <span class="ach-seal">${got || !masked ? escapeHtml(def.seal) : "？"}</span>
+          <div>
+            <strong>${escapeHtml(masked ? "隐藏成就" : def.name)}<small>+${def.points} 点</small></strong>
+            <small>${escapeHtml(masked ? "达成后揭晓……" : def.desc)}</small>
+          </div>
+          <span class="ach-state">${got ? "✓" : ""}</span>
+        </div>`;
+    }).join("");
+    const nextTheme = THEME_DEFS.find((def) => points < def.requirement);
+    return `
+    <section class="screen achievements-screen">
+      <header class="practice-head">
+        <button class="ghost-button" type="button" data-action="close-view">← 返回</button>
+        <div>
+          <p class="eyebrow">成就 · 声迹志</p>
+          <h1 class="screen-title">${unlocked.size} / ${ACHIEVEMENTS.length} · ${points} 点</h1>
+        </div>
+      </header>
+      <p class="screen-subtitle">总成就点 ${points} / ${ACHIEVEMENT_POINTS_TOTAL}。${nextTheme ? `再攒 ${nextTheme.requirement - points} 点解锁「${nextTheme.name}」主题。` : "全部主题已解锁，可在设置页换装。"}</p>
+      <div class="ach-list">${cards}</div>
+    </section>`;
+  }
+
+  /** P4 图鉴页：履历点亮的卡牌 / 敌人 / 遗物 / 道具 / 事件 */
+  private codexTemplate(): string {
+    const codex = profileCache.codex;
+    const section = (
+      title: string,
+      all: readonly { id: string; name: string; tip: string; mark?: string }[],
+      seen: readonly string[]
+    ): string => {
+      const owned = new Set(seen);
+      const items = all
+        .map((def) => {
+          const lit = owned.has(def.id);
+          return `
+            <div class="codex-card ${lit ? "lit" : ""}">
+              <span class="codex-mark">${lit ? escapeHtml(def.mark ?? def.name.slice(0, 1)) : "？"}</span>
+              <div>
+                <strong>${escapeHtml(lit ? def.name : "？？？")}</strong>
+                <small>${lit ? escapeHtml(def.tip) : "在楼中遇见后点亮"}</small>
+              </div>
+            </div>`;
+        })
+        .join("");
+      const litCount = all.filter((def) => owned.has(def.id)).length;
+      return `
+        <details class="panel codex-section" open>
+          <summary>${escapeHtml(title)} <small>${litCount} / ${all.length}</small></summary>
+          <div class="codex-grid">${items}</div>
+        </details>`;
+    };
+    return `
+    <section class="screen codex-screen">
+      <header class="practice-head">
+        <button class="ghost-button" type="button" data-action="close-view">← 返回</button>
+        <div>
+          <p class="eyebrow">图鉴 · 登楼履痕</p>
+          <h1 class="screen-title">见过什么，一目了然</h1>
+        </div>
+      </header>
+      ${section(
+        "声诀（技能）",
+        SKILLS.map((s) => ({ id: s.id, name: s.name, tip: `${s.phrase} · ${s.jyutping}` })),
+        codex.skills
+      )}
+      ${section(
+        "楼中对手",
+        [...ENEMIES, ...ELITES, BOSS].map((e) => ({ id: e.id, name: e.name, tip: e.epithet })),
+        codex.enemies
+      )}
+      ${section(
+        "遗物",
+        RELICS.map((r) => ({ id: r.id, name: r.name, tip: r.description, mark: r.short })),
+        codex.relics
+      )}
+      ${section(
+        "道具",
+        ITEMS.map((i) => ({ id: i.id, name: i.name, tip: i.description, mark: i.short })),
+        codex.items
+      )}
+      ${section(
+        "事件",
+        EVENTS.map((e) => ({ id: e.id, name: e.title, tip: e.text })),
+        codex.events
+      )}
+    </section>`;
   }
 
   private reportTemplate(): string {

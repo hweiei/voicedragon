@@ -215,7 +215,14 @@ export interface GameState {
   stats: RunStats | null;
   campaign?: CampaignState | null;
   quiz?: QuizState | null;
+  /** P4 无尽塔模式：无 Boss 无终点，难度按层持续放大 */
+  endless?: boolean;
+  /** P4 自适应难度系数（± 生命/攻击缩放，由组合根注入，存档自恢复） */
+  adaptiveBoost?: number;
 }
+
+/** P4 自适应难度注入点（组合根接 profile / 设置；默认 0，行为与原版一致）。 */
+export type AdaptiveProvider = () => number;
 
 export interface IntentPreview {
   label: string;
@@ -281,6 +288,8 @@ function unique<T>(list: T[]): T[] {
 export class GameEngine {
   state: GameState;
   private listeners = new Set<EngineListener>();
+  /** P4：自适应难度系数提供者（组合根注入；默认关闭=0）。 */
+  adaptiveProvider: AdaptiveProvider = () => 0;
 
   constructor(initialState: GameState | null = null) {
     this.state = initialState || this.createTitleState();
@@ -345,7 +354,9 @@ export class GameEngine {
         skillsLearned: 0
       },
       campaign: null,
-      quiz: null
+      quiz: null,
+      endless: false,
+      adaptiveBoost: this.adaptiveProvider()
     };
   }
 
@@ -384,6 +395,16 @@ export class GameEngine {
     };
     this.state.maxFloor = map.rows - 1;
     this.state.notice = "第一幕 · 骑楼长街：从底层任意起点登楼，直取声煞之巅。";
+    this.prepareFloorOptions();
+    this.emit({ save: true });
+  }
+
+  /** P4 无尽塔：无终点的单段爬楼，楼层无限延伸（5 的倍数为强敌关，永不出现 Boss）。 */
+  startEndless(seed?: number): void {
+    this.state = this.createRunState(seed);
+    this.state.endless = true;
+    this.state.maxFloor = Number.MAX_SAFE_INTEGER;
+    this.state.notice = "无尽塔开楼：没有天台，只有下一层。";
     this.prepareFloorOptions();
     this.emit({ save: true });
   }
@@ -438,12 +459,13 @@ export class GameEngine {
     }
 
     const nextFloor = this.state.floor + 1;
-    if (nextFloor > MAX_FLOOR) return;
+    const endless = Boolean(this.state.endless);
+    if (!endless && nextFloor > MAX_FLOOR) return;
 
     let types: NodeType[];
-    if (nextFloor === MAX_FLOOR) {
+    if (!endless && nextFloor === MAX_FLOOR) {
       types = ["boss"];
-    } else if (nextFloor === 5) {
+    } else if (nextFloor === 5 || (endless && nextFloor % 5 === 0)) {
       types = ["elite"];
     } else {
       const pool: NodeType[] =
@@ -562,11 +584,15 @@ export class GameEngine {
 
   scaledEnemy(source: EnemyBlueprint, kind: CombatKind): RuntimeEnemy {
     const enemy = clone(source) as unknown as RuntimeEnemy;
+    // P4 自适应系数：组合根按近绩注入（±15% 上限内微调生命/攻击）
+    const adaptive = 1 + clamp(this.state.adaptiveBoost ?? 0, -0.15, 0.15);
     const hpScale =
-      1 +
-      Math.max(0, this.state.floor - 1) *
-        (kind === "boss" ? DIFFICULTY_CURVE.bossHpPerFloor : DIFFICULTY_CURVE.enemyHpPerFloor);
-    const attackScale = 1 + Math.max(0, this.state.floor - 1) * DIFFICULTY_CURVE.attackPerFloor;
+      (1 +
+        Math.max(0, this.state.floor - 1) *
+          (kind === "boss" ? DIFFICULTY_CURVE.bossHpPerFloor : DIFFICULTY_CURVE.enemyHpPerFloor)) *
+      adaptive;
+    const attackScale =
+      (1 + Math.max(0, this.state.floor - 1) * DIFFICULTY_CURVE.attackPerFloor) * adaptive;
     enemy.maxHp = Math.round(enemy.hp * hpScale);
     enemy.hp = enemy.maxHp;
     enemy.baseAttack = Math.max(1, Math.round(enemy.attack * attackScale));
@@ -1161,6 +1187,7 @@ export class GameEngine {
   }
 
   getFloorName(floor: number = this.state.floor): string {
+    if (this.state.endless && floor > MAX_FLOOR) return "深塔回廊";
     return FLOOR_NAMES[Math.max(0, floor - 1)] || "塔门";
   }
 

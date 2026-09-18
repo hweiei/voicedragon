@@ -8,6 +8,8 @@ import { SCORING_WEIGHTS_V2 } from "../core/config/balance";
 import type { DailyRecord } from "../core/daily";
 import { compareDailyRecords } from "../core/daily";
 import type { GameState } from "../core/engine";
+import { emptyProfile } from "../core/profile";
+import type { ProfileStore } from "../core/profile";
 import { emptySrsStore } from "../core/srs";
 import type { SrsStore } from "../core/srs";
 import type { VoiceMode } from "./voice";
@@ -30,6 +32,10 @@ export interface GameSettings {
   voiceMode: VoiceMode;
   /** P3 声调权重（调准占比 0–0.8，默认 0.4 = 字 60% / 调 40%）。 */
   toneWeight?: number;
+  /** P4 主题皮肤（默认 ink 墨色；成就点解锁其余） */
+  theme?: string;
+  /** P4 自适应难度（默认开；连胜微加难、连败微减压） */
+  adaptiveEnabled?: boolean;
 }
 
 interface KVStore {
@@ -94,7 +100,9 @@ export function loadSettings(): GameSettings {
     reduceMotion: false,
     tutorialSeen: false,
     voiceMode: "auto",
-    toneWeight: SCORING_WEIGHTS_V2.tone
+    toneWeight: SCORING_WEIGHTS_V2.tone,
+    theme: "ink",
+    adaptiveEnabled: true
   };
   try {
     const raw = platformStorage().get(SETTINGS_KEY);
@@ -200,5 +208,39 @@ export function saveDailyRecord(record: DailyRecord): void {
     }
   } catch (error) {
     console.warn("Unable to save daily record", error);
+  }
+}
+
+// ─── P4 玩家档案：跨局统计 / 成就 / 图鉴 / 无尽最佳 / 自适应节律 ───────────────
+
+const PROFILE_KEY = "voice-tower-profile-v1";
+
+export function loadProfile(): ProfileStore {
+  try {
+    const raw = platformStorage().get(PROFILE_KEY);
+    if (!raw) return emptyProfile();
+    const parsed = JSON.parse(raw) as Partial<ProfileStore>;
+    const base = emptyProfile();
+    return {
+      stats: { ...base.stats, ...(parsed.stats ?? {}) },
+      unlocked: Array.isArray(parsed.unlocked) ? parsed.unlocked : [],
+      codex: {
+        skills: parsed.codex?.skills ?? [],
+        enemies: parsed.codex?.enemies ?? [],
+        relics: parsed.codex?.relics ?? [],
+        items: parsed.codex?.items ?? [],
+        events: parsed.codex?.events ?? []
+      }
+    };
+  } catch {
+    return emptyProfile();
+  }
+}
+
+export function saveProfile(profile: ProfileStore): void {
+  try {
+    platformStorage().set(PROFILE_KEY, JSON.stringify(profile));
+  } catch (error) {
+    console.warn("Unable to save profile", error);
   }
 }
