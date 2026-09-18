@@ -29,7 +29,10 @@ export interface VoiceStartOptions {
 
 export interface VoiceAdapter {
   readonly id: string;
+  /** 运行时环境是否支持（wasm/能力探测）。 */
   readonly supported: boolean;
+  /** 是否立即可用（模型已缓存且引擎可拉起）。 */
+  readonly ready: boolean;
   start(options: VoiceStartOptions): void;
   stop(): void;
   cancel(): void;
@@ -81,6 +84,10 @@ export class BrowserVoiceAdapter implements VoiceAdapter {
 
   get supported(): boolean {
     return Boolean(this.Recognition);
+  }
+
+  get ready(): boolean {
+    return this.supported;
   }
 
   start({ targets, onInterim, onResult, onError, onState }: VoiceStartOptions): void {
@@ -175,10 +182,31 @@ export class BrowserVoiceAdapter implements VoiceAdapter {
   }
 }
 
+export type VoiceMode = "auto" | "sensevoice" | "webspeech";
+
 /**
- * 适配器选择策略：P0 永远返回零下载的 Web Speech 兜底；
- * P1 在此插入 SenseVoice WASM Worker（supported 探测 + 设置页开关）。
+ * 语音引擎选择策略（纯函数，可单测）。
+ * - "auto"：端侧模型已缓存 → 端侧（离线高精度）；否则 Web Speech（零下载保底）
+ * - "sensevoice"：强制端侧（未下载则 start 报错，UI 引导下载/回落）
+ * - "webspeech"：强制在线兜底
  */
-export function createVoiceAdapter(): VoiceAdapter {
+export function selectAdapterKind(
+  mode: VoiceMode,
+  probe: { modelCached: boolean }
+): Exclude<VoiceMode, "auto"> {
+  if (mode === "auto") return probe.modelCached ? "sensevoice" : "webspeech";
+  return mode;
+}
+
+/** 工厂：按模式构造适配器（异步：SenseVoice 适配器动态加载以免拖慢首包）。 */
+export async function createVoiceAdapter(
+  mode: VoiceMode,
+  probe: { modelCached: boolean } = { modelCached: false }
+): Promise<VoiceAdapter> {
+  const kind = selectAdapterKind(mode, probe);
+  if (kind === "sensevoice") {
+    const { SenseVoiceAdapter } = await import("./voice/sensevoice/adapter");
+    return new SenseVoiceAdapter();
+  }
   return new BrowserVoiceAdapter();
 }

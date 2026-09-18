@@ -1,0 +1,29 @@
+第三方软件许可声明 / Third-Party Notices
+=============================================
+
+本项目包含或引用了以下开源组件，遵循其各自许可证。
+
+1) sherpa-onnx（k2-fsa，含 SenseVoice WASM 运行时 glue/助手 JS）
+   License: Apache-2.0
+   来源: https://github.com/k2-fsa/sherpa-onnx
+   用途: public/vendors/sherpa/ 下的 Emscripten 运行时与助手脚本
+         （经 sokuji 构建发布，Apache-2.0 许可的构建产物）
+
+2) SenseVoice 模型（FunAudioLLM / QwenAudio）
+   模型卡: https://github.com/QwenAudio/SenseVoice
+   用途: 浏览器端粤语语音识别（中/英/日/韩/粤）
+   数据托管（镜像）: Hugging Face datasets jiangzhuo9357/sherpa-onnx-asr-models
+
+3) sokuji（kizuna-ai-lab）—— Worker 管线参考实现
+   https://github.com/kizuna-ai-lab/sokuji
+   用途: ASR Worker 协议与模型清单结构参考（VAD→离线识别范式）
+
+4) pitchy（MIT，P3 启用）
+   https://github.com/ianprime0509/pitchy
+   用途: 实时基频提取（粤语六调评分）
+
+5) Vite / TypeScript / Biome / Vitest / vite-plugin-pwa
+   License: MIT / Apache-2.0
+   用途: 工程基座
+
+本列表随依赖变更持续更新；商用分发前请复核各组件最新许可文本。

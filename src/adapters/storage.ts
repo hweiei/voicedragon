@@ -5,6 +5,7 @@
  */
 
 import type { GameState } from "../core/engine";
+import type { VoiceMode } from "./voice";
 
 export const SAVE_KEY = "voice-tower-save-v2";
 const SETTINGS_KEY = "voice-tower-settings-v1";
@@ -20,6 +21,8 @@ export interface GameSettings {
   sound: boolean;
   reduceMotion: boolean;
   tutorialSeen: boolean;
+  /** 语音引擎选择（P1 起）：auto=自动降级链 / sensevoice=端侧 / webspeech=在线 */
+  voiceMode: VoiceMode;
 }
 
 interface KVStore {
@@ -79,7 +82,12 @@ export function clearSave(): void {
 }
 
 export function loadSettings(): GameSettings {
-  const defaults: GameSettings = { sound: true, reduceMotion: false, tutorialSeen: false };
+  const defaults: GameSettings = {
+    sound: true,
+    reduceMotion: false,
+    tutorialSeen: false,
+    voiceMode: "auto"
+  };
   try {
     const raw = platformStorage().get(SETTINGS_KEY);
     if (!raw) return defaults;

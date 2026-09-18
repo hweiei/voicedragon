@@ -1,16 +1,46 @@
 /**
- * 渲染层：DOM 直渲适配器（原版 js/ui.js 的 TypeScript 化迁移，行为等价）。
- * 后续 P4 将各屏拆为独立组件文件并接入 Motion 动效时间轴；
- * 但布局/CSS 类名与 data-action 契约保持不变，E2E 选择器稳定。
+ * 渲染层：DOM 直渲适配器（P1 版）。
+ * P1 新增：QTE 无声施法「破阵拍」、TTS 示范发音（听一听）、设置页
+ * （语音引擎切换/模型下载管理/声音与动效开关/隐私说明）、适配器热切换。
+ * 选择器/CSS 类名契约与 P0 保持一致。
  */
 
 import { getPlatformLabel, vibrate } from "../adapters/platform";
 import { clearSave, hasSave, loadGame } from "../adapters/storage";
-import type { VoiceAdapter, VoiceAdapterState, VoiceScoreResult } from "../adapters/voice";
+import type { GameSettings } from "../adapters/storage";
+import type {
+  VoiceAdapter,
+  VoiceAdapterState,
+  VoiceMode,
+  VoiceScoreResult
+} from "../adapters/voice";
+import type { ModelStatus } from "../adapters/voice/sensevoice/model-store";
+import type { DownloadProgress } from "../adapters/voice/sensevoice/model-store";
 import { ITEMS, RELICS, getSkill } from "../core/data";
 import type { Skill } from "../core/data";
 import type { EmitOptions, GameEngine, GameState } from "../core/engine";
 import { scoreLabel, scorePronunciation } from "../core/scoring";
+import { VocalQte } from "./qte";
+
+// ─── 注入服务（组合根提供） ───────────────────────────────────────────────────
+
+export interface VoiceServices {
+  tts: {
+    speak(text: string): void;
+    stop(): void;
+  };
+  settings: {
+    get(): GameSettings;
+    save(partial: Partial<GameSettings>): void;
+  };
+  model: {
+    getStatus(): Promise<ModelStatus>;
+    download(): Promise<void>;
+    clear(): Promise<void>;
+    onProgress(listener: (progress: DownloadProgress | null) => void): () => void;
+  };
+  setVoiceMode(mode: VoiceMode): Promise<string>;
+}
 
 function escapeHtml(value = ""): string {
   return String(value)
@@ -100,7 +130,8 @@ function titleTemplate(): string {
         ${resume ? `<button class="primary-button full-button" type="button" data-action="continue-run">继续登楼</button>` : ""}
         <button class="${resume ? "secondary-button" : "primary-button"} full-button" type="button" data-action="new-run">${resume ? "重新开局" : "开始登楼"}</button>
         <button class="ghost-button full-button" type="button" data-action="show-help">玩法与语音说明</button>
-        <p class="title-note">网页试玩会在本机自动存档。P1 起可在设置中下载端侧粤语识别（完全离线）。</p>
+        <button class="ghost-button full-button" type="button" data-action="open-settings">设置 · 语音引擎</button>
+        <p class="title-note">语音识别全部可选：经在线兜底引擎、可下载端侧模型（完全离线）、无声破阵拍三种方式施法。</p>
       </div>
     </section>`;
 }
@@ -359,6 +390,12 @@ function endTemplate(state: GameState, engine: GameEngine, victory: boolean): st
     </section>`;
 }
 
+const VOICE_MODE_COPY: Record<VoiceMode, string> = {
+  auto: "自动（先用在线引擎，下载端侧模型后自动离线）",
+  sensevoice: "端侧 SenseVoice · 完全离线（需先下载约 230MB 模型）",
+  webspeech: "Web Speech · 在线识别（零下载）"
+};
+
 interface PendingVoice {
   skill: Skill;
   result: VoiceScoreResult | null;
@@ -366,7 +403,8 @@ interface PendingVoice {
 
 export class GameUI {
   private engine: GameEngine;
-  private voiceAdapter: VoiceAdapter;
+  private voiceAdapter: VoiceAdapter | null;
+  private services: VoiceServices;
   private root: HTMLElement;
   private topbar: HTMLElement;
   private modalRoot: HTMLElement;
@@ -375,10 +413,21 @@ export class GameUI {
   private lastNotice: string | null = null;
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingVoice: PendingVoice | null = null;
+  private activeQte: VocalQte | null = null;
+  private modelUnsubscribe: (() => void) | null = null;
 
-  constructor({ engine, voiceAdapter }: { engine: GameEngine; voiceAdapter: VoiceAdapter }) {
+  constructor({
+    engine,
+    voiceAdapter,
+    services
+  }: {
+    engine: GameEngine;
+    voiceAdapter: VoiceAdapter | null;
+    services: VoiceServices;
+  }) {
     this.engine = engine;
     this.voiceAdapter = voiceAdapter;
+    this.services = services;
     this.root = document.querySelector<HTMLElement>("#app")!;
     this.topbar = document.querySelector<HTMLElement>("#topbar")!;
     this.modalRoot = document.querySelector<HTMLElement>("#modal-root")!;
@@ -389,11 +438,23 @@ export class GameUI {
     if (platformLabel) platformLabel.textContent = getPlatformLabel();
   }
 
+  /** 适配器热切换（设置页改语音引擎 / 组合根异步构造完成后注入）。 */
+  setVoiceAdapter(adapter: VoiceAdapter): void {
+    this.voiceAdapter = adapter;
+  }
+
+  private get adapter(): VoiceAdapter | null {
+    return this.voiceAdapter;
+  }
+
   private bindEvents(): void {
     this.root.addEventListener("click", (event) => this.handleAction(event));
     this.modalRoot.addEventListener("click", (event) => this.handleModalAction(event));
     this.inventoryButton.addEventListener("click", () => this.openInventory());
     document.querySelector("#help-button")?.addEventListener("click", () => this.openHelp());
+    document
+      .querySelector("#settings-button")
+      ?.addEventListener("click", () => this.openSettings());
   }
 
   private handleAction(event: Event): void {
@@ -407,6 +468,7 @@ export class GameUI {
       else this.engine.startNew();
     }
     if (action === "show-help") this.openHelp();
+    if (action === "open-settings") this.openSettings();
     if (action === "choose-floor") this.engine.chooseFloorOption(button.dataset.optionId!);
     if (action === "cast-skill") this.openVoice(getSkill(button.dataset.skillId!));
     if (action === "end-turn") this.engine.endTurn();
@@ -433,10 +495,14 @@ export class GameUI {
     const action = button.dataset.action!;
     if (action === "close-modal") this.closeModal();
     if (action === "start-listening") this.startListening();
-    if (action === "stop-listening") this.voiceAdapter.stop();
+    if (action === "stop-listening") this.adapter?.stop();
     if (action === "toggle-fallback") this.toggleFallback();
     if (action === "submit-fallback") this.submitFallback();
     if (action === "apply-voice") this.applyVoiceResult();
+    if (action === "listen-sample") this.listenSample();
+    if (action === "start-qte") this.startQte();
+    if (action === "download-model") void this.downloadModel(button as HTMLButtonElement);
+    if (action === "clear-model") void this.clearModel();
     if (action === "use-item") {
       this.engine.useItem(Number(button.dataset.itemIndex));
       this.openInventory();
@@ -492,10 +558,22 @@ export class GameUI {
       </div>`;
   }
 
+  // ─── 施法（语音/无声 QTE 双通道） ──────────────────────────────────────────
+
   private openVoice(skill: Skill | undefined): void {
     if (!skill || !this.engine.canUseSkill(skill.id)) return;
     this.pendingVoice = { skill, result: null };
-    const supported = this.voiceAdapter.supported;
+    const adapter = this.adapter;
+    const canListen = Boolean(adapter?.ready);
+    const engineLabel = adapter ? adapter.id : "loading";
+    const hint = !adapter
+      ? "语音引擎加载中，请稍候或直接破阵拍"
+      : !adapter.supported
+        ? "当前环境不支持所选语音引擎，已打开破阵拍"
+        : !adapter.ready
+          ? "端侧模型未就绪：可在设置页下载，或直接破阵拍"
+          : "点击按钮后，请清晰说出上方短句";
+
     this.modalRoot.innerHTML = `
       <div class="modal-sheet voice-sheet">
         <div class="modal-head">
@@ -506,23 +584,26 @@ export class GameUI {
           <strong>${escapeHtml(skill.phrase)}</strong>
           <span>${escapeHtml(skill.jyutping)}</span>
           <small>${escapeHtml(skill.lesson)}</small>
+          <button class="mini-button sample-button" type="button" data-action="listen-sample" aria-label="收听示范发音">🔊 听一听</button>
         </div>
         <div class="voice-orb-wrap">
           <div class="voice-orb" id="voice-orb">待开声</div>
         </div>
-        <p class="voice-live-text" id="voice-live-text">${supported ? "点击按钮后，请清晰说出上方短句" : "当前环境没有语音识别，可用键盘测试判定"}</p>
+        <p class="voice-live-text" id="voice-live-text">${escapeHtml(hint)}（当前引擎：${escapeHtml(engineLabel)}）</p>
         <div class="voice-actions">
-          <button class="primary-button full-button" type="button" data-action="start-listening" ${supported ? "" : "disabled"}>开始收音</button>
-          <button class="ghost-button full-button" type="button" data-action="toggle-fallback">${supported ? "使用键盘测试" : "打开键盘测试"}</button>
+          <button class="primary-button full-button" type="button" data-action="start-listening" ${canListen ? "" : "disabled"}>开始收音</button>
+          <button class="ghost-button full-button" type="button" data-action="start-qte">破阵拍（无声施法）</button>
         </div>
-        <div class="fallback-panel" id="fallback-panel" ${supported ? "hidden" : ""}>
+        <div id="qte-host"></div>
+        <details class="fallback-panel" id="fallback-panel">
+          <summary>键盘判定（开发者）</summary>
           <label for="fallback-transcript">模拟识别到的文字</label>
           <input id="fallback-transcript" type="text" value="${escapeHtml(skill.phrase)}" autocomplete="off" />
           <div class="range-line"><label for="fallback-confidence">模拟识别置信度</label><strong id="confidence-value">82%</strong></div>
           <input id="fallback-confidence" type="range" min="30" max="100" value="82" />
           <button class="secondary-button full-button" type="button" data-action="submit-fallback" style="margin-top:10px">计算并发动</button>
-        </div>
-        <p class="voice-disclaimer">当前分数由识别文本相似度与 ASR 置信度合成，只用于游戏反馈，不等同于专业声学发音测评。</p>
+        </details>
+        <p class="voice-disclaimer">分数用于游戏反馈，不等同于专业声学发音测评。无声也可用「破阵拍」完整通关。</p>
       </div>`;
     const slider = this.modalRoot.querySelector<HTMLInputElement>("#fallback-confidence");
     const sliderValue = this.modalRoot.querySelector<HTMLElement>("#confidence-value");
@@ -531,16 +612,53 @@ export class GameUI {
     });
   }
 
-  private startListening(): void {
+  private listenSample(): void {
     if (!this.pendingVoice) return;
+    this.services.tts.speak(this.pendingVoice.skill.phrase);
+  }
+
+  private startQte(): void {
+    if (!this.pendingVoice) return;
+    this.activeQte?.dispose();
+    const host = this.modalRoot.querySelector<HTMLElement>("#qte-host");
+    const orb = this.modalRoot.querySelector<HTMLElement>("#voice-orb");
+    const text = this.modalRoot.querySelector<HTMLElement>("#voice-live-text");
+    if (!host) return;
+    if (orb) orb.textContent = "破阵拍";
+    if (text) text.textContent = "看准甜区按「出手」——无声也能打出正音。";
+    this.activeQte = new VocalQte(host, {
+      onResolve: (score) => {
+        this.activeQte = null;
+        const skill = this.pendingVoice?.skill;
+        if (!skill) return;
+        const result: VoiceScoreResult = {
+          score,
+          similarity: 0,
+          confidence: 0,
+          matchedTarget: skill.phrase,
+          transcript: `破阵拍 ${score} 分`,
+          source: "qte"
+        };
+        this.showVoiceResult(result);
+      },
+      onCancel: () => {
+        this.activeQte = null;
+      }
+    });
+    this.activeQte.mount();
+  }
+
+  private startListening(): void {
+    if (!this.pendingVoice || !this.adapter) return;
     const { skill } = this.pendingVoice;
+    const adapter = this.adapter;
     const orb = this.modalRoot.querySelector<HTMLElement>("#voice-orb");
     const text = this.modalRoot.querySelector<HTMLElement>("#voice-live-text");
     const startButton = this.modalRoot.querySelector<HTMLButtonElement>(
       '[data-action="start-listening"]'
     );
     if (startButton) startButton.disabled = true;
-    this.voiceAdapter.start({
+    adapter.start({
       targets: skill.alternatives || [skill.phrase],
       jyutping: skill.jyutping,
       onState: (state: VoiceAdapterState) => {
@@ -562,22 +680,16 @@ export class GameUI {
           orb.classList.remove("listening");
           orb.textContent = "未识别";
         }
-        if (text) text.textContent = `${error.message}，请改用键盘测试。`;
-        this.showFallback();
+        if (text) text.textContent = `${error.message}，请改用破阵拍。`;
         if (startButton) startButton.disabled = false;
       }
     });
   }
 
   private toggleFallback(): void {
-    const panel = this.modalRoot.querySelector<HTMLElement>("#fallback-panel");
+    const panel = this.modalRoot.querySelector<HTMLDetailsElement>("#fallback-panel");
     if (!panel) return;
-    panel.hidden = !panel.hidden;
-  }
-
-  private showFallback(): void {
-    const panel = this.modalRoot.querySelector<HTMLElement>("#fallback-panel");
-    if (panel) panel.hidden = false;
+    panel.open = !panel.open;
   }
 
   private submitFallback(): void {
@@ -596,18 +708,22 @@ export class GameUI {
     if (!this.pendingVoice) return;
     this.pendingVoice.result = result;
     const { skill } = this.pendingVoice;
+    const isQte = result.source === "qte";
     const confidence = result.confidence ?? Math.round((result.rawConfidence || 0.72) * 100);
     this.modalRoot.innerHTML = `
       <div class="modal-sheet score-result">
         <div class="modal-head">
-          <div><h2>${escapeHtml(scoreLabel(result.score))}</h2><p>「${escapeHtml(skill.phrase)}」本次声韵判定</p></div>
+          <div><h2>${escapeHtml(scoreLabel(result.score))}</h2><p>「${escapeHtml(skill.phrase)}」本次${isQte ? "破阵拍" : "声韵"}判定</p></div>
           <button class="close-button" type="button" data-action="close-modal">×</button>
         </div>
-        <div class="score-ring" style="--score:${result.score}"><div><strong>${result.score}</strong><small>声韵分</small></div></div>
-        <p class="screen-subtitle">识别到：${escapeHtml(result.transcript || "未返回文字")}</p>
+        <div class="score-ring" style="--score:${result.score}"><div><strong>${result.score}</strong><small>${isQte ? "节奏分" : "声韵分"}</small></div></div>
+        <p class="screen-subtitle">${isQte ? "无声判定：" : "识别到："}${escapeHtml(result.transcript || "未返回文字")}</p>
         <div class="score-breakdown">
-          <div><strong>${result.similarity ?? 0}%</strong><small>短句相似度</small></div>
-          <div><strong>${confidence}%</strong><small>识别置信度</small></div>
+          ${
+            isQte
+              ? `<div><strong>破阵拍</strong><small>施法方式</small></div><div><strong>${result.score}分</strong><small>命中精度</small></div>`
+              : `<div><strong>${result.similarity ?? 0}%</strong><small>短句相似度</small></div><div><strong>${confidence}%</strong><small>识别置信度</small></div>`
+          }
         </div>
         <button class="primary-button full-button" type="button" data-action="apply-voice">发动「${escapeHtml(skill.name)}」</button>
         <p class="voice-disclaimer">遗物、喉糖、永久声韵与敌方干扰会在发动时计入最终战斗分数。</p>
@@ -621,6 +737,127 @@ export class GameUI {
     this.closeModal(false);
     this.engine.resolveSkill(skill.id, result.score, result);
   }
+
+  // ─── 设置页 ────────────────────────────────────────────────────────────────
+
+  private openSettings(): void {
+    const settings = this.services.settings.get();
+    const current = settings.voiceMode;
+    const radio = (mode: VoiceMode) => `
+      <label class="radio-line">
+        <input type="radio" name="voice-mode" value="${mode}" ${current === mode ? "checked" : ""} />
+        <span>${escapeHtml(VOICE_MODE_COPY[mode])}</span>
+      </label>`;
+    this.modalRoot.innerHTML = `
+      <div class="modal-sheet settings-sheet">
+        <div class="modal-head"><div><h2>设置</h2><p>语音引擎与体验选项</p></div><button class="close-button" data-action="close-modal">×</button></div>
+        <div class="settings-group">
+          <h3>语音引擎</h3>
+          ${radio("auto")}${radio("sensevoice")}${radio("webspeech")}
+        </div>
+        <div class="settings-group" id="model-panel">
+          <h3>端侧模型</h3>
+          <p class="settings-note" id="model-status">查询中…</p>
+          <div class="progress-track" id="model-progress-track" hidden><div class="progress-fill" id="model-progress-fill"></div></div>
+          <div class="button-row">
+            <button class="secondary-button full-button" type="button" data-action="download-model" id="download-model-button">下载模型（约 230MB）</button>
+            <button class="ghost-button full-button" type="button" data-action="clear-model" id="clear-model-button">清除缓存</button>
+          </div>
+        </div>
+        <div class="settings-group">
+          <h3>体验</h3>
+          <label class="radio-line"><input type="checkbox" id="set-sound" ${settings.sound ? "checked" : ""} /><span>音效（施工中，P4 上线）</span></label>
+          <label class="radio-line"><input type="checkbox" id="set-reduce-motion" ${settings.reduceMotion ? "checked" : ""} /><span>减弱动效</span></label>
+        </div>
+        <div class="notice-strip">隐私承诺：端侧模式下语音全部留在本机；在线模式只上传你施法的几秒收音，绝不收集其它数据。</div>
+      </div>`;
+
+    // 引擎选择
+    for (const input of this.modalRoot.querySelectorAll<HTMLInputElement>(
+      'input[name="voice-mode"]'
+    )) {
+      input.addEventListener("change", () => {
+        void this.services.setVoiceMode(input.value as VoiceMode).then((adapterId) => {
+          this.showToast(`语音引擎已切换：${adapterId}`);
+          void this.refreshModelPanel();
+        });
+      });
+    }
+    // 体验开关
+    this.modalRoot
+      .querySelector<HTMLInputElement>("#set-sound")
+      ?.addEventListener("change", (e) => {
+        this.services.settings.save({ sound: (e.target as HTMLInputElement).checked });
+      });
+    this.modalRoot
+      .querySelector<HTMLInputElement>("#set-reduce-motion")
+      ?.addEventListener("change", (e) => {
+        this.services.settings.save({ reduceMotion: (e.target as HTMLInputElement).checked });
+      });
+
+    this.refreshModelPanel();
+  }
+
+  private async refreshModelPanel(): Promise<void> {
+    const statusEl = this.modalRoot.querySelector<HTMLElement>("#model-status");
+    const downloadButton =
+      this.modalRoot.querySelector<HTMLButtonElement>("#download-model-button");
+    if (!statusEl) return;
+    const status = await this.services.model.getStatus();
+    if (status.state === "ready") {
+      statusEl.textContent = `已缓存（${(status.totalBytes / 1024 / 1024).toFixed(0)}MB）· 端侧离线识别可用`;
+      if (downloadButton) {
+        downloadButton.disabled = true;
+        downloadButton.textContent = "模型已就绪";
+      }
+    } else if (status.state === "partial") {
+      statusEl.textContent = `已下载 ${status.percent}%（${status.doneParts}/${status.partCount} 片）· 中断后重开可续传`;
+    } else {
+      statusEl.textContent = "未下载 · 下载一次即可完全离线、高精度粤语识别";
+    }
+  }
+
+  private async downloadModel(button: HTMLButtonElement): Promise<void> {
+    const track = this.modalRoot.querySelector<HTMLElement>("#model-progress-track");
+    const fill = this.modalRoot.querySelector<HTMLElement>("#model-progress-fill");
+    const statusEl = this.modalRoot.querySelector<HTMLElement>("#model-status");
+    button.disabled = true;
+    button.textContent = "下载中…";
+    if (track) track.hidden = false;
+    this.modelUnsubscribe?.();
+    this.modelUnsubscribe = this.services.model.onProgress((progress) => {
+      if (!progress) {
+        // 下载结束（无论成败），由 getStatus 定格
+        void this.refreshModelPanel();
+        return;
+      }
+      if (fill) fill.style.width = `${progress.percent}%`;
+      if (statusEl) {
+        statusEl.textContent = `下载中 ${progress.percent}% · ${(progress.downloadedBytes / 1024 / 1024).toFixed(0)}MB / ${(progress.totalBytes / 1024 / 1024).toFixed(0)}MB`;
+      }
+    });
+    try {
+      await this.services.model.download();
+      this.showToast("模型下载完成，端侧粤语识别已就绪");
+      button.textContent = "模型已就绪";
+    } catch (error) {
+      this.showToast(`下载失败：${(error as Error).message}（可重试，已下载部分自动续传）`);
+      button.disabled = false;
+      button.textContent = "重试下载";
+    } finally {
+      this.modelUnsubscribe?.();
+      this.modelUnsubscribe = null;
+      void this.refreshModelPanel();
+    }
+  }
+
+  private async clearModel(): Promise<void> {
+    await this.services.model.clear();
+    this.showToast("模型缓存已清除");
+    void this.refreshModelPanel();
+  }
+
+  // ─── 行囊 / 帮助 ────────────────────────────────────────────────────────────
 
   private openInventory(): void {
     const player = this.engine.state.player;
@@ -652,24 +889,32 @@ export class GameUI {
   }
 
   private openHelp(): void {
-    const adapterLabel = this.voiceAdapter.supported
-      ? "当前环境可直接收音"
-      : "当前环境使用键盘测试回退";
+    const adapter = this.adapter;
+    const engineLabel = adapter
+      ? VOICE_MODE_COPY[this.services.settings.get().voiceMode]
+      : "加载中";
     this.modalRoot.innerHTML = `
       <div class="modal-sheet">
-        <div class="modal-head"><div><h2>如何登楼</h2><p>${escapeHtml(adapterLabel)}</p></div><button class="close-button" data-action="close-modal">×</button></div>
+        <div class="modal-head"><div><h2>如何登楼</h2><p>${escapeHtml(engineLabel)}</p></div><button class="close-button" data-action="close-modal">×</button></div>
         <div class="help-steps">
           <div class="help-step"><b>1</b><div><strong>逐层择路</strong><small>普通楼层随机出现战斗、事件、歇脚处与夜市；第五层为强敌，第十层为最终首领。</small></div></div>
-          <div class="help-step"><b>2</b><div><strong>开声出招</strong><small>选择技能后说出卡牌上的粤语短句。每回合有 3 点声气，技能会消耗 1 至 2 点。</small></div></div>
-          <div class="help-step"><b>3</b><div><strong>发音影响威力</strong><small>未稳 0.52 倍、入门 0.78 倍、清晰 1 倍、正音 1.32 倍。分数由文本相似度与识别置信度合成。</small></div></div>
+          <div class="help-step"><b>2</b><div><strong>开声出招 / 破阵拍</strong><small>说出卡牌上的粤语短句即可施法；无声环境改用「破阵拍」节奏判定，随时可在设置页切换引擎。</small></div></div>
+          <div class="help-step"><b>3</b><div><strong>发音影响威力</strong><small>未稳 0.52 倍、入门 0.78 倍、清晰 1 倍、正音 1.32 倍。听不准就点「听一听」跟读示范。</small></div></div>
           <div class="help-step"><b>4</b><div><strong>构筑与存档</strong><small>战后从三张技能中选一张，收集遗物和道具。每次行动都会自动保存到当前设备。</small></div></div>
         </div>
-        <div class="notice-strip">从 P1 起可在设置页下载端侧粤语识别模型：语音不出设备、完全离线可玩（见 docs/REDESIGN-PLAN.md）。</div>
+        <div class="notice-strip">端侧模型（约 230MB，可断点续传）下载一次即可完全离线游玩：设置 → 端侧模型。</div>
       </div>`;
   }
 
   private closeModal(cancelVoice = true): void {
-    if (cancelVoice) this.voiceAdapter.cancel();
+    if (cancelVoice) {
+      this.adapter?.cancel();
+      this.activeQte?.dispose();
+      this.activeQte = null;
+      this.services.tts.stop();
+      this.modelUnsubscribe?.();
+      this.modelUnsubscribe = null;
+    }
     this.pendingVoice = cancelVoice ? null : this.pendingVoice;
     this.modalRoot.innerHTML = "";
   }

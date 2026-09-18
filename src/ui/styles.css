@@ -1967,3 +1967,143 @@ button:disabled {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ─── P1: 设置页 ─────────────────────────────────────────────── */
+.settings-sheet h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  color: var(--gold, #f2b16d);
+}
+
+.settings-group {
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(242, 177, 109, 0.14);
+}
+
+.settings-note {
+  font-size: 13px;
+  color: rgba(255, 248, 240, 0.72);
+  margin: 0 0 10px;
+}
+
+.radio-line {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 0;
+  font-size: 14px;
+  color: rgba(255, 248, 240, 0.88);
+  cursor: pointer;
+}
+
+.radio-line input {
+  accent-color: #e05a43;
+  width: 18px;
+  height: 18px;
+}
+
+.button-row {
+  display: flex;
+  gap: 10px;
+}
+
+.button-row .full-button {
+  flex: 1;
+}
+
+.progress-track {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 248, 240, 0.12);
+  overflow: hidden;
+  margin: 10px 0;
+}
+
+.progress-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #e05a43, #f2b16d);
+  transition: width 0.3s ease;
+}
+
+/* ─── P1: 破阵拍 QTE ─────────────────────────────────────────── */
+.qte-stage {
+  margin: 14px 0 4px;
+}
+
+.qte-bar {
+  position: relative;
+  height: 34px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 248, 240, 0.06),
+    rgba(224, 90, 67, 0.1),
+    rgba(255, 248, 240, 0.06)
+  );
+  border: 1px solid rgba(242, 177, 109, 0.22);
+  overflow: hidden;
+}
+
+.qte-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(242, 177, 109, 0.28),
+    rgba(242, 177, 109, 0.85),
+    rgba(242, 177, 109, 0.28)
+  );
+  box-shadow: 0 0 18px rgba(242, 177, 109, 0.45);
+}
+
+.qte-cursor {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 6px;
+  margin-left: -3px;
+  border-radius: 3px;
+  background: #fff8f0;
+  box-shadow: 0 0 10px rgba(224, 90, 67, 0.9);
+}
+
+.qte-hint {
+  margin: 8px 0;
+  font-size: 12px;
+  text-align: center;
+  color: rgba(255, 248, 240, 0.6);
+}
+
+.voice-sheet details.fallback-panel {
+  margin-top: 12px;
+  border: 1px dashed rgba(242, 177, 109, 0.25);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.voice-sheet details.fallback-panel summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: rgba(255, 248, 240, 0.6);
+  outline: none;
+}
+
+.sample-button {
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+body.reduce-motion *,
+body.reduce-motion *::before,
+body.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}

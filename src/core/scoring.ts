@@ -4,6 +4,8 @@
  * 最终合成评分 = w_text·本层 + w_tone·声调层（P3）+ w_conf·置信度。
  */
 
+import { SCORING_WEIGHTS } from "./config/balance";
+
 const CHAR_EQUIVALENTS = new Map<string, string>([
   ["頂", "顶"],
   ["驚", "惊"],
@@ -86,7 +88,8 @@ export function scorePronunciation(
   }));
   const best = similarities.sort((a, b) => b.value - a.value)[0] || { target: "", value: 0 };
   const safeConfidence = Math.max(0, Math.min(1, Number.isFinite(confidence) ? confidence : 0.72));
-  const raw = 100 * (best.value * 0.76 + safeConfidence * 0.24);
+  const raw =
+    100 * (best.value * SCORING_WEIGHTS.text + safeConfidence * SCORING_WEIGHTS.confidence);
   const score = Math.max(0, Math.min(100, Math.round(raw)));
   return {
     score,

@@ -1,18 +1,93 @@
 /**
  * 应用入口：组装内核 + 适配器 + 渲染层（组合根）。
+ * 语音编排：按 settings.voiceMode 构造适配器；模型缓存探测走 model-store；
+ * 设置页事件（引擎切换/下载模型/清除缓存）经 VoiceServices 注入 UI。
  */
 
 import "./ui/styles.css";
 import { setKeepScreenOn } from "./adapters/platform";
-import { saveGame } from "./adapters/storage";
+import { loadSettings, saveGame, saveSettings } from "./adapters/storage";
+import { SpeechTts } from "./adapters/tts";
 import { createVoiceAdapter } from "./adapters/voice";
+import type { VoiceAdapter, VoiceMode } from "./adapters/voice";
+import type { SenseVoiceAdapter } from "./adapters/voice/sensevoice/adapter";
+import {
+  clearModel,
+  downloadModel,
+  getModelStatus,
+  isModelReady
+} from "./adapters/voice/sensevoice/model-store";
+import type { DownloadProgress } from "./adapters/voice/sensevoice/model-store";
 import { GameEngine } from "./core/engine";
 import type { EmitOptions, GameState } from "./core/engine";
 import { GameUI } from "./ui/ui";
+import type { VoiceServices } from "./ui/ui";
+
+const settings = loadSettings();
+document.body.classList.toggle("reduce-motion", settings.reduceMotion);
 
 const engine = new GameEngine();
-const voiceAdapter = createVoiceAdapter();
-const ui = new GameUI({ engine, voiceAdapter });
+const tts = new SpeechTts();
+
+// ─── 语音编排 ────────────────────────────────────────────────────────────────
+
+let voiceAdapter: VoiceAdapter;
+const modelListeners = new Set<(progress: DownloadProgress | null) => void>();
+
+async function buildAdapter(mode: VoiceMode): Promise<VoiceAdapter> {
+  const modelCached = await isModelReady().catch(() => false);
+  return createVoiceAdapter(mode, { modelCached });
+}
+
+const voiceServices: VoiceServices = {
+  tts: {
+    speak: (text) => tts.speak(text),
+    stop: () => tts.stop()
+  },
+  settings: {
+    get: () => settings,
+    save: (next) => {
+      Object.assign(settings, next);
+      saveSettings(settings);
+      document.body.classList.toggle("reduce-motion", settings.reduceMotion);
+    }
+  },
+  model: {
+    getStatus: () => getModelStatus(),
+    async download() {
+      await downloadModel({
+        onProgress: (progress) => {
+          for (const listener of modelListeners) listener(progress);
+        }
+      });
+      const senseAdapter = voiceAdapter as Partial<SenseVoiceAdapter>;
+      senseAdapter.markModelReady?.();
+      for (const listener of modelListeners) listener(null);
+    },
+    async clear() {
+      await clearModel();
+      for (const listener of modelListeners) listener(null);
+    },
+    onProgress(listener) {
+      modelListeners.add(listener);
+      return () => modelListeners.delete(listener);
+    }
+  },
+  async setVoiceMode(mode) {
+    voiceServices.settings.save({ voiceMode: mode });
+    voiceAdapter = await buildAdapter(mode);
+    ui.setVoiceAdapter(voiceAdapter);
+    return voiceAdapter.id;
+  }
+};
+
+// ─── 启动 ────────────────────────────────────────────────────────────────────
+
+const ui = new GameUI({
+  engine,
+  voiceAdapter: undefined as unknown as VoiceAdapter,
+  services: voiceServices
+});
 
 engine.subscribe((state: GameState, options: EmitOptions) => {
   if (options.save && state.phase !== "title") saveGame(state);
@@ -20,11 +95,19 @@ engine.subscribe((state: GameState, options: EmitOptions) => {
 });
 
 void setKeepScreenOn();
-ui.render(engine.state);
+
+void buildAdapter(settings.voiceMode).then((adapter) => {
+  voiceAdapter = adapter;
+  ui.setVoiceAdapter(adapter);
+  ui.render(engine.state);
+});
 
 // 调试/自动化验收钩子：Playwright 与仿真工具从此读取/驱动引擎。
 (globalThis as Record<string, unknown>).__VOICE_TOWER__ = {
   engine,
-  voiceAdapter,
-  getState: () => engine.state
+  get voiceAdapter() {
+    return voiceAdapter;
+  },
+  getState: () => engine.state,
+  voiceServices
 };
