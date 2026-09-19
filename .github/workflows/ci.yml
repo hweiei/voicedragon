@@ -32,7 +32,7 @@ jobs:
         run: npm run build
 
       - name: Performance budget (first-bundle JS gzip)
-        run: vite-node scripts/perf-budget.ts
+        run: npx vite-node scripts/perf-budget.ts
 
   e2e:
     runs-on: ubuntu-latest
