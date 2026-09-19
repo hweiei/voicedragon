@@ -14,6 +14,7 @@ import {
   saveGame,
   saveSettings
 } from "./adapters/storage";
+import type { CampaignActMeta } from "./adapters/storage";
 import { SpeechTts } from "./adapters/tts";
 import { createVoiceAdapter } from "./adapters/voice";
 import type { VoiceAdapter, VoiceMode } from "./adapters/voice";
@@ -44,30 +45,44 @@ const tts = new SpeechTts();
 engine.adaptiveProvider = () =>
   settings.adaptiveEnabled !== false ? adaptiveBoostFor(loadProfile().stats.adaptiveStreak) : 0;
 
-// ─── P2 战役元存档：同一幕的节点★最高纪录跨局累计 ─────────────────────────────
+// ─── 战役元存档（P2 单幕 → P5 按幕）：同幕同种子★最高纪录跨局累计 ─────────────
 
-/** 开新战役时，把本地同种子同幕的历史★注入新局（重打刷新只升不降）。 */
+/** 幕号 → 该幕元数据（读不到给空对象）。 */
+export function campaignActMeta(act: number): CampaignActMeta | null {
+  return loadCampaignMeta()?.acts[String(act)] ?? null;
+}
+
+/** 开新战役时，把本地同种子同幕的历史★注入新局（重打刷新只升不降；同幕地图种子复用）。 */
 const startCampaignBase = engine.startCampaign.bind(engine);
 engine.startCampaign = (act = 1, seed?: number) => {
-  const meta = loadCampaignMeta();
-  const resolvedSeed = seed ?? meta?.mapSeed;
+  const actMeta = campaignActMeta(act);
+  const resolvedSeed = seed ?? actMeta?.mapSeed;
   startCampaignBase(act, resolvedSeed);
   const campaign = engine.state.campaign;
-  if (campaign && meta && meta.act === campaign.act && meta.mapSeed === campaign.map.seed) {
-    Object.assign(campaign.stars, meta.stars);
+  if (campaign && actMeta && actMeta.mapSeed === campaign.map.seed) {
+    Object.assign(campaign.stars, actMeta.stars);
   }
 };
 
-/** 每次状态广播都把战役★同步进元存档（含败北——星辉不随倒下丢失）。 */
+/** 每次状态广播都把战役★同步进元存档（含败北——星辉不随倒下丢失；Boss 通关标记只升不降）。 */
 function syncCampaignMeta(state: GameState): void {
   const campaign = state.campaign;
   if (!campaign) return;
-  saveCampaignMeta({
-    act: campaign.act,
+  const meta = loadCampaignMeta() ?? { version: 2, acts: {}, updatedAt: "" };
+  const key = String(campaign.act);
+  const prev = meta.acts[key];
+  const stars = { ...campaign.stars };
+  if (prev) {
+    for (const [nodeId, best] of Object.entries(prev.stars)) {
+      stars[nodeId] = Math.max(stars[nodeId] ?? 0, best);
+    }
+  }
+  meta.acts[key] = {
     mapSeed: campaign.map.seed,
-    stars: { ...campaign.stars },
-    updatedAt: new Date().toISOString()
-  });
+    stars,
+    bossCleared: Boolean(prev?.bossCleared) || campaign.clearedIds.includes(campaign.map.bossId)
+  };
+  saveCampaignMeta({ ...meta, updatedAt: new Date().toISOString() });
 }
 
 // ─── 语音编排 ────────────────────────────────────────────────────────────────

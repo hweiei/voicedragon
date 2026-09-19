@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "check": "biome check .",
     "check:fix": "biome check --write .",
-    "ci": "biome ci . && tsc --noEmit && vitest run && vite build"
+    "ci": "biome ci . && tsc --noEmit && vitest run && vite build",
+    "sim": "vite-node scripts/balance-sim.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",

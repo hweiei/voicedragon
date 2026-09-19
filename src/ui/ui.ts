@@ -34,8 +34,19 @@ import {
   newlyUnlocked
 } from "../core/achievements";
 import type { AchievementContext } from "../core/achievements";
+import {
+  ACT_COUNT,
+  ACT_NUMERALS,
+  ALL_EVENTS,
+  ALL_RELICS,
+  ALL_SKILLS,
+  actContent,
+  codexEnemyList,
+  lookupRelic,
+  lookupSkill
+} from "../core/content";
 import { dailySeedForKey, dateKeyFor } from "../core/daily";
-import { BOSS, ELITES, ENEMIES, EVENTS, ITEMS, RELICS, SKILLS, getSkill } from "../core/data";
+import { ITEMS } from "../core/data";
 import type { Skill } from "../core/data";
 import { NODE_META } from "../core/engine";
 import type { EmitOptions, GameEngine, GameState, RunSummary } from "../core/engine";
@@ -56,6 +67,21 @@ import {
 } from "../core/tone";
 import { drawRunPoster, sharePoster } from "./poster";
 import { VocalQte } from "./qte";
+
+/** 标题屏战役幕按钮：act 2/3 需上一幕 Boss 已通关（元存档 bossCleared 只升不降）。 */
+function titleCampaignActButtons(): string {
+  const meta = loadCampaignMeta();
+  const buttons: string[] = [];
+  for (let act = 2; act <= ACT_COUNT; act += 1) {
+    const unlocked = Boolean(meta?.acts[String(act - 1)]?.bossCleared);
+    if (!unlocked) continue;
+    const pack = actContent(act);
+    buttons.push(
+      `<button class="ghost-button full-button" type="button" data-action="new-campaign" data-act="${act}">战役 · 第${ACT_NUMERALS[act - 1]}幕 · ${escapeHtml(pack.theme)}</button>`
+    );
+  }
+  return buttons.join("");
+}
 
 // ─── P4 玩家档案缓存（读档/语音/结算时持久化） ───────────────────────────────
 
@@ -254,7 +280,7 @@ function titleReviewStrip(): string {
   if (!picks.length) return "";
   const chips = picks
     .map((entry) => {
-      const skill = getSkill(entry.id);
+      const skill = lookupSkill(entry.id);
       if (!skill) return "";
       return `<button class="review-chip" type="button" data-action="practice-select" data-skill-id="${escapeHtml(skill.id)}">
         <strong>${escapeHtml(skill.phrase)}</strong>
@@ -295,7 +321,8 @@ function titleTemplate(): string {
       <div class="title-actions">
         ${resume ? `<button class="primary-button full-button" type="button" data-action="continue-run">继续登楼</button>` : ""}
         <button class="${resume ? "secondary-button" : "primary-button"} full-button" type="button" data-action="new-run">${resume ? "重新开局" : "开始登楼"}</button>
-        <button class="${resume ? "ghost-button" : "secondary-button"} full-button" type="button" data-action="new-campaign">战役 · 第一幕（7×15 分支地图）</button>
+        <button class="${resume ? "ghost-button" : "secondary-button"} full-button" type="button" data-action="new-campaign">战役 · 第一幕 · 骑楼长街</button>
+        ${titleCampaignActButtons()}
         <button class="ghost-button full-button" type="button" data-action="daily-challenge">每日挑战 · ${escapeHtml(dailyStatusLabel())}</button>
         <button class="ghost-button full-button" type="button" data-action="endless-run">无尽塔 · 深塔回廊（最佳 ${profileCache.stats.endlessBest} 层）</button>
         <div class="title-quick">
@@ -316,7 +343,7 @@ function towerTemplate(state: GameState, engine: GameEngine): string {
   const nextFloor = state.floor + 1;
   const player = state.player!;
   const lessonId = player.deck[(state.floor + 1) % player.deck.length];
-  const lesson = getSkill(lessonId)!;
+  const lesson = lookupSkill(lessonId)!;
   const dots = state.endless
     ? ""
     : Array.from({ length: state.maxFloor }, (_, index) => {
@@ -426,7 +453,7 @@ function campaignMapTemplate(state: GameState): string {
       ${hud(state)}
       <div class="map-head">
         <div>
-          <p class="eyebrow">第一幕 · 骑楼长街</p>
+          <p class="eyebrow">第${ACT_NUMERALS[campaign.act - 1]}幕 · ${escapeHtml(actContent(campaign.act).theme)}</p>
           <h1 class="screen-title">沿分支路线登上声煞之巅</h1>
         </div>
         <div class="map-total"><strong>${totalStars}</strong><small>累计星辉</small></div>
@@ -505,7 +532,7 @@ function battleTemplate(state: GameState, engine: GameEngine): string {
   ).join("");
   const hand = combat.hand
     .map((card) => {
-      const skill = getSkill(card.id)!;
+      const skill = lookupSkill(card.id)!;
       return skillCard(skill, { disabled: combat.energy < skill.cost || combat.locked });
     })
     .join("");
@@ -602,14 +629,14 @@ function offerDetails(offer: { type: string; id: string }): {
   description: string;
 } {
   if (offer.type === "skill") {
-    const item = getSkill(offer.id)!;
+    const item = lookupSkill(offer.id)!;
     return { mark: "技", name: item.name, description: `${item.jyutping} · ${item.lesson}` };
   }
   if (offer.type === "item") {
     const item = ITEMS.find((entry) => entry.id === offer.id)!;
     return { mark: item.short, name: item.name, description: item.description };
   }
-  const item = RELICS.find((entry) => entry.id === offer.id)!;
+  const item = lookupRelic(offer.id)!;
   return { mark: item.short, name: item.name, description: item.description };
 }
 
@@ -639,7 +666,7 @@ function shopTemplate(state: GameState): string {
 
 function rewardBonus(reward: { bonus: { type: string; id: string } | null }): string {
   if (!reward.bonus) return "";
-  const source = reward.bonus.type === "relic" ? RELICS : ITEMS;
+  const source = reward.bonus.type === "relic" ? ALL_RELICS : ITEMS;
   const item = source.find((entry) => entry.id === reward.bonus!.id)!;
   return `
     <div class="panel reward-banner">
@@ -651,7 +678,7 @@ function rewardBonus(reward: { bonus: { type: string; id: string } | null }): st
 function rewardTemplate(state: GameState): string {
   const reward = state.reward!;
   const cards = reward.choices
-    .map((id) => skillCard(getSkill(id)!, { action: "reward-skill" }))
+    .map((id) => skillCard(lookupSkill(id)!, { action: "reward-skill" }))
     .join("");
   return `
     <section class="screen">
@@ -671,7 +698,7 @@ function endTemplate(state: GameState, engine: GameEngine, victory: boolean): st
     ? Object.values(state.campaign.stars).reduce((sum, value) => sum + value, 0)
     : 0;
   const campaignLine = state.campaign
-    ? `<p class="screen-subtitle">第一幕战役星辉累计 <strong>${campaignStars} 颗</strong>（已刻入地图，重打同一幕只会刷新最高纪录）。</p>`
+    ? `<p class="screen-subtitle">第${ACT_NUMERALS[state.campaign.act - 1]}幕战役星辉累计 <strong>${campaignStars} 颗</strong>（已刻入地图，重打同一幕只会刷新最高纪录）。</p>`
     : "";
   const endlessLine = state.endless
     ? `<p class="screen-subtitle">无尽塔最佳纪录：<strong>${Math.max(loadProfile().stats.endlessBest, summary.floor)} 层</strong>（倒下即刻结算，纪录本地保留）。</p>`
@@ -679,10 +706,10 @@ function endTemplate(state: GameState, engine: GameEngine, victory: boolean): st
   return `
     <section class="screen end-screen ${victory ? "victory" : "defeat"}">
       <div class="end-seal">${victory ? "胜" : "落"}</div>
-      <p class="eyebrow">${victory ? (state.campaign ? "第一幕通关" : "十层尽破") : state.endless ? `无尽塔止步第 ${summary.floor} 层` : `止步第 ${summary.floor} 层`}</p>
+      <p class="eyebrow">${victory ? (state.campaign ? (state.campaign.act >= ACT_COUNT ? "三幕尽破" : `第${ACT_NUMERALS[state.campaign.act - 1]}幕通关`) : "十层尽破") : state.endless ? `无尽塔止步第 ${summary.floor} 层` : `止步第 ${summary.floor} 层`}</p>
       <h1 class="screen-title">${victory ? "你的声音响彻龙楼" : "声气未绝，下次再来"}</h1>
       ${campaignLine}${endlessLine}
-      <p class="screen-subtitle">${victory ? "九龙声煞已散。你带着一路学会的粤语短句走下天台。" : "本局路线与收获会被结算，重新开局将生成新的楼层。"}</p>
+      <p class="screen-subtitle">${victory ? escapeHtml(actContent(state.campaign?.act ?? 1).victoryText) : "本局路线与收获会被结算，重新开局将生成新的楼层。"}</p>
       <div class="summary-grid">
         <div class="summary-card"><strong>${summary.enemies}</strong><small>击败敌人</small></div>
         <div class="summary-card"><strong>${summary.averageScore}</strong><small>平均声韵</small></div>
@@ -692,7 +719,8 @@ function endTemplate(state: GameState, engine: GameEngine, victory: boolean): st
       <div class="button-row">
         <button class="ghost-button" type="button" data-action="back-title">返回标题</button>
         <button class="ghost-button" type="button" data-action="share-poster">生成战绩海报</button>
-        <button class="primary-button" type="button" data-action="restart-run">再闯一局</button>
+        ${victory && state.campaign && state.campaign.act < ACT_COUNT ? `<button class="primary-button" type="button" data-action="campaign-next-act">乘胜登楼 · 进入第${ACT_NUMERALS[state.campaign.act]}幕</button>` : ""}
+        <button class="${victory && state.campaign && state.campaign.act < ACT_COUNT ? "ghost-button" : "primary-button"}" type="button" data-action="restart-run">再闯一局</button>
       </div>
     </section>`;
 }
@@ -784,7 +812,11 @@ export class GameUI {
     if (!button || (button as HTMLButtonElement).disabled) return;
     const action = button.dataset.action!;
     if (action === "new-run") this.confirmNewRun();
-    if (action === "new-campaign") this.engine.startCampaign();
+    if (action === "new-campaign") {
+      const act = Number(button.dataset.act ?? 1);
+      this.engine.startCampaign(Number.isFinite(act) ? act : 1);
+    }
+    if (action === "campaign-next-act") this.engine.continueNextAct();
     if (action === "continue-run") {
       const payload = loadGame();
       if (payload) this.engine.load(payload.state);
@@ -815,7 +847,7 @@ export class GameUI {
     if (action === "show-help") this.openHelp();
     if (action === "open-settings") this.openSettings();
     if (action === "choose-floor") this.engine.chooseFloorOption(button.dataset.optionId!);
-    if (action === "cast-skill") this.openVoice(getSkill(button.dataset.skillId!));
+    if (action === "cast-skill") this.openVoice(lookupSkill(button.dataset.skillId!)!);
     if (action === "end-turn") this.engine.endTurn();
     if (action === "event-choice") this.engine.resolveEvent(button.dataset.choiceId!);
     if (action === "leave-event") this.engine.leaveEvent();
@@ -1163,20 +1195,22 @@ export class GameUI {
     this.checkNewAchievements();
   }
 
-  /** 成就判定上下文：档案统计 + 战役星辉（由种子重算节点类型）+ 每日战绩 + SRS 驯服数。 */
+  /** 成就判定上下文：档案统计 + 各幕战役星辉（由种子重算节点类型）+ 每日战绩 + SRS 驯服数。 */
   private profileContext(): AchievementContext {
     const stats = profileCache.stats;
-    const meta = loadCampaignMeta();
-    const campaignStarsTotal = meta
-      ? Object.values(meta.stars).reduce((sum, value) => sum + value, 0)
-      : 0;
-    const quizNodeIds = new Set(meta ? mapQuizNodeIds(meta.mapSeed) : []);
+    const actMetas = Object.values(loadCampaignMeta()?.acts ?? {});
+    const campaignStarsTotal = actMetas.reduce(
+      (sum, entry) => sum + Object.values(entry.stars).reduce((inner, stars) => inner + stars, 0),
+      0
+    );
     let quizPerfects = 0;
-    if (meta) {
-      for (const [nodeId, stars] of Object.entries(meta.stars)) {
+    for (const entry of actMetas) {
+      const quizNodeIds = new Set(mapQuizNodeIds(entry.mapSeed));
+      for (const [nodeId, stars] of Object.entries(entry.stars)) {
         if (stars >= 3 && quizNodeIds.has(nodeId)) quizPerfects += 1;
       }
     }
+    const actsCleared = actMetas.filter((entry) => entry.bossCleared).length;
     return {
       voiceAttempts: stats.voiceAttempts,
       bestVoice: stats.bestVoice,
@@ -1189,6 +1223,7 @@ export class GameUI {
       endlessBest: stats.endlessBest,
       campaignStarsTotal,
       campaignBossKills: stats.campaignBossKills,
+      actsCleared,
       quizPerfects,
       dailyWins: Object.values(loadDailyRecords()).filter((record) => record.victory).length,
       srsGraduated: countSrsGraduated(loadSrsStore())
@@ -1218,8 +1253,10 @@ export class GameUI {
       }
       if (state.combat) markCodexSeen(p, "enemies", [state.combat.enemy.id]);
       if (state.event) markCodexSeen(p, "events", [state.event.id]);
-      // 终局必见关底：胜利 = 击败过 boss（经典塔与战役共用九龙声煞）
-      if (state.phase === "victory") markCodexSeen(p, "enemies", [BOSS.id]);
+      // 终局必见关底：胜利 = 击败过该幕 boss（经典塔 = 第一幕九龙声煞）
+      if (state.phase === "victory") {
+        markCodexSeen(p, "enemies", [actContent(state.campaign?.act ?? 1).boss.id]);
+      }
     });
   }
 
@@ -1234,7 +1271,11 @@ export class GameUI {
     const campaignStars = state.campaign
       ? Object.values(state.campaign.stars).reduce((sum, value) => sum + value, 0)
       : 0;
-    const modeLabel = state.endless ? "无尽塔" : state.campaign ? "战役第一幕" : "经典十层";
+    const modeLabel = state.endless
+      ? "无尽塔"
+      : state.campaign
+        ? `战役 · 第${ACT_NUMERALS[state.campaign.act - 1]}幕`
+        : "经典十层";
     drawRunPoster(this.posterCanvas, {
       victory,
       title: victory ? "声震龙楼" : "下次再会",
@@ -1436,7 +1477,7 @@ export class GameUI {
     const relics = player.relics.length
       ? player.relics
           .map((id) => {
-            const relic = RELICS.find((entry) => entry.id === id)!;
+            const relic = lookupRelic(id)!;
             return `<div class="inventory-item"><span class="item-mark">${escapeHtml(relic.short)}</span><div><strong>${escapeHtml(relic.name)}</strong><small>${escapeHtml(relic.description)}</small></div><span></span></div>`;
           })
           .join("")
@@ -1489,13 +1530,13 @@ export class GameUI {
   }
 
   private currentPracticeSkill(): Skill | null {
-    return (this.practiceSkillId ? getSkill(this.practiceSkillId) : null) ?? null;
+    return (this.practiceSkillId ? lookupSkill(this.practiceSkillId) : null) ?? null;
   }
 
   private openPractice(skillId?: string): void {
     this.view = "practice";
-    if (skillId && getSkill(skillId)) this.practiceSkillId = skillId;
-    if (!this.currentPracticeSkill()) this.practiceSkillId = SKILLS[0].id;
+    if (skillId && lookupSkill(skillId)) this.practiceSkillId = skillId;
+    if (!this.currentPracticeSkill()) this.practiceSkillId = ALL_SKILLS[0].id;
     this.practiceResult = null;
     this.practiceLiveFrames = [];
     this.render(this.engine.state);
@@ -1536,7 +1577,7 @@ export class GameUI {
   private practiceTemplate(): string {
     const skill = this.currentPracticeSkill()!;
     const guides = expectedToneGuides(skill.jyutping);
-    const chips = SKILLS.map(
+    const chips = ALL_SKILLS.map(
       (entry) =>
         `<button class="practice-chip${entry.id === skill.id ? " active" : ""}" type="button" data-action="practice-select" data-skill-id="${escapeHtml(entry.id)}">${escapeHtml(entry.phrase)}</button>`
     ).join("");
@@ -1733,17 +1774,17 @@ export class GameUI {
       </header>
       ${section(
         "声诀（技能）",
-        SKILLS.map((s) => ({ id: s.id, name: s.name, tip: `${s.phrase} · ${s.jyutping}` })),
+        ALL_SKILLS.map((s) => ({ id: s.id, name: s.name, tip: `${s.phrase} · ${s.jyutping}` })),
         codex.skills
       )}
       ${section(
         "楼中对手",
-        [...ENEMIES, ...ELITES, BOSS].map((e) => ({ id: e.id, name: e.name, tip: e.epithet })),
+        codexEnemyList().map((e) => ({ id: e.id, name: e.name, tip: e.epithet })),
         codex.enemies
       )}
       ${section(
         "遗物",
-        RELICS.map((r) => ({ id: r.id, name: r.name, tip: r.description, mark: r.short })),
+        ALL_RELICS.map((r) => ({ id: r.id, name: r.name, tip: r.description, mark: r.short })),
         codex.relics
       )}
       ${section(
@@ -1753,7 +1794,7 @@ export class GameUI {
       )}
       ${section(
         "事件",
-        EVENTS.map((e) => ({ id: e.id, name: e.title, tip: e.text })),
+        ALL_EVENTS.map((e) => ({ id: e.id, name: e.title, tip: e.text })),
         codex.events
       )}
     </section>`;
@@ -1769,7 +1810,7 @@ export class GameUI {
         muted: report.toneAvg == null ? "暂无基频数据" : undefined
       },
       { label: "信心", value: report.confidenceAvg },
-      { label: "词汇", value: Math.min(100, Math.round((report.vocab / SKILLS.length) * 100)) }
+      { label: "词汇", value: Math.min(100, Math.round((report.vocab / ALL_SKILLS.length) * 100)) }
     ];
     const cx = 100;
     const cy = 100;
@@ -1795,7 +1836,7 @@ export class GameUI {
       })
       .join("");
     const mistakes = report.mistakes.slice(0, 8).map((entry) => {
-      const skill = getSkill(entry.id);
+      const skill = lookupSkill(entry.id);
       if (!skill) return "";
       const dueDays = Math.max(0, Math.ceil((Date.parse(entry.dueAt) - Date.now()) / 86400000));
       return `<div class="inventory-item">
@@ -1822,7 +1863,7 @@ export class GameUI {
           ${labels}
         </svg>
         <div class="radar-notes">
-          <p>开口练习 <strong>${report.voiceAttempts}</strong> 次 · 覆盖短句 <strong>${report.vocab}</strong> / ${SKILLS.length}</p>
+          <p>开口练习 <strong>${report.voiceAttempts}</strong> 次 · 覆盖短句 <strong>${report.vocab}</strong> / ${ALL_SKILLS.length}</p>
           ${axes[1].muted ? `<p class="settings-note">调准轴：${escapeHtml(axes[1].muted)}（端侧模型可产出）</p>` : ""}
           <p class="settings-note">今日挑战：${escapeHtml(todayRecord ? (todayRecord.victory ? `已通关 · 综合 ${todayRecord.averageScore}` : `到第 ${todayRecord.floor} 层 · 综合 ${todayRecord.averageScore}`) : "未挑战")}</p>
         </div>

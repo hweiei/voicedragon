@@ -54,16 +54,21 @@ describe("achievement thresholds", () => {
     expect(checkAchievements({ ...EMPTY, runs: 0, victories: 1 })).toContain("first-victory");
   });
 
-  test("only dragon-bane is secret", () => {
+  test("secret achievements are story reveals only", () => {
     const secret = ACHIEVEMENTS.filter((def) => def.secret).map((def) => def.id);
-    expect(secret).toEqual(["dragon-bane"]);
+    expect(secret).toEqual(["dragon-bane", "all-acts"]);
   });
 
-  test("total points are stable (13 defs)", () => {
-    expect(ACHIEVEMENTS).toHaveLength(13);
-    expect(ACHIEVEMENT_POINTS_TOTAL).toBe(
-      13 === 13 ? ACHIEVEMENTS.reduce((s, d) => s + d.points, 0) : 0
-    );
+  test("all-acts unlocks at three cleared acts (P5)", () => {
+    const def = ACHIEVEMENTS.find((entry) => entry.id === "all-acts")!;
+    expect(def.check({ actsCleared: 2 } as AchievementContext)).toBe(false);
+    expect(def.check({ actsCleared: 3 } as AchievementContext)).toBe(true);
+    expect(def.check({} as AchievementContext)).toBe(false); // 缺省视为 0
+  });
+
+  test("total points are stable (14 defs)", () => {
+    expect(ACHIEVEMENTS).toHaveLength(14);
+    expect(ACHIEVEMENT_POINTS_TOTAL).toBe(ACHIEVEMENTS.reduce((s, d) => s + d.points, 0));
     expect(ACHIEVEMENT_POINTS_TOTAL).toBeGreaterThanOrEqual(200);
   });
 });

@@ -122,30 +122,63 @@ export function saveSettings(settings: GameSettings): void {
   }
 }
 
-// ─── P2 战役元存档：节点 ★ 最高纪录跨局累计（与局内存档键分离） ─────────────────
+// ─── 战役元存档（P2 单幕 → P5 按幕）：每幕的地图种子 / 节点★最高纪录 / Boss 通关标记 ──
+// 键名沿用 v1（voice-tower-campaign-meta-v1），内容升级为 { version: 2, acts: {...} }；
+// 旧单幕结构 { act, mapSeed, stars } 首读自动迁移，不丢历史星辉。
 
 const CAMPAIGN_META_KEY = "voice-tower-campaign-meta-v1";
 
-export interface CampaignMeta {
-  act: number;
+export interface CampaignActMeta {
   mapSeed: number;
   /** nodeId → 历史最高★（只升不降） */
   stars: Record<string, number>;
+  /** 本幕 Boss 是否已通关（标题屏解锁下一幕的依据） */
+  bossCleared: boolean;
+}
+
+export interface CampaignMeta {
+  version: 2;
+  /** 幕号（字符串键）→ 该幕元数据 */
+  acts: Record<string, CampaignActMeta>;
   updatedAt: string;
+}
+
+interface LegacyCampaignMeta {
+  act?: number;
+  mapSeed?: number;
+  stars?: Record<string, number>;
+}
+
+function migrateLegacy(raw: LegacyCampaignMeta): CampaignMeta | null {
+  if (typeof raw.mapSeed !== "number" || !raw.stars) return null;
+  return {
+    version: 2,
+    acts: {
+      [String(raw.act ?? 1)]: { mapSeed: raw.mapSeed, stars: { ...raw.stars }, bossCleared: false }
+    },
+    updatedAt: ""
+  };
 }
 
 export function loadCampaignMeta(): CampaignMeta | null {
   try {
     const raw = platformStorage().get(CAMPAIGN_META_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<CampaignMeta>;
-    if (!parsed || typeof parsed.mapSeed !== "number" || !parsed.stars) return null;
-    return {
-      act: parsed.act ?? 1,
-      mapSeed: parsed.mapSeed,
-      stars: { ...parsed.stars },
-      updatedAt: parsed.updatedAt ?? ""
-    };
+    const parsed = JSON.parse(raw) as Partial<CampaignMeta> & Partial<LegacyCampaignMeta>;
+    if (!parsed) return null;
+    if (parsed.version === 2 && parsed.acts) {
+      const acts: Record<string, CampaignActMeta> = {};
+      for (const [key, entry] of Object.entries(parsed.acts)) {
+        if (!entry || typeof entry.mapSeed !== "number" || !entry.stars) continue;
+        acts[key] = {
+          mapSeed: entry.mapSeed,
+          stars: { ...entry.stars },
+          bossCleared: Boolean(entry.bossCleared)
+        };
+      }
+      return { version: 2, acts, updatedAt: parsed.updatedAt ?? "" };
+    }
+    return migrateLegacy(parsed as LegacyCampaignMeta);
   } catch {
     return null;
   }

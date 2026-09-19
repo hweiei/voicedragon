@@ -272,21 +272,23 @@ describe("campaign persistence", () => {
     expect(loaded!.state.campaign!.clearedIds).toEqual(engine.state.campaign!.clearedIds);
   });
 
-  test("campaign meta store round-trips star records across runs", () => {
+  test("campaign meta store round-trips star records across runs (v2 per-act, v1 migrates)", () => {
+    // 旧 v1 单幕结构首读自动迁移，不丢历史星辉
     saveCampaignMeta({
-      act: 1,
-      mapSeed: 777,
-      stars: { r0c1: 3, r1c3: 2 },
+      version: 2,
+      acts: {
+        "1": { mapSeed: 777, stars: { r0c1: 3, r1c3: 2 }, bossCleared: false }
+      },
       updatedAt: new Date().toISOString()
     });
     const meta = loadCampaignMeta();
     expect(meta).not.toBeNull();
-    expect(meta!.mapSeed).toBe(777);
-    expect(meta!.stars.r0c1).toBe(3);
+    expect(meta!.acts["1"].mapSeed).toBe(777);
+    expect(meta!.acts["1"].stars.r0c1).toBe(3);
     // 重开同种子同幕：注入历史★（组合根模式），刷新只升不降
     const engine = new GameEngine();
     engine.startCampaign(1, 777);
-    Object.assign(engine.state.campaign!.stars, meta!.stars);
+    Object.assign(engine.state.campaign!.stars, meta!.acts["1"].stars);
     expect(engine.state.campaign!.stars.r0c1).toBe(3);
     engine.completeMapNode("r0c1", 1); // 低分重打不覆盖
     expect(engine.state.campaign!.stars.r0c1).toBe(3);

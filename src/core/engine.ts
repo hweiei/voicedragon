@@ -12,21 +12,17 @@
  * 节点 ★ 评价（无伤/声韵≥85/限时）与宝箱/问答节点纯函数规则见 levelgen.ts。
  */
 
-import { DIFFICULTY_CURVE, QUIZ_PER_NODE, TREASURE } from "./config/balance";
 import {
-  BOSS,
-  ELITES,
-  ENEMIES,
-  EVENTS,
-  FLOOR_NAMES,
-  ITEMS,
-  MAX_FLOOR,
-  QUIZ_QUESTIONS,
-  RELICS,
-  SKILLS,
-  clone,
-  getSkill
-} from "./data";
+  ACT_DIFFICULTY_TARGET,
+  CAMPAIGN_SUSTAIN,
+  DIFFICULTY_CURVE,
+  MAX_ENERGY,
+  QUIZ_PER_NODE,
+  REST_HEAL,
+  TREASURE
+} from "./config/balance";
+import { ACT_COUNT, actContent, lookupSkill, relicsUpToAct, skillsUpToAct } from "./content";
+import { FLOOR_NAMES, ITEMS, MAX_FLOOR, QUIZ_QUESTIONS, clone } from "./data";
 import type { EnemyBlueprint, EnemyIntent, GameEventContent, QuizQuestion, Skill } from "./data";
 import { availableNodeIds, evaluateCombatStars, generateActMap, nodeById } from "./levelgen";
 import type { ActMap, MapNodeType } from "./levelgen";
@@ -135,6 +131,12 @@ export interface CombatState {
   damageTaken: number;
   lastResult: ResolvedSkillResult | null;
   locked: boolean;
+  /** P5 手牌数（碧玉洞箫 +1；缺省 3，旧存档兼容）。 */
+  handSize?: number;
+  /** P5 泊港铜铃：本回合首次施法标记。 */
+  bellTriggered?: boolean;
+  /** P5 咸柠茶盅：本回合回血标记。 */
+  lemonTriggered?: boolean;
 }
 
 export interface EventState extends GameEventContent {
@@ -380,21 +382,56 @@ export class GameEngine {
   }
 
   /**
-   * P2 闯关战役：以给定种子生成第一幕分支地图并开新一局。
+   * P2 闯关战役：以给定种子生成该幕分支地图并开新一局。
    * 同一 act 种子 = 同一张地图（★最高纪录可跨局累计，由组合根注入/同步）。
+   * P5 起：内容（敌/精英/Boss/事件/楼层名）随幕切换，act 越界钳到 [1, ACT_COUNT]。
    */
   startCampaign(act = 1, seed: number = makeSeed()): void {
-    this.state = this.createRunState();
-    const map = generateActMap(seed, act);
+    const pack = actContent(act);
+    const actNo = pack.act;
+    // P5 修复：种子同时驱动地图与战斗 LCG——同 (act, seed) 必得同局（可复现/回放的基石）
+    this.state = this.createRunState(seed);
+    const map = generateActMap(seed, actNo);
     this.state.campaign = {
-      act,
+      act: actNo,
       map,
       clearedIds: [],
       stars: {},
       currentNodeId: null
     };
     this.state.maxFloor = map.rows - 1;
-    this.state.notice = "第一幕 · 骑楼长街：从底层任意起点登楼，直取声煞之巅。";
+    this.state.notice = pack.notice;
+    this.prepareFloorOptions();
+    this.emit({ save: true });
+  }
+
+  /**
+   * P5 跨幕续行：幕 Boss 落幕后乘胜登楼——保留牌组/遗物/生命/战绩，
+   * 换一张新幕地图（种子由当前局种子派生，同局续行可复现），
+   * 塔间小憩回复 20% 最大生命。仅战役胜利相可用，终幕（第三幕）后不可续。
+   */
+  continueNextAct(seed?: number): void {
+    const campaign = this.state.campaign;
+    if (this.state.phase !== "victory" || !campaign) return;
+    const nextAct = campaign.act + 1;
+    if (nextAct > ACT_COUNT) return;
+    const pack = actContent(nextAct);
+    const mapSeed = seed ?? (this.state.seed + nextAct * 0x9e3779b9) >>> 0;
+    const map = generateActMap(mapSeed, nextAct);
+    const rested = this.healPlayer(Math.ceil(this.state.player!.maxHp * 0.2));
+    this.state.seed = mapSeed;
+    campaign.act = nextAct;
+    campaign.map = map;
+    campaign.clearedIds = [];
+    campaign.stars = {};
+    campaign.currentNodeId = null;
+    this.state.floor = 0;
+    this.state.maxFloor = map.rows - 1;
+    this.state.combat = null;
+    this.state.reward = null;
+    this.state.quiz = null;
+    this.state.phase = "tower";
+    this.state.notice = `${pack.notice}（塔间小憩：回复 ${rested} 点生命。）`;
     this.prepareFloorOptions();
     this.emit({ save: true });
   }
@@ -536,7 +573,11 @@ export class GameEngine {
       finds.push(`「${item.name}」`);
     }
     if (this.random() < TREASURE.relicChance) {
-      const relic = this.pickDistinct(RELICS, 1, player.relics)[0];
+      const relic = this.pickDistinct(
+        relicsUpToAct(this.state.campaign?.act ?? 1),
+        1,
+        player.relics
+      )[0];
       if (relic) {
         player.relics.push(relic.id);
         finds.push(`遗物「${relic.name}」`);
@@ -586,13 +627,22 @@ export class GameEngine {
     const enemy = clone(source) as unknown as RuntimeEnemy;
     // P4 自适应系数：组合根按近绩注入（±15% 上限内微调生命/攻击）
     const adaptive = 1 + clamp(this.state.adaptiveBoost ?? 0, -0.15, 0.15);
+    // P5 战役难度映射：敌人曲线按经典 10 层调校，战役 15 行的行号按各幕
+    // 难度目标折算等效层数（一幕顶 ≈ 第 6 层，三幕顶 = 第 10 层旧版终局强度）；
+    // 经典/无尽模式沿用真实楼层，行为不变。
+    const campaign = this.state.campaign;
+    const scaleFloor = campaign
+      ? 1 +
+        (this.state.floor / Math.max(1, campaign.map.rows - 1)) *
+          ((ACT_DIFFICULTY_TARGET[campaign.act] ?? MAX_FLOOR) - 1)
+      : this.state.floor;
+    const steps = Math.max(0, scaleFloor - 1);
     const hpScale =
       (1 +
-        Math.max(0, this.state.floor - 1) *
+        steps *
           (kind === "boss" ? DIFFICULTY_CURVE.bossHpPerFloor : DIFFICULTY_CURVE.enemyHpPerFloor)) *
       adaptive;
-    const attackScale =
-      (1 + Math.max(0, this.state.floor - 1) * DIFFICULTY_CURVE.attackPerFloor) * adaptive;
+    const attackScale = (1 + steps * DIFFICULTY_CURVE.attackPerFloor) * adaptive;
     enemy.maxHp = Math.round(enemy.hp * hpScale);
     enemy.hp = enemy.maxHp;
     enemy.baseAttack = Math.max(1, Math.round(enemy.attack * attackScale));
@@ -603,15 +653,17 @@ export class GameEngine {
   }
 
   startCombat(kind: CombatKind = "battle"): void {
+    // P5：敌人池按幕取（act 1 与既有 ENEMIES/ELITES/BOSS 逐位一致）
+    const pack = actContent(this.state.campaign?.act ?? 1);
     let blueprint: EnemyBlueprint;
     if (kind === "boss") {
-      blueprint = BOSS;
+      blueprint = pack.boss;
     } else if (kind === "elite") {
-      blueprint = this.pick(ELITES);
+      blueprint = this.pick(pack.elites);
     } else {
-      const unlocked = ENEMIES.slice(
+      const unlocked = pack.enemies.slice(
         0,
-        clamp(2 + Math.floor(this.state.floor / 2), 2, ENEMIES.length)
+        clamp(2 + Math.floor(this.state.floor / 2), 2, pack.enemies.length)
       );
       blueprint = this.pick(unlocked);
     }
@@ -619,14 +671,15 @@ export class GameEngine {
     const openingStrength = this.hasRelic("old-radio") ? 1 : 0;
     const player = this.state.player!;
     this.state.phase = "battle";
-    player.armor = 0;
+    player.armor = this.hasRelic("ferry-lantern") ? 4 : 0;
     player.strength = openingStrength;
+    const handSize = this.hasRelic("jade-flute") ? 4 : 3;
     this.state.combat = {
       kind,
       enemy: this.scaledEnemy(blueprint, kind),
       turn: 1,
-      energy: 3,
-      hand: this.drawHand(3),
+      energy: this.hasRelic("old-compass") ? MAX_ENERGY + 1 : MAX_ENERGY,
+      hand: this.drawHand(handSize),
       log: [`${blueprint.name} 挡住去路。`],
       firstAttack: true,
       teaTriggered: false,
@@ -634,7 +687,10 @@ export class GameEngine {
       scoreHistory: [],
       damageTaken: 0,
       lastResult: null,
-      locked: false
+      locked: false,
+      handSize,
+      bellTriggered: false,
+      lemonTriggered: false
     };
   }
 
@@ -660,7 +716,12 @@ export class GameEngine {
     const intent = this.currentIntent();
     const combat = this.state.combat;
     if (!intent || !combat) return null;
-    const attack = Math.max(0, Math.round(combat.enemy.baseAttack * (intent.amount || 0)));
+    // 吞音意图预览同样按固定伤害展示（与 endTurn 的 P5 修复一致）
+    const rawAttack =
+      intent.type === "silence"
+        ? intent.amount || 0
+        : combat.enemy.baseAttack * (intent.amount || 0);
+    const attack = Math.max(0, Math.round(rawAttack));
     const adjusted = combat.enemy.weakness > 0 ? Math.round(attack * 0.65) : attack;
     if (intent.type === "attack") {
       return {
@@ -686,7 +747,7 @@ export class GameEngine {
   }
 
   canUseSkill(skillId: string): boolean {
-    const skill = getSkill(skillId);
+    const skill = lookupSkill(skillId);
     return Boolean(
       this.state.phase === "battle" &&
         this.state.combat &&
@@ -709,7 +770,7 @@ export class GameEngine {
     voiceMeta: VoiceResultMeta = {}
   ): ResolvedSkillResult | null {
     if (!this.canUseSkill(skillId)) return null;
-    const skill = getSkill(skillId) as Skill;
+    const skill = lookupSkill(skillId) as Skill;
     const combat = this.state.combat!;
     const player = this.state.player!;
 
@@ -776,12 +837,13 @@ export class GameEngine {
       );
       if (player.buffs.length < before) messages.push("发音干扰已清除。");
     } else if (skill.type === "strength") {
-      const amount = Math.max(1, Math.round(skill.power * (0.7 + tier.multiplier / 2)));
+      let amount = Math.max(1, Math.round(skill.power * (0.7 + tier.multiplier / 2)));
+      if (this.hasRelic("thunder-drum")) amount = Math.round(amount * 1.5);
       player.strength += amount;
       messages.push(`声势提升 ${amount}。`);
     } else if (skill.type === "tempo") {
       gainArmor(scaledPower);
-      combat.hand = this.drawHand(3);
+      combat.hand = this.drawHand(combat.handSize ?? 3);
       messages.push("你借势换了一组技能。");
     } else if (skill.type === "heal") {
       healing += this.healPlayer(scaledPower);
@@ -790,6 +852,25 @@ export class GameEngine {
       dealDamage(scaledPower);
       combat.enemy.weakness = Math.max(combat.enemy.weakness, 2);
       messages.push("敌人进入虚弱状态 2 回合。");
+    }
+
+    // P5 泊港铜铃：每回合第一次施法获得 2 点护甲
+    if (this.hasRelic("harbor-bell") && !combat.bellTriggered) {
+      combat.bellTriggered = true;
+      gainArmor(2);
+      messages.push("泊港铜铃轻响。");
+    }
+    // P5 咸柠茶盅：声韵 ≥70 的施法回复 2 点生命（每回合最多一次）
+    if (this.hasRelic("salty-lemon") && !combat.lemonTriggered && score >= 70) {
+      combat.lemonTriggered = true;
+      const lemonHealing = this.healPlayer(2);
+      healing += lemonHealing;
+      if (lemonHealing) messages.push("咸柠茶盅回甘。");
+    }
+    // P5 九音骊珠：正音施法后，下一次判定 +6 分
+    if (this.hasRelic("nine-tone-pearl") && score >= 85) {
+      combat.voiceBoost += 6;
+      messages.push("九音骊珠泛起微光。");
     }
 
     if (score >= 85 && this.hasRelic("tea-cup") && !combat.teaTriggered) {
@@ -838,6 +919,8 @@ export class GameEngine {
     let damage = amount;
     const vulnerable = player.buffs.find((buff) => buff.id === "vulnerable");
     if (vulnerable) damage = Math.round(damage * 1.25);
+    // P5 龙鳞音甲：无甲受击时先张出 3 点鳞甲（每次被击破后可再次触发）
+    if (this.hasRelic("dragon-scale") && player.armor <= 0) player.armor = 3;
     const blocked = Math.min(player.armor, damage);
     player.armor -= blocked;
     const actual = Math.max(0, damage - blocked);
@@ -856,7 +939,11 @@ export class GameEngine {
     combat.locked = true;
 
     const messages: string[] = [];
-    const baseAttack = Math.max(1, Math.round(enemy.baseAttack * (intent.amount || 0)));
+    // P5 修复（平衡仿真发现的原版遗留 bug）：「吞音」意图的 amount 是固定伤害值，
+    // 原实现误乘 baseAttack（铜钟 9×8=72 点，秒杀满血玩家）。其余意图仍按倍率。
+    const rawAttack =
+      intent.type === "silence" ? intent.amount || 0 : enemy.baseAttack * (intent.amount || 0);
+    const baseAttack = Math.max(1, Math.round(rawAttack));
     const attack = enemy.weakness > 0 ? Math.max(1, Math.round(baseAttack * 0.65)) : baseAttack;
 
     if (intent.type === "attack") {
@@ -907,10 +994,12 @@ export class GameEngine {
     }
 
     combat.turn += 1;
-    combat.energy = 3;
+    combat.energy = MAX_ENERGY;
     player.armor = 0;
     combat.teaTriggered = false;
-    combat.hand = this.drawHand(3);
+    combat.bellTriggered = false;
+    combat.lemonTriggered = false;
+    combat.hand = this.drawHand(combat.handSize ?? 3);
     combat.locked = false;
     this.emit({ save: true, effect: "enemy" });
   }
@@ -921,6 +1010,14 @@ export class GameEngine {
     const isElite = combat.kind === "elite";
     this.state.stats!.enemiesDefeated += 1;
     if (isElite) this.state.stats!.elitesDefeated += 1;
+
+    // P5 凌云香囊：战斗胜利后回复 5 点生命
+    if (this.hasRelic("cloud-herb")) this.healPlayer(5);
+    // P5 战役续航：胜利后小额回血（经典/无尽不适用，行为不变）
+    if (this.state.campaign) {
+      const regen = this.healPlayer(CAMPAIGN_SUSTAIN.victoryRegen);
+      if (regen) combat.log.unshift(`凯旋缓气，回复 ${regen} 点生命。`);
+    }
 
     // P2 战役：胜利即评★（无伤 / 平均声韵≥85 / 限时）并清理节点
     const campaign = this.state.campaign;
@@ -947,11 +1044,14 @@ export class GameEngine {
 
     const gold = this.randomInt(10, 16) + (isElite ? 10 : 0);
     this.state.player!.gold += gold;
-    const choices = this.pickDistinct(SKILLS, 3).map((skill) => skill.id);
+    // P5：奖励卡池按幕累计（act 1 = 既有 12 张，行为不变）
+    const skillPool = skillsUpToAct(this.state.campaign?.act ?? 1);
+    const relicPool = relicsUpToAct(this.state.campaign?.act ?? 1);
+    const choices = this.pickDistinct(skillPool, 3).map((skill) => skill.id);
     let bonus: RewardBonus | null = null;
 
     if (isElite) {
-      const relic = this.pickDistinct(RELICS, 1, this.state.player!.relics)[0];
+      const relic = this.pickDistinct(relicPool, 1, this.state.player!.relics)[0];
       if (relic) {
         this.state.player!.relics.push(relic.id);
         bonus = { type: "relic", id: relic.id };
@@ -972,7 +1072,7 @@ export class GameEngine {
     if (skillId && reward.choices.includes(skillId)) {
       this.state.player!.deck.push(skillId);
       this.state.stats!.skillsLearned += 1;
-      this.state.notice = `学会了「${getSkill(skillId)!.name}」。`;
+      this.state.notice = `学会了「${lookupSkill(skillId)!.name}」。`;
     } else {
       this.state.notice = "你保留现有招式，继续登楼。";
     }
@@ -985,8 +1085,9 @@ export class GameEngine {
 
   startEvent(): void {
     this.state.phase = "event";
+    const eventPool = actContent(this.state.campaign?.act ?? 1).events;
     this.state.event = {
-      ...clone(this.pick(EVENTS)),
+      ...clone(this.pick(eventPool)),
       resolved: false,
       outcome: ""
     };
@@ -1010,7 +1111,7 @@ export class GameEngine {
     } else if (choice.action === "buySkill") {
       if (player.gold >= choice.value) {
         player.gold -= choice.value;
-        const learned = this.pick(SKILLS);
+        const learned = this.pick(skillsUpToAct(this.state.campaign?.act ?? 1));
         player.deck.push(learned.id);
         this.state.stats!.skillsLearned += 1;
         outcome = `你花了 ${choice.value} 两，学会「${learned.name}」。`;
@@ -1023,7 +1124,7 @@ export class GameEngine {
       outcome = "答对了。永久声韵加成 +2。";
     } else if (choice.action === "quizWrong") {
       player.hp = Math.max(1, player.hp - choice.value);
-      outcome = `字墙震出一道回声，你失去 ${choice.value} 点生命。正确答案是“没有问题”。`;
+      outcome = `字墙震出一道回声，你失去 ${choice.value} 点生命。正确意思是“${event.lesson.meaning}”。`;
     } else if (choice.action === "maxHp") {
       player.maxHp += choice.value;
       player.hp += choice.value;
@@ -1033,7 +1134,11 @@ export class GameEngine {
       outcome = `整理完唱片，你获得 ${choice.value} 两。`;
     } else if (choice.action === "relicForHp") {
       player.hp = Math.max(1, player.hp - choice.value);
-      const relic = this.pickDistinct(RELICS, 1, player.relics)[0];
+      const relic = this.pickDistinct(
+        relicsUpToAct(this.state.campaign?.act ?? 1),
+        1,
+        player.relics
+      )[0];
       if (relic) {
         player.relics.push(relic.id);
         outcome = `手上磨出血泡，失去 ${choice.value} 点生命；老师傅送你「${relic.name}」。`;
@@ -1076,7 +1181,7 @@ export class GameEngine {
     if (this.state.phase !== "rest") return;
     const player = this.state.player!;
     if (action === "heal") {
-      const amount = Math.ceil(player.maxHp * 0.3);
+      const amount = Math.ceil(player.maxHp * REST_HEAL.ratio);
       const healed = this.healPlayer(amount);
       this.state.notice = `歇息完毕，回复 ${healed} 点生命。`;
     } else if (action === "practice") {
@@ -1096,20 +1201,30 @@ export class GameEngine {
   }
 
   startShop(): void {
-    const skillOffers = this.pickDistinct(SKILLS, 2).map((skill, index) => ({
-      key: `skill-${index}`,
-      type: "skill" as const,
-      id: skill.id,
-      price: skill.rarity === "rare" ? 34 : 22,
-      sold: false
-    }));
+    // P5：夜市卡池按幕累计；夜市贵宾牌全场 -15%
+    const discount = this.hasRelic("night-market-vip") ? 0.85 : 1;
+    const priceOf = (base: number) => Math.round(base * discount);
+    const skillOffers = this.pickDistinct(skillsUpToAct(this.state.campaign?.act ?? 1), 2).map(
+      (skill, index) => ({
+        key: `skill-${index}`,
+        type: "skill" as const,
+        id: skill.id,
+        price: priceOf(skill.rarity === "rare" ? 34 : 22),
+        sold: false
+      })
+    );
     const item = this.pick(ITEMS);
-    const relic = this.pickDistinct(RELICS, 1, this.state.player!.relics)[0];
+    const relic = this.pickDistinct(
+      relicsUpToAct(this.state.campaign?.act ?? 1),
+      1,
+      this.state.player!.relics
+    )[0];
     const offers: ShopOffer[] = [
       ...skillOffers,
-      { key: "item-0", type: "item", id: item.id, price: 18, sold: false }
+      { key: "item-0", type: "item", id: item.id, price: priceOf(18), sold: false }
     ];
-    if (relic) offers.push({ key: "relic-0", type: "relic", id: relic.id, price: 52, sold: false });
+    if (relic)
+      offers.push({ key: "relic-0", type: "relic", id: relic.id, price: priceOf(52), sold: false });
     this.state.shop = { offers };
     this.state.phase = "shop";
   }
@@ -1188,6 +1303,11 @@ export class GameEngine {
 
   getFloorName(floor: number = this.state.floor): string {
     if (this.state.endless && floor > MAX_FLOOR) return "深塔回廊";
+    if (this.state.campaign) {
+      // P5：战役楼层名随幕（act 1 = 既有 FLOOR_NAMES + 塔门回退，行为不变）
+      const pack = actContent(this.state.campaign.act);
+      return pack.floorNames[Math.max(0, floor - 1)] || pack.fallbackName;
+    }
     return FLOOR_NAMES[Math.max(0, floor - 1)] || "塔门";
   }
 

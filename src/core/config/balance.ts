@@ -98,6 +98,30 @@ export const DIFFICULTY_CURVE = {
   attackPerFloor: 0.055
 } as const;
 
+/**
+ * P5 各幕难度目标（等效经典塔层数）：战役行号按比例折算到 [1, target] 区间，
+ * 再乘各幕内容包的基础数值 = 该幕总强度。经典/无尽模式不受影响。
+ * ⚠️ 数值为平衡仿真校准产物（贪心 Bot 声韵均值 74 → 各幕胜率 45–65% 带），
+ * 勿按直觉修改：调参请跑 `npm run sim` 并以 docs/BALANCE-REPORT.md 为准。
+ * 各幕内容包基础数值不同（幕越厚基础越高、目标越低），故目标值不随幕号单调。
+ */
+export const ACT_DIFFICULTY_TARGET: Record<number, number> = {
+  1: 9.5,
+  2: 6.5,
+  3: 4
+};
+
+/** P5 战役续航：15 行地图战斗密度远高于经典 10 层塔，胜利后小额回血对冲消耗。 */
+export const CAMPAIGN_SUSTAIN = {
+  /** 每场战斗胜利后回复的生命值 */
+  victoryRegen: 6
+} as const;
+
+/** 歇脚处「饮茶歇息」回血比例（原硬编码 0.3，P5 迁入配置中心）。 */
+export const REST_HEAL = {
+  ratio: 0.3
+} as const;
+
 /** 宝箱节点产出调参。 */
 export const TREASURE = {
   goldMin: 18,

@@ -199,7 +199,8 @@ function assignTypes(rng: () => number, grid: ActNode[][]): void {
   take((n) => n.row >= 2 && n.row <= prizeMaxRow, randInt(rng, 2, 3), "treasure");
   take((n) => n.row >= 2 && n.row <= prizeMaxRow, randInt(rng, 2, 3), "quiz");
   take((n) => n.row >= 2 && n.row <= prizeMaxRow, 2, "shop");
-  take((n) => n.row >= 2 && n.row <= bossRow - 1, 3, "rest");
+  // P5：歇脚配额 3→4（15 行地图约 10+ 场战斗，3 处续航不足——平衡仿真结论）
+  take((n) => n.row >= 1 && n.row <= bossRow - 1, 4, "rest");
   take((n) => n.row >= 1 && n.row <= bossRow - 1, randInt(rng, 3, 4), "event");
   // 其余保持 battle（首行因此必为战斗热身）
 }

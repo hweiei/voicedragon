@@ -18,6 +18,8 @@ export interface AchievementContext {
   endlessBest: number;
   campaignStarsTotal: number;
   campaignBossKills: number;
+  /** P5：已通关（Boss 落幕）的战役幕数 */
+  actsCleared?: number;
   quizPerfects: number;
   dailyWins: number;
   /** 错词本中间隔 ≥10 天的“驯服”句数 */
@@ -108,6 +110,15 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     points: 40,
     secret: true,
     check: (ctx) => ctx.campaignBossKills >= 1
+  },
+  {
+    id: "all-acts",
+    name: "声震三幕",
+    desc: "三幕战役（长街 / 码头 / 声窟）全部通关",
+    seal: "幕",
+    points: 60,
+    secret: true,
+    check: (ctx) => (ctx.actsCleared ?? 0) >= 3
   },
   {
     id: "endless-walker",
