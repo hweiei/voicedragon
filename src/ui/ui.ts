@@ -895,6 +895,11 @@ export class GameUI {
       this.closeModal();
       this.engine.startNew();
     }
+    if (action === "replay-tutorial") {
+      this.tutorialShownThisSession = true;
+      this.tutorialStep = 1;
+      this.renderTutorial();
+    }
     if (action === "tutorial-next") {
       this.tutorialStep = Math.min(3, (this.tutorialStep ?? 1) + 1);
       this.renderTutorial();
@@ -1626,6 +1631,7 @@ export class GameUI {
           <div class="help-step"><b>5</b><div><strong>开口有回响</strong><small>低分短句自动进「错词本」，标题屏每日推三句复习；「学习报告」看字准/调准/信心/词汇四维。</small></div></div>
         </div>
         <div class="notice-strip">端侧模型（约 230MB，可断点续传）下载一次即可完全离线游玩：设置 → 端侧模型。</div>
+        <button class="ghost-button full-button" type="button" data-action="replay-tutorial" style="margin-top:10px">重看新手教学（识招 · 听示范 · 开声校准）</button>
       </div>`;
   }
 

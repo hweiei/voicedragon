@@ -70,6 +70,8 @@ test("QTE cast consumes energy and writes a battle log", async ({ page }) => {
   // 施法结算：弹层关闭、声气消耗、战斗日志记录了效果
   await expect(page.locator(".voice-sheet")).toBeHidden({ timeout: 10_000 });
   await expect(page.locator(".energy-orb.spent")).not.toHaveCount(0);
+  // P5 演出：伤害/护甲浮字随施法出现
+  await expect(page.locator(".fx-floater").first()).toBeVisible({ timeout: 3_000 });
   await expect(page.locator(".battle-log-line")).toContainText(
     /你说出|护甲|伤害|声势|回复|换了一组/
   );

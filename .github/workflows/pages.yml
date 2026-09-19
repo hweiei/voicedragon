@@ -1,0 +1,43 @@
+# GitHub Pages 备用部署（方案 §9：Cloudflare Pages 首选，Pages 备选）。
+# 零密钥：使用仓库内置 GITHUB_TOKEN。
+#
+# ⚠️ 首次启用需手动一步：仓库 Settings → Pages → Build and deployment →
+#    Source 选 **GitHub Actions**（此文件即可被识别），然后手动 Run workflow。
+#    注意：私有仓库的 Pages 需要账户支持（GitHub Pro/Team/Enterprise）；
+#    免费账户请把仓库设为 public，或改用 Cloudflare Pages（见 DEPLOY.md）。
+name: pages
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build（项目页子路径 base）
+        run: npx vite build --base=/voicedragon/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - id: deployment
+        uses: actions/deploy-pages@v4

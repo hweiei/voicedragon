@@ -1,7 +1,19 @@
-# 部署指南（Cloudflare Pages）
+# 部署指南
 
-> 方案 §13 决策 1：Cloudflare Pages（纯静态 `dist/`，零后端）。
-> GitHub Actions 已内置手动部署工作流 `.github/workflows/deploy-pages.yml`。
+> 方案 §13 决策 1：Cloudflare Pages（纯静态 `dist/`，零后端）；GitHub Pages 为零配置备选。
+> 两条路线都已备好工作流：`.github/workflows/deploy-pages.yml`（Cloudflare）与 `.github/workflows/pages.yml`（GitHub Pages）。
+
+## 路线二：GitHub Pages（零密钥，最快上线）
+
+1. 仓库 **Settings → Pages → Build and deployment → Source 选 “GitHub Actions”**（唯一的开关）。
+2. Actions → **pages** → Run workflow（此后 main 每次推送自动部署）。
+3. 访问 `https://<用户名>.github.io/voicedragon/`（构建时自动带 `/voicedragon/` 子路径 base）。
+
+限制：私有仓库的 Pages 需要账户支持（GitHub Pro/Team/Enterprise）；免费账户可将仓库设为 public，或走 Cloudflare 路线。
+
+---
+
+## 路线一：Cloudflare Pages（推荐，可设响应头）
 
 ## 一次性配置
 
@@ -29,9 +41,12 @@
 
 ## 发布后验收清单
 
-- [ ] Lighthouse（Chrome DevTools / `npx lighthouse <url> --preset=desktop`）：
-      Performance ≥ 90、PWA 无报错、LCP < 2.5s（性能预算：首包游戏 JS ≤ 350 KB gzip，
-      本地实测见 `npm run perf` 输出）
+- [x] Lighthouse 本地实测（vite preview + `npx lighthouse --preset=desktop`，2026-09-19）：
+      **Performance 100 / Best Practices 100 / SEO 100 / Accessibility 100**，
+      FCP 0.4s · LCP 0.4s · TBT 0ms · CLS 0.006 —— 见 `docs/LIGHTHOUSE-REPORT.md`
+      （Lighthouse v12 已移除 PWA 评分类目；可安装性以 manifest + SW + 图标齐备为准，E2E 走 preview 产物验证）
+- [ ] 线上复跑 Lighthouse（部署域名）确认网络环境下的 LCP/INP
+- [ ] 性能预算：首包游戏 JS ≤ 350 KB gzip（本地实测 59.2 KB，`npm run perf`）
 - [ ] iOS Safari 实机：可安装（分享 → 添加到主屏幕）、可玩（保底 WebSpeech / 破阵拍）
 - [ ] 模型下载（设置页 → 端侧引擎 → 下载约 238 MB）在移动网络下断点续传可用
 - [ ] 分享卡片：og/twitter 图在聊天工具里正常预览
