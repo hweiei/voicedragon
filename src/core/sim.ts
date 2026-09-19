@@ -1,3 +1,4 @@
+import { removalPrice, removalReason, upgradeReason, upgradedSkill } from "./buildcraft";
 /**
  * P5 自动化平衡仿真（核心层，纯函数）：无头引擎 + 两种策略 Bot 蒙特卡洛。
  *
@@ -59,6 +60,8 @@ export interface SimRunResult {
   battles: number;
   /** 回合超时保护触发（视为败北） */
   timeout: boolean;
+  upgrades?: number;
+  removals?: number;
 }
 
 export interface SimOptions {
@@ -68,6 +71,7 @@ export interface SimOptions {
   bot: BotId;
   profile?: Partial<BotProfile>;
   ruleset?: ContentRuleset;
+  buildVersion?: 1;
 }
 
 const MAX_TURNS_PER_BATTLE = 60;
@@ -257,7 +261,7 @@ function pickEventChoice(state: GameState, rng: () => number, bot: BotId): strin
 export function simulateCampaign(options: SimOptions): SimRunResult {
   const profile = { ...BOTS[options.bot], ...options.profile };
   const engine = new GameEngine();
-  engine.startCampaign(options.act, options.seed, options.ruleset);
+  engine.startCampaign(options.act, options.seed, options.ruleset, options.buildVersion);
   // Bot 决策流独立于引擎 LCG：同种子下游戏随机与决策随机都可复现
   const rng = mulberry32((options.seed ^ 0x5eed_b07 ^ (options.act * 0x85eb_ca6b)) >>> 0);
 
@@ -267,12 +271,18 @@ export function simulateCampaign(options: SimOptions): SimRunResult {
   let steps = 0;
   let maxFloor = 0;
   const state = engine.state;
+  let upgrades = 0;
+  let removals = 0;
+  const finish = (result: SimRunResult): SimRunResult =>
+    options.buildVersion === 1 ? { ...result, upgrades, removals } : result;
 
   while (steps < MAX_STEPS_PER_RUN) {
     steps += 1;
     maxFloor = Math.max(maxFloor, state.floor);
-    if (state.phase === "victory") return { win: true, floor: maxFloor, turns, battles, timeout };
-    if (state.phase === "defeat") return { win: false, floor: maxFloor, turns, battles, timeout };
+    if (state.phase === "victory")
+      return finish({ win: true, floor: maxFloor, turns, battles, timeout });
+    if (state.phase === "defeat")
+      return finish({ win: false, floor: maxFloor, turns, battles, timeout });
     if (state.phase === "tower") {
       engine.chooseFloorOption(pickNode(state, rng, options.bot));
       continue;
@@ -316,7 +326,10 @@ export function simulateCampaign(options: SimOptions): SimRunResult {
             if (id === "p7-ginger-shot") return combat.energy <= 1;
             if (id === "p7-crack-bell") return combat.enemy.vulnerable === 0 && combat.energy >= 2;
             if (id === "p7-fan")
-              return combat.energy > 0 && !combat.hand.some((card) => engine.canUseSkill(card.id));
+              return (
+                combat.energy > 0 &&
+                !combat.hand.some((card) => engine.canUseSkill(card.id, card.index))
+              );
             return false;
           });
           if (tactical >= 0) {
@@ -329,7 +342,10 @@ export function simulateCampaign(options: SimOptions): SimRunResult {
         if (options.bot === "greedy") {
           hand.sort((a, b) => {
             const weight = options.ruleset === "p7" ? p7CardWeight : cardWeight;
-            return weight(lookupSkill(b.id)!, state) - weight(lookupSkill(a.id)!, state);
+            return (
+              weight(engine.getDeckSkill(b.index)!, state) -
+              weight(engine.getDeckSkill(a.index)!, state)
+            );
           });
         } else {
           for (let i = hand.length - 1; i > 0; i -= 1) {
@@ -339,11 +355,16 @@ export function simulateCampaign(options: SimOptions): SimRunResult {
         }
         let cast = false;
         for (const card of hand) {
-          const skill = lookupSkill(card.id)!;
-          if (!engine.canUseSkill(skill.id)) continue;
-          engine.resolveSkill(skill.id, sampleScore(rng, profile.voiceMean, profile.voiceSd), {
-            source: "sim"
-          });
+          const skill = engine.getDeckSkill(card.index)!;
+          if (!engine.canUseSkill(skill.id, card.index)) continue;
+          engine.resolveSkill(
+            skill.id,
+            sampleScore(rng, profile.voiceMean, profile.voiceSd),
+            {
+              source: "sim"
+            },
+            card.index
+          );
           cast = true;
           break; // 每次循环最多出一张，重估场面
         }
@@ -357,7 +378,7 @@ export function simulateCampaign(options: SimOptions): SimRunResult {
       if (state.phase === "battle") {
         // 超时保护：视为败北（真实玩家不会 60 回合不倒）
         timeout = true;
-        return { win: false, floor: maxFloor, turns, battles, timeout };
+        return finish({ win: false, floor: maxFloor, turns, battles, timeout });
       }
       continue;
     }
@@ -390,6 +411,33 @@ export function simulateCampaign(options: SimOptions): SimRunResult {
       continue;
     }
     if (state.phase === "rest") {
+      if (
+        options.buildVersion === 1 &&
+        options.bot === "greedy" &&
+        state.player!.hp / state.player!.maxHp >= 0.65 &&
+        state.player!.voiceMastery >= 6
+      ) {
+        const candidate = state
+          .player!.deck.map((id, index) => ({ id, index }))
+          .filter((card) => !upgradeReason(state.player!, card.index))
+          .sort((a, b) => {
+            const value = (index: number) => {
+              const skill = engine.getDeckSkill(index)!;
+              const next = upgradedSkill(skill)!;
+              return (
+                ((next.power - skill.power) *
+                  (skill.hits ??
+                    (skill.type === "strength" ? 3 : skill.type === "hybrid" ? 2 : 1))) /
+                skill.cost
+              );
+            };
+            return value(b.index) - value(a.index);
+          })[0];
+        if (candidate && engine.upgradeDeckCard(candidate.index, candidate.id)) {
+          upgrades++;
+          continue;
+        }
+      }
       const hpRatio = state.player!.hp / state.player!.maxHp;
       const action =
         options.bot === "random"
@@ -401,6 +449,37 @@ export function simulateCampaign(options: SimOptions): SimRunResult {
       continue;
     }
     if (state.phase === "shop") {
+      const player = state.player!;
+      if (
+        options.buildVersion === 1 &&
+        options.bot === "greedy" &&
+        !state.shop!.removalUsed &&
+        player.deck.length >= 9 &&
+        player.gold >= removalPrice(player) + 30
+      ) {
+        const candidate = player.deck
+          .map((id, index) => ({ id, index }))
+          .filter(
+            (card) =>
+              !removalReason(player, card.index) &&
+              !player.upgradedSlots?.includes(card.index) &&
+              player.deck.filter((id) => id === card.id).length > 1
+          )
+          .sort((a, b) => {
+            const value = (id: string) => {
+              const skill = lookupSkill(id)!;
+              return (
+                (skill.power * (skill.hits ?? 1)) / skill.cost -
+                player.deck.filter((entry) => entry === id).length
+              );
+            };
+            return value(a.id) - value(b.id);
+          })[0];
+        if (candidate && engine.removeDeckCard(candidate.index, candidate.id)) {
+          removals++;
+          continue;
+        }
+      }
       const offers = state.shop!.offers.filter((offer) => !offer.sold);
       if (options.bot === "random") {
         if (rng() < 0.3) {
@@ -447,9 +526,9 @@ export function simulateCampaign(options: SimOptions): SimRunResult {
       continue;
     }
     // 未知相：安全退出
-    return { win: false, floor: maxFloor, turns, battles, timeout };
+    return finish({ win: false, floor: maxFloor, turns, battles, timeout });
   }
-  return { win: false, floor: maxFloor, turns, battles, timeout };
+  return finish({ win: false, floor: maxFloor, turns, battles, timeout });
 }
 
 export interface SimSummary {
@@ -463,6 +542,8 @@ export interface SimSummary {
   avgTurnsPerBattle: number;
   avgBattles: number;
   timeouts: number;
+  upgrades?: number;
+  removals?: number;
 }
 
 /** 幕级蒙特卡洛：种子流 = hash(baseSeed, act, runIndex)，全确定性可复现。 */
@@ -473,6 +554,7 @@ export function simulateAct(options: {
   baseSeed?: number;
   profile?: Partial<BotProfile>;
   ruleset?: ContentRuleset;
+  buildVersion?: 1;
 }): SimSummary {
   const { act, bot, runs } = options;
   const baseSeed = options.baseSeed ?? 0x2026_0919;
@@ -482,6 +564,8 @@ export function simulateAct(options: {
   let turnsSum = 0;
   let battlesSum = 0;
   let timeouts = 0;
+  let upgrades = 0;
+  let removals = 0;
   for (let index = 0; index < runs; index += 1) {
     const seed = (baseSeed + act * 0x1b873593 + index * 0x9e3779b9) >>> 0;
     const result = simulateCampaign({
@@ -489,13 +573,16 @@ export function simulateAct(options: {
       seed,
       bot,
       profile: options.profile,
-      ruleset: options.ruleset
+      ruleset: options.ruleset,
+      buildVersion: options.buildVersion
     });
     if (result.win) wins += 1;
     floorSum += result.floor;
     turnsSum += result.turns;
     battlesSum += result.battles;
     if (result.timeout) timeouts += 1;
+    upgrades += result.upgrades ?? 0;
+    removals += result.removals ?? 0;
   }
   return {
     act,
@@ -507,6 +594,7 @@ export function simulateAct(options: {
     avgFloor: floorSum / runs,
     avgTurnsPerBattle: battlesSum ? turnsSum / battlesSum : 0,
     avgBattles: battlesSum / runs,
-    timeouts
+    timeouts,
+    ...(options.buildVersion === 1 ? { upgrades, removals } : {})
   };
 }

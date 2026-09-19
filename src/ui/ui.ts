@@ -1,3 +1,12 @@
+import { buildEnabled, removalPrice, removalReason, upgradeReason } from "../core/buildcraft";
+import {
+  type BuildOperation,
+  type BuildView,
+  buildConfirmTemplate,
+  buildViewTemplate,
+  skillTags,
+  synergyMarkup
+} from "./buildcraft";
 /**
  * 渲染层：DOM 直渲适配器（P1 版）。
  * P1 新增：QTE 无声施法「破阵拍」、TTS 示范发音（听一听）、设置页
@@ -245,24 +254,30 @@ function drawPitchCurves(
   }
 }
 
-function skillCard(skill: Skill, options: { action?: string; disabled?: boolean } = {}): string {
+function skillCard(
+  skill: Skill,
+  options: { action?: string; disabled?: boolean; deckIndex?: number } = {}
+): string {
   const action = options.action || "cast-skill";
   const disabled = Boolean(options.disabled);
   const extraClass = disabled ? " locked" : "";
   return `
-    <button class="skill-card${extraClass}" type="button" data-action="${action}" data-skill-id="${escapeHtml(skill.id)}" data-type-mark="${skillTypeMark(skill)}" ${disabled ? "disabled" : ""}>
+    <button class="skill-card${extraClass}" type="button" data-action="${action}" data-skill-id="${escapeHtml(skill.id)}" ${options.deckIndex !== undefined ? `data-deck-index="${options.deckIndex}"` : ""} data-type-mark="${skillTypeMark(skill)}" ${disabled ? "disabled" : ""}>
       <span class="skill-cost">${skill.cost}</span>
       <strong>${escapeHtml(skill.name)}</strong>
       <span class="jyutping">${escapeHtml(skill.jyutping)}</span>
       <span class="meaning">${escapeHtml(skill.lesson)}</span>
       <span class="effect">${escapeHtml(skillDescription(skill))}</span>
+      ${skillTags(skill)}
     </button>`;
 }
 
 function challengeBanner(state: GameState): string {
   const challenge = state.challenge;
   if (!challenge)
-    return state.ruleset === "p7" ? '<div class="content-version">三幕深耕 · 扩展内容池</div>' : "";
+    return state.ruleset === "p7"
+      ? `<div class="content-version">三幕深耕 · 扩展内容池${buildEnabled(state) ? " · 构筑已开启" : ""}</div>`
+      : "";
   return `<aside class="challenge-banner" aria-label="本局变异词缀">
     <strong>${challenge.mode === "daily" ? `每日挑战 · ${escapeHtml(challenge.dateKey ?? "")}` : `无尽变异 · 第 ${challenge.stage * 5 + 1}–${challenge.stage * 5 + 5} 层`}</strong>
     ${mutationList(challenge.mutatorIds)
@@ -328,7 +343,7 @@ function titleTemplate(): string {
         <div class="title-kicker">粤语声攻 · 十层试炼</div>
         <h1 class="title-name"><span>声震</span>龙楼</h1>
         <p class="title-tagline">讲得准，打得狠；一路开声，一路登楼</p>
-        <p class="content-version">三幕深耕 · ${ALL_SKILLS.length} 招式 · ${ALL_EVENTS.length} 奇遇 · ${ITEMS.length} 道具<br />战役开新局体验；旧存档保留原规则</p>
+        <p class="content-version">三幕深耕 · ${ALL_SKILLS.length} 招式 · ${ALL_EVENTS.length} 奇遇 · ${ITEMS.length} 道具<br />战役开新局体验；旧存档保留原规则<br />构筑新玩法：歇脚升级 · 夜市删牌</p>
       </div>
 
       <div class="tower-illustration" aria-hidden="true">
@@ -560,8 +575,11 @@ function battleTemplate(state: GameState, engine: GameEngine): string {
   ).join("");
   const hand = combat.hand
     .map((card) => {
-      const skill = lookupSkill(card.id)!;
-      return skillCard(skill, { disabled: combat.energy < skill.cost || combat.locked });
+      const skill = engine.getDeckSkill(card.index)!;
+      return skillCard(skill, {
+        disabled: combat.energy < skill.cost || combat.locked,
+        deckIndex: card.index
+      });
     })
     .join("");
   const log = combat.log[0] || "轮到你开声。";
@@ -654,6 +672,7 @@ function restTemplate(state: GameState): string {
       <p class="screen-subtitle">烛火很稳。你只能选择一种休整方式。</p>
       <div class="story-art"><span class="story-glyph">息</span></div>
       <div class="rest-options">
+        ${buildEnabled(state) ? '<div class="rest-card"><h3>磨练一招</h3><p>选择一张牌升级一次，替代本次回血或练声。同名牌分别强化。</p><button class="secondary-button full-button" type="button" data-action="open-build" data-build-mode="upgrade">选择升级</button></div>' : ""}
         <div class="rest-card"><h3>饮茶歇息</h3><p>回复最大生命的 30%，适合伤势较重时。</p><button class="primary-button full-button" type="button" data-action="rest" data-rest-action="heal">回复生命</button></div>
         <div class="rest-card"><h3>对墙练声</h3><p>永久声韵 +3，使之后每次语音判定更稳定。</p><button class="secondary-button full-button" type="button" data-action="rest" data-rest-action="practice">提升声韵</button></div>
         <div class="rest-card"><h3>调匀气息</h3><p>最大生命 +5，并同步回复 5 点生命。</p><button class="ghost-button full-button" type="button" data-action="rest" data-rest-action="fortify">强健体魄</button></div>
@@ -685,7 +704,7 @@ function shopTemplate(state: GameState): string {
       return `
       <div class="shop-offer">
         <span class="offer-seal">${escapeHtml(detail.mark)}</span>
-        <div><h3>${escapeHtml(detail.name)}</h3><p>${escapeHtml(detail.description)}</p></div>
+        <div><h3>${escapeHtml(detail.name)}</h3><p>${escapeHtml(detail.description)}</p>${offer.type === "skill" ? skillTags(lookupSkill(offer.id)!) : ""}${offer.type === "skill" && buildEnabled(state) ? synergyMarkup(lookupSkill(offer.id)!, state.player!) : ""}</div>
         <button class="price-button" type="button" data-action="buy-offer" data-offer-key="${escapeHtml(offer.key)}" ${offer.sold ? "disabled" : ""}>${offer.sold ? "已售" : `${offer.price} 两`}</button>
       </div>`;
     })
@@ -698,6 +717,7 @@ function shopTemplate(state: GameState): string {
       <h1 class="screen-title">榕树头声货摊</h1>
       <p class="screen-subtitle">货物每局不同，卖出后概不退换。</p>
       ${state.notice ? `<div class="notice-strip">${escapeHtml(state.notice)}</div>` : ""}
+      ${buildEnabled(state) ? `<div class="panel build-service"><h3>精简牌组 · ${removalPrice(state.player!)} 两</h3><p>本店限一次，至少留 5 张及一张输出牌；服务不打折。</p><button class="secondary-button full-button" type="button" data-action="open-build" data-build-mode="remove" ${state.shop!.removalUsed ? "disabled" : ""}>${state.shop!.removalUsed ? "本店已删牌" : "选择删牌"}</button></div>` : ""}
       <div class="shop-grid">${offers}</div>
       <button class="ghost-button full-button" type="button" data-action="leave-shop" style="margin-top:14px">离开夜市</button>
     </section>`;
@@ -717,7 +737,10 @@ function rewardBonus(reward: { bonus: { type: string; id: string } | null }): st
 function rewardTemplate(state: GameState): string {
   const reward = state.reward!;
   const cards = reward.choices
-    .map((id) => skillCard(lookupSkill(id)!, { action: "reward-skill" }))
+    .map(
+      (id) =>
+        `<div class="reward-candidate">${skillCard(lookupSkill(id)!, { action: "reward-skill" })}${buildEnabled(state) ? synergyMarkup(lookupSkill(id)!, state.player!) : ""}</div>`
+    )
     .join("");
   return `
     <section class="screen">
@@ -772,6 +795,8 @@ const VOICE_MODE_COPY: Record<VoiceMode, string> = {
 };
 
 interface PendingVoice {
+  deckIndex?: number;
+  combat: GameState["combat"];
   skill: Skill;
   result: VoiceScoreResult | null;
 }
@@ -788,6 +813,15 @@ export class GameUI {
   private lastNotice: string | null = null;
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingVoice: PendingVoice | null = null;
+  private pendingBuild: {
+    operation: BuildOperation;
+    index: number;
+    id: string;
+    player: GameState["player"];
+    phase: GameState["phase"];
+    floor: number;
+    shop: GameState["shop"];
+  } | null = null;
   private activeQte: VocalQte | null = null;
   /** P6-F2 语音光环：收音期间的龙吟环（说话可见）。 */
   private voiceAura: VoiceAura | null = null;
@@ -859,7 +893,7 @@ export class GameUI {
     if (action === "new-run") this.confirmNewRun();
     if (action === "new-campaign") {
       const act = Number(button.dataset.act ?? 1);
-      this.engine.startCampaign(Number.isFinite(act) ? act : 1, undefined, "p7");
+      this.engine.startCampaign(Number.isFinite(act) ? act : 1, undefined, "p7", 1);
     }
     if (action === "campaign-next-act") this.engine.continueNextAct();
     if (action === "continue-run") {
@@ -892,7 +926,17 @@ export class GameUI {
     if (action === "show-help") this.openHelp();
     if (action === "open-settings") this.openSettings();
     if (action === "choose-floor") this.engine.chooseFloorOption(button.dataset.optionId!);
-    if (action === "cast-skill") this.openVoice(lookupSkill(button.dataset.skillId!)!);
+    if (action === "cast-skill") {
+      const index =
+        button.dataset.deckIndex === undefined ? undefined : Number(button.dataset.deckIndex);
+      this.openVoice(
+        index === undefined
+          ? lookupSkill(button.dataset.skillId!)
+          : this.engine.getDeckSkill(index),
+        index
+      );
+    }
+    if (action === "open-build") this.openBuild(button.dataset.buildMode as BuildView);
     if (action === "end-turn") this.engine.endTurn();
     if (action === "event-choice") this.engine.resolveEvent(button.dataset.choiceId!);
     if (action === "leave-event") this.engine.leaveEvent();
@@ -907,7 +951,7 @@ export class GameUI {
       if (this.engine.state.endless) this.engine.startEndless(undefined, "p7");
       else if (this.engine.state.challenge?.mode === "daily") this.startDailyChallenge();
       else if (this.engine.state.campaign)
-        this.engine.startCampaign(this.engine.state.campaign.act, undefined, "p7");
+        this.engine.startCampaign(this.engine.state.campaign.act, undefined, "p7", 1);
       else this.engine.startNew();
     }
     if (action === "back-title") {
@@ -921,6 +965,14 @@ export class GameUI {
     if (!button || (button as HTMLButtonElement).disabled) return;
     const action = button.dataset.action!;
     if (action === "close-modal") this.closeModal();
+    if (action === "open-build") this.openBuild(button.dataset.buildMode as BuildView);
+    if (action === "build-select")
+      this.selectBuild(
+        button.dataset.operation as BuildOperation,
+        Number(button.dataset.slot),
+        button.dataset.skillId!
+      );
+    if (action === "confirm-build") this.confirmBuild();
     if (action === "start-listening") this.startListening();
     if (action === "stop-listening") this.adapter?.stop();
     if (action === "toggle-fallback") this.toggleFallback();
@@ -1149,9 +1201,9 @@ export class GameUI {
 
   // ─── 施法（语音/无声 QTE 双通道） ──────────────────────────────────────────
 
-  private openVoice(skill: Skill | undefined): void {
-    if (!skill || !this.engine.canUseSkill(skill.id)) return;
-    this.pendingVoice = { skill, result: null };
+  private openVoice(skill: Skill | undefined, deckIndex?: number): void {
+    if (!skill || !this.engine.canUseSkill(skill.id, deckIndex)) return;
+    this.pendingVoice = { skill, result: null, deckIndex, combat: this.engine.state.combat };
     const adapter = this.adapter;
     const canListen = Boolean(adapter?.ready);
     const engineLabel = adapter ? adapter.id : "loading";
@@ -1337,9 +1389,13 @@ export class GameUI {
 
   private applyVoiceResult(): void {
     if (!this.pendingVoice?.result) return;
-    const { skill, result } = this.pendingVoice;
+    const { skill, result, deckIndex, combat } = this.pendingVoice;
     this.pendingVoice = null;
     this.closeModal(false);
+    if (combat !== this.engine.state.combat || !this.engine.canUseSkill(skill.id, deckIndex)) {
+      this.showToast("战斗或手牌已变化，本次未消耗声气，请重新选牌。");
+      return;
+    }
     // P3：真实语音尝试进入学习闭环（错词本 / 学习报告 / 每日三句）
     this.recordVoiceAttempt(skill.id, result);
     // P4：真声施法累计进档案（连珠/最佳/次数），并即时点亮成就
@@ -1347,7 +1403,7 @@ export class GameUI {
       persistProfile((p) => recordVoiceCast(p, result.score));
       this.checkNewAchievements();
     }
-    this.engine.resolveSkill(skill.id, result.score, result);
+    this.engine.resolveSkill(skill.id, result.score, result, deckIndex);
   }
 
   // ─── P4 档案 / 成就 / 图鉴接线 ─────────────────────────────────────────────
@@ -1671,6 +1727,64 @@ export class GameUI {
 
   // ─── 行囊 / 帮助 ────────────────────────────────────────────────────────────
 
+  private openBuild(mode: BuildView = "view"): void {
+    if (!this.engine.state.player) return;
+    this.pendingBuild = null;
+    const safeMode = mode === "remove" || mode === "upgrade" ? mode : "view";
+    this.modalRoot.innerHTML = buildViewTemplate(this.engine.state, safeMode);
+    this.modalRoot.querySelector<HTMLButtonElement>(".close-button")?.focus();
+  }
+
+  private selectBuild(operation: BuildOperation, index: number, id: string): void {
+    const state = this.engine.state;
+    const player = state.player;
+    if (!buildEnabled(state) || !player || player.deck[index] !== id) return;
+    if (operation === "upgrade" && (state.phase !== "rest" || upgradeReason(player, index))) return;
+    if (
+      operation === "remove" &&
+      (state.phase !== "shop" ||
+        state.shop?.removalUsed ||
+        removalReason(player, index) ||
+        player.gold < removalPrice(player))
+    )
+      return;
+    if (operation !== "upgrade" && operation !== "remove") return;
+    this.pendingBuild = {
+      operation,
+      index,
+      id,
+      player,
+      phase: state.phase,
+      floor: state.floor,
+      shop: state.shop
+    };
+    this.modalRoot.innerHTML = buildConfirmTemplate(state, operation, index);
+    this.modalRoot.querySelector<HTMLButtonElement>('[data-action="confirm-build"]')?.focus();
+  }
+
+  private confirmBuild(): void {
+    const pending = this.pendingBuild;
+    if (!pending) return;
+    this.pendingBuild = null;
+    const state = this.engine.state;
+    if (
+      pending.player !== state.player ||
+      pending.phase !== state.phase ||
+      pending.floor !== state.floor ||
+      pending.shop !== state.shop
+    ) {
+      this.closeModal();
+      this.showToast("当前节点已变化，请重新选择。");
+      return;
+    }
+    this.closeModal();
+    const ok =
+      pending.operation === "upgrade"
+        ? this.engine.upgradeDeckCard(pending.index, pending.id)
+        : this.engine.removeDeckCard(pending.index, pending.id);
+    if (!ok) this.showToast("操作条件已变化，牌组与银两保持不变。");
+  }
+
   private openInventory(): void {
     const player = this.engine.state.player;
     if (!player) return;
@@ -1693,6 +1807,7 @@ export class GameUI {
     this.modalRoot.innerHTML = `
       <div class="modal-sheet">
         <div class="modal-head"><div><h2>随身行囊</h2><p>${player.deck.length} 张技能 · ${player.gold} 两 · 永久声韵 +${player.voiceMastery}</p></div><button class="close-button" data-action="close-modal">×</button></div>
+        <button type="button" class="secondary-button full-button" data-action="open-build" data-build-mode="view">查看构筑 · ${player.deck.length} 张牌</button>
         <div class="section-label"><h2>遗物</h2><p>${player.relics.length} 件</p></div>
         <div class="inventory-list">${relics}</div>
         <div class="section-label"><h2>消耗品</h2><p>${player.items.length} 件</p></div>
@@ -2089,6 +2204,7 @@ export class GameUI {
     this.voiceAura?.stop();
     this.voiceAura = null;
     this.pendingVoice = cancelVoice ? null : this.pendingVoice;
+    this.pendingBuild = null;
     this.modalRoot.innerHTML = "";
   }
 

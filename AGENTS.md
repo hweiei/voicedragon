@@ -33,9 +33,11 @@ npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 
 - `src/adapters/` 是端口实现（audio/tts/voice/storage/platform）。
 - `src/ui/` 渲染与演出：模板字符串直渲 + `src/ui/fx/` 演出编排（FxDirector）。
 - 设计决策的单一事实源：`docs/REDESIGN-PLAN.md`（P0–P5 历史）与
-  `docs/FX-UPGRADE-PLAN.md`（P6 三期完成）及 `docs/CONTENT-EXPANSION-PLAN.md`（P7 三幕深耕）。
+  `docs/FX-UPGRADE-PLAN.md`（P6 三期完成）及 `docs/CONTENT-EXPANSION-PLAN.md`（P7 三幕深耕）与 `docs/BUILDCRAFT-PLAN.md`（P8-A 构筑成型）。
 - 内容兼容：缺失 `ruleset` 的旧局按 legacy；P7 新内容只经 `skillsFor/eventsFor/itemsFor` 进入对应新局。
   不直接修改基础内容表或用扩展池替换基础池。新增参数须审查组合根包装器是否完整转发。
+- 构筑独立版本 `buildVersion:1` 仅用于新战役；缺失时保留旧玩法。升级按 `upgradedSlots` 记录具体牌组槽位，
+  不改原 skillId；删牌必须重映射槽位；P8 施法必须从 UI/模拟器传入 deckIndex，不能按同名技能猜副本。
 
 ## 2. 黄金契约与确定性
 
@@ -47,10 +49,11 @@ npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 
 ```bash
 npx biome check .          # 风格（或 npm run check:fix）
 npx tsc --noEmit           # 严格类型
-npx vitest run             # 单测+契约+仿真（现 269 条）
-npx vite build && npx vite-node scripts/perf-budget.ts   # 首包 ≤350KB gzip（现 ~70.7）
+npx vitest run             # 单测+契约+仿真（现 303 条）
+npx vite build && npx vite-node scripts/perf-budget.ts   # 首包 ≤350KB gzip（现 ~75.2）
+npm run sim:p8            # 构筑版独立仿真（含真实升级/删牌计数）
 npm run sim:p7            # 扩展版独立平衡报表（基础版仍用 npm run sim）
-npx playwright test        # E2E（现 13 条；需 npx playwright install chromium）
+npx playwright test        # E2E（现 20 条；需 npx playwright install chromium）
 ```
 
 ## 4. 不可触碰的红线

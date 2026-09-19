@@ -2989,3 +2989,158 @@ body {
 .mutation-rule[data-kind="boon"] b {
   color: #9cceae;
 }
+
+/* P8-A 静态构筑信息：不依赖动画或仅用颜色传达状态。 */
+.skill-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 7px;
+}
+.skill-tag {
+  display: inline-block;
+  font-size: 10px;
+  line-height: 1.6;
+  border: 1px solid rgba(240, 207, 131, 0.22);
+  border-radius: 4px;
+  padding: 0 5px;
+  color: var(--muted);
+}
+.build-sheet {
+  max-width: 680px;
+}
+.build-intro {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.cost-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin: 14px 0;
+}
+.cost-summary span {
+  padding: 8px 4px;
+  text-align: center;
+  border: 1px solid rgba(240, 207, 131, 0.18);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.build-flows {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.build-flows > div {
+  background: rgba(240, 207, 131, 0.04);
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 12px;
+}
+.build-flows p {
+  margin: 5px 0;
+}
+.build-flows small {
+  color: var(--muted);
+  line-height: 1.5;
+}
+.build-card-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+.build-card {
+  min-width: 0;
+  border: 1px solid rgba(240, 207, 131, 0.22);
+  border-radius: 10px;
+  padding: 12px;
+}
+.build-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 14px;
+}
+.build-card-head small {
+  color: var(--muted);
+}
+.build-card > p {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.build-card > small {
+  font-size: 11px;
+}
+.build-card button {
+  font-size: 12px;
+  min-height: 44px;
+}
+.build-service {
+  margin: 16px 0;
+  padding: 16px;
+}
+.build-service h3 {
+  margin-top: 0;
+}
+.build-service p {
+  color: var(--muted);
+  font-size: 13px;
+}
+.upgrade-preview {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.upgrade-preview > div {
+  border: 1px solid rgba(240, 207, 131, 0.24);
+  padding: 12px;
+  border-radius: 10px;
+}
+.upgrade-preview small {
+  color: var(--muted);
+}
+.upgrade-preview p,
+.build-confirm > p {
+  font-size: 13px;
+  line-height: 1.7;
+}
+.build-confirm .full-button {
+  margin-top: 10px;
+}
+.synergy-hints {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.synergy-hints li {
+  margin: 5px 0;
+  padding-left: 8px;
+  border-left: 2px solid rgba(156, 206, 174, 0.65);
+}
+.synergy-hints li[data-kind="caution"] {
+  border-left-color: #d9ac61;
+}
+.reward-candidate {
+  min-width: 0;
+}
+.reward-candidate > .skill-card {
+  width: 100%;
+}
+@media (max-width: 480px) {
+  .build-flows {
+    grid-template-columns: 1fr;
+  }
+  .build-card-list {
+    grid-template-columns: 1fr;
+  }
+  .upgrade-preview {
+    grid-template-columns: 1fr;
+  }
+}

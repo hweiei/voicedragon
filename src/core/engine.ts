@@ -13,11 +13,20 @@
  */
 
 import {
+  buildEnabled,
+  deckSkill,
+  removalPrice,
+  removalReason,
+  upgradeReason,
+  upgradesAfterRemoval
+} from "./buildcraft";
+import {
   ACT_DIFFICULTY_TARGET,
   CAMPAIGN_SUSTAIN,
   DIFFICULTY_CURVE,
   MAX_ENERGY,
   P7_ACT_DIFFICULTY_TARGET,
+  P8_ACT_DIFFICULTY_TARGET,
   QUIZ_PER_NODE,
   REST_HEAL,
   TREASURE
@@ -86,6 +95,9 @@ export interface PlayerState {
   relics: string[];
   items: string[];
   buffs: Buff[];
+  /** P8-A 按牌组槽位标记，删除时平移；不修改全局技能。 */
+  upgradedSlots?: number[];
+  removedCards?: number;
 }
 
 export interface RuntimeEnemy extends EnemyBlueprint {
@@ -166,6 +178,7 @@ export interface ShopOffer {
 
 export interface ShopState {
   offers: ShopOffer[];
+  removalUsed?: boolean;
 }
 
 export interface RewardBonus {
@@ -235,6 +248,8 @@ export interface GameState {
   adaptiveBoost?: number;
   /** P7 可选版本：缺失保留基础池，跨幕/读档不变。 */
   ruleset?: ContentRuleset;
+  /** 构筑规则独立于内容版本；只在显式开启的新战役中生效。 */
+  buildVersion?: 1;
   challenge?: ChallengeState;
 }
 
@@ -401,12 +416,22 @@ export class GameEngine {
    * 同一 act 种子 = 同一张地图（★最高纪录可跨局累计，由组合根注入/同步）。
    * P5 起：内容（敌/精英/Boss/事件/楼层名）随幕切换，act 越界钳到 [1, ACT_COUNT]。
    */
-  startCampaign(act = 1, seed: number = makeSeed(), ruleset: ContentRuleset = "legacy"): void {
+  startCampaign(
+    act = 1,
+    seed: number = makeSeed(),
+    ruleset: ContentRuleset = "legacy",
+    buildVersion?: 1
+  ): void {
     const pack = actContent(act);
     const actNo = pack.act;
     // P5 修复：种子同时驱动地图与战斗 LCG——同 (act, seed) 必得同局（可复现/回放的基石）
     this.state = this.createRunState(seed);
     if (ruleset === "p7") this.state.ruleset = ruleset;
+    if (ruleset === "p7" && buildVersion === 1) {
+      this.state.buildVersion = 1;
+      this.state.player!.upgradedSlots = [];
+      this.state.player!.removedCards = 0;
+    }
     const map = generateActMap(seed, actNo);
     this.state.campaign = {
       act: actNo,
@@ -679,7 +704,11 @@ export class GameEngine {
     // 难度目标折算等效层数（一幕顶 ≈ 第 6 层，三幕顶 = 第 10 层旧版终局强度）；
     // 经典/无尽模式沿用真实楼层，行为不变。
     const campaign = this.state.campaign;
-    const targets = this.state.ruleset === "p7" ? P7_ACT_DIFFICULTY_TARGET : ACT_DIFFICULTY_TARGET;
+    const targets = buildEnabled(this.state)
+      ? P8_ACT_DIFFICULTY_TARGET
+      : this.state.ruleset === "p7"
+        ? P7_ACT_DIFFICULTY_TARGET
+        : ACT_DIFFICULTY_TARGET;
     const scaleFloor = campaign
       ? 1 +
         (this.state.floor / Math.max(1, campaign.map.rows - 1)) *
@@ -809,8 +838,23 @@ export class GameEngine {
     return { label: intent.label, detail: "施加发音干扰", type: "debuff" };
   }
 
-  canUseSkill(skillId: string): boolean {
-    const skill = lookupSkill(skillId);
+  /** 读取一张实体卡的有效数值；旧局忽略所有升级附加字段。 */
+  getDeckSkill(index: number): Skill | undefined {
+    return this.state.player
+      ? deckSkill(this.state.player, index, buildEnabled(this.state))
+      : undefined;
+  }
+
+  canUseSkill(skillId: string, deckIndex?: number): boolean {
+    const isBuild = buildEnabled(this.state);
+    if (
+      isBuild &&
+      (deckIndex === undefined ||
+        !this.state.combat?.hand.some((card) => card.index === deckIndex && card.id === skillId))
+    )
+      return false;
+    const skill = isBuild ? this.getDeckSkill(deckIndex!) : lookupSkill(skillId);
+    if (skill?.id !== skillId) return false;
     return Boolean(
       this.state.phase === "battle" &&
         this.state.combat &&
@@ -830,10 +874,13 @@ export class GameEngine {
   resolveSkill(
     skillId: string,
     rawScore: number,
-    voiceMeta: VoiceResultMeta = {}
+    voiceMeta: VoiceResultMeta = {},
+    deckIndex?: number
   ): ResolvedSkillResult | null {
-    if (!this.canUseSkill(skillId)) return null;
-    const skill = lookupSkill(skillId) as Skill;
+    if (!this.canUseSkill(skillId, deckIndex)) return null;
+    const skill = (
+      buildEnabled(this.state) ? this.getDeckSkill(deckIndex!) : lookupSkill(skillId)
+    ) as Skill;
     const combat = this.state.combat!;
     const player = this.state.player!;
 
@@ -1247,6 +1294,50 @@ export class GameEngine {
     this.emit({ save: true });
   }
 
+  /** P8-A 歇脚升级事务：全部校验通过才写入，结束节点与回血互斥。 */
+  upgradeDeckCard(index: number, expectedId: string): boolean {
+    const player = this.state.player;
+    if (
+      !buildEnabled(this.state) ||
+      this.state.phase !== "rest" ||
+      !player ||
+      player.deck[index] !== expectedId ||
+      upgradeReason(player, index)
+    )
+      return false;
+    player.upgradedSlots = [...(player.upgradedSlots ?? []), index];
+    this.state.notice = `「${this.getDeckSkill(index)!.name}」磨练完成，只强化这一张牌。`;
+    this.finishRest();
+    return true;
+  }
+
+  /** P8-A 夜市删牌事务：同店仅一次，余额/牌数/最后输出保护。 */
+  removeDeckCard(index: number, expectedId: string): boolean {
+    const player = this.state.player;
+    const shop = this.state.shop;
+    if (
+      !buildEnabled(this.state) ||
+      this.state.phase !== "shop" ||
+      !player ||
+      !shop ||
+      shop.removalUsed ||
+      player.deck[index] !== expectedId ||
+      removalReason(player, index)
+    )
+      return false;
+    const price = removalPrice(player);
+    if (player.gold < price) return false;
+    const name = this.getDeckSkill(index)!.name;
+    player.gold -= price;
+    player.deck.splice(index, 1);
+    player.upgradedSlots = upgradesAfterRemoval(player.upgradedSlots ?? [], index);
+    player.removedCards = (player.removedCards ?? 0) + 1;
+    shop.removalUsed = true;
+    this.state.notice = `花费 ${price} 两，移除「${name}」。本店删牌服务已使用。`;
+    this.emit({ save: true });
+    return true;
+  }
+
   rest(action: string): void {
     if (this.state.phase !== "rest") return;
     const player = this.state.player!;
@@ -1262,6 +1353,10 @@ export class GameEngine {
       player.hp += 5;
       this.state.notice = "调匀气息，最大生命 +5。";
     }
+    this.finishRest();
+  }
+
+  private finishRest(): void {
     if (this.state.campaign?.currentNodeId) {
       this.completeMapNode(this.state.campaign.currentNodeId, 1);
     }

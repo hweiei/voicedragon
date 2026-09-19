@@ -135,3 +135,6 @@ export const QUIZ_PER_NODE = 3;
 
 /** P7 扩池后强卡/续航掉落被稀释，单独校准；不改基础版的种子回放。 */
 export const P7_ACT_DIFFICULTY_TARGET: Record<number, number> = { 1: 8, 2: 6.5, 3: 4.4 };
+
+/** P8-A 构筑版独立校准；旧 P7 曲线不变。 */
+export const P8_ACT_DIFFICULTY_TARGET: Record<number, number> = { 1: 8, 2: 6.5, 3: 4.4 };
