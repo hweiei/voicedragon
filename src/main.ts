@@ -5,6 +5,7 @@
  */
 
 import "./ui/styles.css";
+import { GameAudio, bgmMoodForPhase, sfxForEffect } from "./adapters/audio";
 import { setKeepScreenOn } from "./adapters/platform";
 import {
   loadCampaignMeta,
@@ -30,6 +31,7 @@ import { SCORING_WEIGHTS_V2 } from "./core/config/balance";
 import { GameEngine } from "./core/engine";
 import type { EmitOptions, GameState } from "./core/engine";
 import { adaptiveBoostFor } from "./core/profile";
+import { AmbientField } from "./ui/ambient";
 import { GameUI } from "./ui/ui";
 import type { VoiceServices } from "./ui/ui";
 
@@ -40,6 +42,27 @@ document.body.dataset.theme = settings.theme ?? "ink";
 
 const engine = new GameEngine();
 const tts = new SpeechTts();
+
+// ─── P5 音效与演出：合成音效 + 生成式 BGM + 氛围粒子 ─────────────────────────
+
+const audio = new GameAudio();
+audio.attachSettings({ sound: settings.sound, music: settings.music ?? true });
+const ambientCanvas = document.querySelector<HTMLCanvasElement>("#ambient-canvas");
+const ambient = ambientCanvas ? new AmbientField(ambientCanvas, settings.reduceMotion) : null;
+
+// 自动播放合规：首次手势解锁 AudioContext；顺手给所有动作按钮配轻点击音
+document.addEventListener(
+  "pointerdown",
+  (event) => {
+    audio.unlock();
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-action]");
+    if (button) audio.playSfx("click");
+  },
+  { capture: true }
+);
+document.addEventListener("visibilitychange", () => {
+  audio.handleVisibility(document.hidden);
+});
 
 // P4 自适应难度注入：连胜略加难 / 连败略减压（设置页可关），随每局开局采样
 engine.adaptiveProvider = () =>
@@ -112,6 +135,9 @@ const voiceServices: VoiceServices = {
       Object.assign(settings, next);
       saveSettings(settings);
       document.body.classList.toggle("reduce-motion", settings.reduceMotion);
+      // P5：音效/音乐/氛围即时生效
+      audio.attachSettings({ sound: settings.sound, music: settings.music ?? true });
+      ambient?.setReducedMotion(settings.reduceMotion);
     }
   },
   model: {
@@ -155,6 +181,11 @@ engine.subscribe((state: GameState, options: EmitOptions) => {
   syncCampaignMeta(state);
   if (options.save && state.phase !== "title") saveGame(state);
   ui.render(state, options);
+  // P5 演出与声音：按 emit 效果播放（未解锁/关闭时适配器内部 no-op）
+  const sfx = sfxForEffect(options.effect);
+  if (sfx) audio.playSfx(sfx);
+  audio.setMood(bgmMoodForPhase(state.phase));
+  if (options.effect === "hit" || options.effect === "victory") ambient?.pulse();
 });
 
 void setKeepScreenOn();

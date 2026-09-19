@@ -26,6 +26,8 @@ export interface SavePayload {
 
 export interface GameSettings {
   sound: boolean;
+  /** P5 背景音乐（生成式五声音阶环境乐；音效开关沿用 sound） */
+  music?: boolean;
   reduceMotion: boolean;
   tutorialSeen: boolean;
   /** 语音引擎选择（P1 起）：auto=自动降级链 / sensevoice=端侧 / webspeech=在线 */
@@ -97,6 +99,7 @@ export function clearSave(): void {
 export function loadSettings(): GameSettings {
   const defaults: GameSettings = {
     sound: true,
+    music: true,
     reduceMotion: false,
     tutorialSeen: false,
     voiceMode: "auto",

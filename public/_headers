@@ -1,0 +1,17 @@
+# Cloudflare Pages 头配置（构建时复制到 dist/_headers）
+# 静态资源：内容哈希命名，可永久缓存
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Service Worker 与入口：始终走网络校验，保证发版即时生效
+/sw.js
+  Cache-Control: no-cache, max-age=0
+
+/index.html
+  Cache-Control: no-cache, max-age=0
+
+# 基础安全头（PWA 同源，无 COOP/COEP：sherpa WASM 单线程 SIMD 已够用，避免隔离头带来的兼容成本）
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: microphone=(self), geolocation=(), camera=()

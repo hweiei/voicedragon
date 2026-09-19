@@ -585,6 +585,7 @@ export class GameEngine {
     }
     this.completeMapNode(nodeId, 1);
     this.state.notice = `藏宝箱开启：获得 ${finds.join("、")}。`;
+    this.emit({ save: false, effect: "treasure" });
     this.state.phase = "tower";
     this.prepareFloorOptions();
   }
@@ -1034,11 +1035,13 @@ export class GameEngine {
         averageScore
       });
       this.completeMapNode(campaign.currentNodeId, breakdown.total);
+      if (breakdown.total >= 3) this.emit({ save: false, effect: "star" });
     }
 
     if (isBoss) {
       this.state.phase = "victory";
       this.state.reward = null;
+      this.emit({ save: true, effect: "victory" });
       return;
     }
 

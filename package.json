@@ -12,11 +12,14 @@
     "test:watch": "vitest",
     "check": "biome check .",
     "check:fix": "biome check --write .",
-    "ci": "biome ci . && tsc --noEmit && vitest run && vite build",
-    "sim": "vite-node scripts/balance-sim.ts"
+    "ci": "biome ci . && tsc --noEmit && vitest run && vite build && vite-node scripts/perf-budget.ts",
+    "sim": "vite-node scripts/balance-sim.ts",
+    "perf": "vite build && vite-node scripts/perf-budget.ts",
+    "test:e2e": "vite build && playwright test"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
+    "@playwright/test": "^1.63.0",
     "typescript": "~5.6.2",
     "vite": "^6.0.0",
     "vite-plugin-pwa": "^0.21.2",

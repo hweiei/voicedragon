@@ -32,3 +32,4 @@ models/
 public/models/
 *.onnx
 *.data
+test-results/

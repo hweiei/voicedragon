@@ -65,6 +65,7 @@ import {
   previewTemplateCurve,
   resamplePoints
 } from "../core/tone";
+import { playBattleFx } from "./fx";
 import { drawRunPoster, sharePoster } from "./poster";
 import { VocalQte } from "./qte";
 
@@ -749,6 +750,9 @@ export class GameUI {
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingVoice: PendingVoice | null = null;
   private activeQte: VocalQte | null = null;
+  /** P5 新手教学：当前步骤（null=未在教学中）；本会话只自动弹一次 */
+  private tutorialStep: number | null = null;
+  private tutorialShownThisSession = false;
   private modelUnsubscribe: (() => void) | null = null;
   private lastPhase: string | null = null;
   private combatStartHp: number | null = null;
@@ -891,6 +895,92 @@ export class GameUI {
       this.closeModal();
       this.engine.startNew();
     }
+    if (action === "tutorial-next") {
+      this.tutorialStep = Math.min(3, (this.tutorialStep ?? 1) + 1);
+      this.renderTutorial();
+    }
+    if (action === "tutorial-listen") this.services.tts.speak("唔使惊");
+    if (action === "tutorial-mic") void this.grantTutorialMic();
+    if (action === "tutorial-skip") this.finishTutorial("已选破阵拍——静音场合也能施法");
+  }
+
+  /** P5 新手教学：三步引导（§7.3：识招 → 听示范 → 跟读校准 + 剧情化麦克风请求）。 */
+  private openTutorial(): void {
+    this.tutorialShownThisSession = true;
+    this.tutorialStep = 1;
+    this.renderTutorial();
+  }
+
+  private renderTutorial(): void {
+    const step = this.tutorialStep ?? 1;
+    const pages: Array<{ head: string; sub: string; body: string }> = [
+      {
+        head: "第一式 · 识招",
+        sub: "声气就是法力",
+        body: `
+          <p>每回合你有 <strong>3 点声气</strong>，点手牌消耗声气施法。</p>
+          <p>施法威力由你的<strong>发音评分</strong>决定：正音 132% · 清晰 100% · 入门 78% · 未稳 52%——<strong>讲得准，打得狠</strong>。</p>
+          <p>技能卡下方的粤语小字就是这句招式的意思，边打边学。</p>`
+      },
+      {
+        head: "第二式 · 听示范",
+        sub: "六声即六式",
+        body: `
+          <div class="phrase-ribbon">
+            <strong>唔使惊</strong>
+            <span>m4 sai2 geng1</span>
+            <small>不用怕</small>
+          </div>
+          <p>先听一遍示范，留意「惊」字的高平调——粤语的六个声调就是六种招式路数。</p>
+          <button class="secondary-button full-button" type="button" data-action="tutorial-listen">🔊 再听一次示范</button>`
+      },
+      {
+        head: "第三式 · 开声校准",
+        sub: "龙楼门童递来一支传声铜管",
+        body: `
+          <p>门童说：「对住佢讲一句就得，佢<strong>只听声，唔会传出去</strong>。」</p>
+          <p class="settings-note">隐私承诺：语音识别在本机完成（端侧模型），收音绝不离开你的设备；在线兜底模式也只上传施法那几秒。</p>
+          <p>允许麦克风后即可真声施法；不方便开声时，「破阵拍」节奏判定同样能通关。</p>`
+      }
+    ];
+    const page = pages[step - 1];
+    const footer =
+      step < 3
+        ? `<button class="primary-button full-button" type="button" data-action="tutorial-next">${step === 1 ? "下一步 · 听示范" : "下一步 · 开声校准"}</button>`
+        : `<div class="button-row">
+             <button class="primary-button" type="button" data-action="tutorial-mic">允许麦克风 · 开声</button>
+             <button class="ghost-button" type="button" data-action="tutorial-skip">先用手拍 · 破阵拍</button>
+           </div>`;
+    this.modalRoot.innerHTML = `
+      <div class="modal-sheet tutorial-sheet">
+        <div class="modal-head">
+          <div><h2>${page.head}</h2><p>${page.sub}</p></div>
+          <button class="close-button" type="button" data-action="close-modal">×</button>
+        </div>
+        <div class="tutorial-dots" aria-label="教学步骤">${[1, 2, 3]
+          .map((n) => `<span class="${n === step ? "on" : ""}">${n === step ? "●" : "○"}</span>`)
+          .join("")}</div>
+        <div class="tutorial-body">${page.body}</div>
+        ${footer}
+      </div>`;
+  }
+
+  /** 剧情化麦克风请求：当场授权、即取即停（不留下设备占用）。 */
+  private async grantTutorialMic(): Promise<void> {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      for (const track of stream.getTracks()) track.stop();
+      this.finishTutorial("铜管嗡鸣——麦克风已就绪，开声吧！");
+    } catch {
+      this.finishTutorial("麦克风未开启：可稍后在设置重试，或先用破阵拍");
+    }
+  }
+
+  private finishTutorial(toast: string): void {
+    this.tutorialStep = null;
+    this.services.settings.save({ tutorialSeen: true });
+    this.closeModal(false);
+    this.showToast(toast);
   }
 
   render(state: GameState, options: EmitOptions = {}): void {
@@ -966,12 +1056,26 @@ export class GameUI {
       this.lastNotice = state.notice;
       this.showToast(state.notice);
     }
-    if (options.effect === "hit") {
-      const target = this.root.querySelector(".enemy-avatar");
-      target?.classList.add("hit-shake");
-      vibrate("light");
-    }
+    // P5 演出：浮字/抖动/星光（body.reduce-motion 时 fx 内部整体跳过）+ 触感反馈
+    playBattleFx(this.root, state, {
+      effect: options.effect,
+      reducedMotion: document.body.classList.contains("reduce-motion")
+    });
+    if (options.effect === "hit") vibrate("light");
     if (options.effect === "enemy" || options.effect === "defeat") vibrate("heavy");
+
+    // P5 新手教学：第一场战斗前弹三步引导（识招 → 听示范 → 开声校准）
+    if (
+      state.phase === "battle" &&
+      !this.tutorialShownThisSession &&
+      state.combat &&
+      state.combat.turn === 1 &&
+      (state.floor ?? 0) <= 1 &&
+      !this.services.settings.get().tutorialSeen &&
+      this.modalRoot.childElementCount === 0
+    ) {
+      this.openTutorial();
+    }
   }
 
   private confirmNewRun(): void {
@@ -1352,7 +1456,8 @@ export class GameUI {
         </div>
         <div class="settings-group">
           <h3>体验</h3>
-          <label class="radio-line"><input type="checkbox" id="set-sound" ${settings.sound ? "checked" : ""} /><span>音效（施工中，P5 上线）</span></label>
+          <label class="radio-line"><input type="checkbox" id="set-sound" ${settings.sound ? "checked" : ""} /><span>音效（施法 / 受击 / 结算）</span></label>
+          <label class="radio-line"><input type="checkbox" id="set-music" ${(settings.music ?? true) ? "checked" : ""} /><span>背景音乐（生成式粤韵环境乐）</span></label>
           <label class="radio-line"><input type="checkbox" id="set-reduce-motion" ${settings.reduceMotion ? "checked" : ""} /><span>减弱动效</span></label>
           <label class="radio-line"><input type="checkbox" id="set-adaptive" ${settings.adaptiveEnabled !== false ? "checked" : ""} /><span>自适应难度（连胜略加难、连败略减压，可在开局前随时关闭）</span></label>
         </div>
@@ -1385,6 +1490,11 @@ export class GameUI {
       .querySelector<HTMLInputElement>("#set-sound")
       ?.addEventListener("change", (e) => {
         this.services.settings.save({ sound: (e.target as HTMLInputElement).checked });
+      });
+    this.modalRoot
+      .querySelector<HTMLInputElement>("#set-music")
+      ?.addEventListener("change", (e) => {
+        this.services.settings.save({ music: (e.target as HTMLInputElement).checked });
       });
     this.modalRoot
       .querySelector<HTMLInputElement>("#set-reduce-motion")

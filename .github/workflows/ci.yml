@@ -30,3 +30,25 @@ jobs:
 
       - name: Build (PWA)
         run: npm run build
+
+      - name: Performance budget (first-bundle JS gzip)
+        run: vite-node scripts/perf-budget.ts
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Build & run E2E (title → map → battle → QTE cast → save resume)
+        run: npm run test:e2e
