@@ -21,6 +21,10 @@
   --radius-md: 15px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* P6-F1 缓动令牌（方案 §5-M8）：全站动效统一取值 */
+  --ease-out-hard: cubic-bezier(0.16, 1, 0.3, 1); /* 命中/入场：快出带尾劲 */
+  --ease-spring: cubic-bezier(0.3, 1.6, 0.5, 1); /* 回弹：按钮/卡牌按压回位 */
+  --ease-breath: cubic-bezier(0.45, 0.05, 0.55, 0.95); /* 呼吸循环：氛围/脉冲 */
   font-family: "Noto Sans SC", "Microsoft YaHei", sans-serif;
   background: var(--ink);
   color: var(--paper);
@@ -222,6 +226,44 @@ button:disabled {
   from {
     opacity: 0;
     transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* P6-F1 场景转场（View Transitions API，方案 §5-M3）：
+   #app 命名快照 → 相位切换时旧屏淡出收拢、新屏上浮入场；
+   不支持的浏览器整段忽略，回退原 screen-in 入场（行为与旧版一致）；
+   reduce-motion 由 transitions.ts 在 JS 侧短路，不会进入过渡。 */
+#app {
+  view-transition-name: game-screen;
+}
+
+::view-transition-old(game-screen) {
+  animation: vt-screen-out 240ms var(--ease-out-hard) both;
+}
+
+::view-transition-new(game-screen) {
+  animation: vt-screen-in 300ms var(--ease-out-hard) both;
+}
+
+@keyframes vt-screen-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.984);
+  }
+}
+
+@keyframes vt-screen-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
   }
   to {
     opacity: 1;
@@ -2808,56 +2850,34 @@ body {
   }
 }
 
-/* 敌人受击：水平抖动 */
-.fx-shake {
-  animation: fx-shake-x 0.32s ease-in-out;
+/* P6-F1：受击抖动 / 战场轻震 / 受创红闪 已迁移至 WAAPI
+   （src/ui/fx/juice.ts 生成关键帧，director 以 playbackRate 实现 hit-stop），
+   原 .fx-shake / .fx-jolt / .fx-hurt 类随之退役。 */
+
+/* P6-F1 暴击浮字：放大 + 金光（评分 ≥90「正中」触发） */
+.fx-floater.fx-crit {
+  font-size: 2.1rem;
+  color: #ffd873;
+  text-shadow: 0 0 14px rgb(255 200 90 / 0.55), 0 1px 6px rgb(0 0 0 / 55%);
 }
 
-@keyframes fx-shake-x {
-  0%,
-  100% {
-    translate: 0 0;
+/* P6-F1 reduce-motion 降级：仅透明度渐显渐隐、零位移（信息保留、动效归零） */
+.fx-floater.fx-calm {
+  animation: fx-fade-calm 1.1s ease both;
+}
+
+@keyframes fx-fade-calm {
+  0% {
+    opacity: 0;
   }
   20% {
-    translate: -9px 2px;
+    opacity: 1;
   }
-  45% {
-    translate: 8px -2px;
+  80% {
+    opacity: 1;
   }
-  70% {
-    translate: -5px 1px;
-  }
-}
-
-/* 我方受击：战场轻震 + 玩家血条红闪 */
-.fx-jolt {
-  animation: fx-jolt-move 0.28s ease-in-out;
-}
-
-@keyframes fx-jolt-move {
-  0%,
   100% {
-    translate: 0 0;
-  }
-  30% {
-    translate: 5px 3px;
-  }
-  60% {
-    translate: -4px -2px;
-  }
-}
-
-.fx-hurt {
-  animation: fx-hurt-flash 0.34s ease-out;
-}
-
-@keyframes fx-hurt-flash {
-  0%,
-  100% {
-    filter: none;
-  }
-  40% {
-    filter: drop-shadow(0 0 10px rgb(220 70 60 / 80%)) brightness(1.25);
+    opacity: 0;
   }
 }
 

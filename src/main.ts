@@ -32,6 +32,7 @@ import { GameEngine } from "./core/engine";
 import type { EmitOptions, GameState } from "./core/engine";
 import { adaptiveBoostFor } from "./core/profile";
 import { AmbientField } from "./ui/ambient";
+import { startScreenTransition } from "./ui/fx/transitions";
 import { GameUI } from "./ui/ui";
 import type { VoiceServices } from "./ui/ui";
 
@@ -177,10 +178,18 @@ const ui = new GameUI({
   services: voiceServices
 });
 
+let lastBroadcastPhase: string | null = null;
+
 engine.subscribe((state: GameState, options: EmitOptions) => {
   syncCampaignMeta(state);
   if (options.save && state.phase !== "title") saveGame(state);
-  ui.render(state, options);
+  // P6-F1 场景转场：相位变更经 View Transitions（不支持/reduce-motion 时自动直渲）
+  if (lastBroadcastPhase !== null && state.phase !== lastBroadcastPhase) {
+    startScreenTransition(() => ui.render(state, options));
+  } else {
+    ui.render(state, options);
+  }
+  lastBroadcastPhase = state.phase;
   // P5 演出与声音：按 emit 效果播放（未解锁/关闭时适配器内部 no-op）
   const sfx = sfxForEffect(options.effect);
   if (sfx) audio.playSfx(sfx);
