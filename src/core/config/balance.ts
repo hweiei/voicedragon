@@ -138,3 +138,6 @@ export const P7_ACT_DIFFICULTY_TARGET: Record<number, number> = { 1: 8, 2: 6.5, 
 
 /** P8-A 构筑版独立校准；旧 P7 曲线不变。 */
 export const P8_ACT_DIFFICULTY_TARGET: Record<number, number> = { 1: 8, 2: 6.5, 3: 4.4 };
+
+/** P8-B 对手进化独立曲线，旧版本不变。 */
+export const P8B_ACT_DIFFICULTY_TARGET: Record<number, number> = { 1: 10.3, 2: 9.5, 3: 6.7 };

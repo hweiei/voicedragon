@@ -20,7 +20,8 @@
     "codegraph:sync": "codegraph sync .",
     "codegraph:status": "codegraph status .",
     "sim:p7": "vite-node scripts/p7-balance.ts",
-    "sim:p8": "vite-node scripts/p8-balance.ts"
+    "sim:p8": "vite-node scripts/p8-balance.ts",
+    "sim:p8b": "vite-node scripts/p8b-balance.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",

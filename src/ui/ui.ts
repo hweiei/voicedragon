@@ -1,4 +1,6 @@
 import { buildEnabled, removalPrice, removalReason, upgradeReason } from "../core/buildcraft";
+import { BOSS_EVOLUTIONS } from "../core/content/encounters";
+import { evolutionEnabled } from "../core/encounters";
 import {
   type BuildOperation,
   type BuildView,
@@ -7,6 +9,7 @@ import {
   skillTags,
   synergyMarkup
 } from "./buildcraft";
+import { encounterPanel } from "./encounters";
 /**
  * 渲染层：DOM 直渲适配器（P1 版）。
  * P1 新增：QTE 无声施法「破阵拍」、TTS 示范发音（听一听）、设置页
@@ -276,7 +279,7 @@ function challengeBanner(state: GameState): string {
   const challenge = state.challenge;
   if (!challenge)
     return state.ruleset === "p7"
-      ? `<div class="content-version">三幕深耕 · 扩展内容池${buildEnabled(state) ? " · 构筑已开启" : ""}</div>`
+      ? `<div class="content-version">三幕深耕 · 扩展内容池${buildEnabled(state) ? " · 构筑已开启" : ""}${evolutionEnabled(state) ? " · 对手进化" : ""}</div>`
       : "";
   return `<aside class="challenge-banner" aria-label="本局变异词缀">
     <strong>${challenge.mode === "daily" ? `每日挑战 · ${escapeHtml(challenge.dateKey ?? "")}` : `无尽变异 · 第 ${challenge.stage * 5 + 1}–${challenge.stage * 5 + 5} 层`}</strong>
@@ -343,7 +346,7 @@ function titleTemplate(): string {
         <div class="title-kicker">粤语声攻 · 十层试炼</div>
         <h1 class="title-name"><span>声震</span>龙楼</h1>
         <p class="title-tagline">讲得准，打得狠；一路开声，一路登楼</p>
-        <p class="content-version">三幕深耕 · ${ALL_SKILLS.length} 招式 · ${ALL_EVENTS.length} 奇遇 · ${ITEMS.length} 道具<br />战役开新局体验；旧存档保留原规则<br />构筑新玩法：歇脚升级 · 夜市删牌</p>
+        <p class="content-version">三幕深耕 · ${ALL_SKILLS.length} 招式 · ${ALL_EVENTS.length} 奇遇 · ${ITEMS.length} 道具<br />战役开新局体验；旧存档保留原规则<br />构筑新玩法：歇脚升级 · 夜市删牌<br />新战役：首领二阶段 · 三名特色精英</p>
       </div>
 
       <div class="tower-illustration" aria-hidden="true">
@@ -599,12 +602,17 @@ function battleTemplate(state: GameState, engine: GameEngine): string {
         </div>
       </div>
 
+      ${encounterPanel(state, intent)}
       <div class="enemy-stage">
         <div class="stage-lines"></div>
-        <div class="intent-card">
+        ${
+          evolutionEnabled(state)
+            ? ""
+            : `<div class="intent-card">
           <small>敌方意图</small>
           <strong>${escapeHtml(intent.label)} · ${escapeHtml(intent.detail)}</strong>
-        </div>
+        </div>`
+        }
         <div class="enemy-avatar hue-${escapeHtml(enemy.hue)}">${escapeHtml(enemy.glyph)}</div>
         <div class="enemy-name">
           <strong>${escapeHtml(enemy.name)}</strong>
@@ -893,7 +901,7 @@ export class GameUI {
     if (action === "new-run") this.confirmNewRun();
     if (action === "new-campaign") {
       const act = Number(button.dataset.act ?? 1);
-      this.engine.startCampaign(Number.isFinite(act) ? act : 1, undefined, "p7", 1);
+      this.engine.startCampaign(Number.isFinite(act) ? act : 1, undefined, "p7", 1, 1);
     }
     if (action === "campaign-next-act") this.engine.continueNextAct();
     if (action === "continue-run") {
@@ -951,7 +959,7 @@ export class GameUI {
       if (this.engine.state.endless) this.engine.startEndless(undefined, "p7");
       else if (this.engine.state.challenge?.mode === "daily") this.startDailyChallenge();
       else if (this.engine.state.campaign)
-        this.engine.startCampaign(this.engine.state.campaign.act, undefined, "p7", 1);
+        this.engine.startCampaign(this.engine.state.campaign.act, undefined, "p7", 1, 1);
       else this.engine.startNew();
     }
     if (action === "back-title") {
@@ -2096,7 +2104,11 @@ export class GameUI {
       )}
       ${section(
         "楼中对手",
-        codexEnemyList().map((e) => ({ id: e.id, name: e.name, tip: e.epithet })),
+        codexEnemyList().map((e) => ({
+          id: e.id,
+          name: e.name,
+          tip: `${e.epithet}${BOSS_EVOLUTIONS[e.id] ? ` · 新战役半血后：${BOSS_EVOLUTIONS[e.id].description}` : ""}`
+        })),
         codex.enemies
       )}
       ${section(

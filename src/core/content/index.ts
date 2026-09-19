@@ -24,6 +24,7 @@ export type ContentRuleset = "legacy" | "p7";
 import { ACT1_CONTENT } from "./act1";
 import { ACT2_CONTENT } from "./act2";
 import { ACT3_CONTENT } from "./act3";
+import { EVOLVED_ELITES } from "./encounters";
 import type { ActContentPack } from "./types";
 
 export type { ActContentPack } from "./types";
@@ -65,7 +66,12 @@ export const ALL_EVENTS: readonly GameEventContent[] = ACT_PACKS.flatMap((pack) 
 
 /** 图鉴「楼中对手」全集：普通敌人 + 精英 + 各幕 Boss。 */
 export function codexEnemyList(): EnemyBlueprint[] {
-  return ACT_PACKS.flatMap((pack) => [...pack.enemies, ...pack.elites, pack.boss]);
+  return ACT_PACKS.flatMap((pack) => [
+    ...pack.enemies,
+    ...pack.elites,
+    EVOLVED_ELITES[pack.act],
+    pack.boss
+  ]);
 }
 
 export function lookupSkill(id: string): Skill | undefined {

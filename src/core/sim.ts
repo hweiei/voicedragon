@@ -1,4 +1,5 @@
 import { removalPrice, removalReason, upgradeReason, upgradedSkill } from "./buildcraft";
+import { evolutionEnabled, intentAt, resolveEnemyAction } from "./encounters";
 /**
  * P5 自动化平衡仿真（核心层，纯函数）：无头引擎 + 两种策略 Bot 蒙特卡洛。
  *
@@ -62,6 +63,8 @@ export interface SimRunResult {
   timeout: boolean;
   upgrades?: number;
   removals?: number;
+  bossPhases?: number;
+  newElites?: number;
 }
 
 export interface SimOptions {
@@ -72,6 +75,7 @@ export interface SimOptions {
   profile?: Partial<BotProfile>;
   ruleset?: ContentRuleset;
   buildVersion?: 1;
+  encounterVersion?: 1;
 }
 
 const MAX_TURNS_PER_BATTLE = 60;
@@ -86,7 +90,15 @@ function sampleScore(rng: () => number, mean: number, sd: number): number {
 /** 敌方下回合意图的预估威胁（对 Bot 而言只是启发式，不偷看内部状态）。 */
 function threatScore(state: GameState): number {
   const combat = state.combat!;
-  const intent = combat.enemy.pattern[(combat.turn - 1) % combat.enemy.pattern.length];
+  const intent = intentAt(
+    combat.enemy.pattern,
+    combat.turn,
+    evolutionEnabled(state) ? combat.bossPhase : undefined
+  );
+  if (evolutionEnabled(state)) {
+    const action = resolveEnemyAction(intent, combat.enemy.baseAttack, combat.enemy.weakness);
+    return action.damage * action.hits;
+  }
   const raw =
     state.ruleset === "p7" && intent.type === "silence"
       ? intent.amount || 0
@@ -137,6 +149,19 @@ function p7CardWeight(skill: Skill, state: GameState): number {
   if (["attack", "multi", "hybrid", "weaken"].includes(skill.type))
     weight += state.player!.strength * (skill.hits ?? 1);
   if (skill.id === "dim-gwo-luk-ze" && state.combat!.enemy.armor > 0) weight += 10;
+  if (evolutionEnabled(state)) {
+    const combat = state.combat!;
+    const action = resolveEnemyAction(
+      intentAt(combat.enemy.pattern, combat.turn, combat.bossPhase),
+      combat.enemy.baseAttack,
+      combat.enemy.weakness
+    );
+    if (action.pierce) {
+      if (["guard", "cleanse", "tempo"].includes(skill.type)) weight *= 0.2;
+      if (skill.type === "hybrid") weight = skill.power + state.player!.strength;
+      if (skill.type === "weaken") weight += 5;
+    }
+  }
   return weight / Math.max(1, skill.cost);
 }
 
@@ -261,7 +286,13 @@ function pickEventChoice(state: GameState, rng: () => number, bot: BotId): strin
 export function simulateCampaign(options: SimOptions): SimRunResult {
   const profile = { ...BOTS[options.bot], ...options.profile };
   const engine = new GameEngine();
-  engine.startCampaign(options.act, options.seed, options.ruleset, options.buildVersion);
+  engine.startCampaign(
+    options.act,
+    options.seed,
+    options.ruleset,
+    options.buildVersion,
+    options.encounterVersion
+  );
   // Bot 决策流独立于引擎 LCG：同种子下游戏随机与决策随机都可复现
   const rng = mulberry32((options.seed ^ 0x5eed_b07 ^ (options.act * 0x85eb_ca6b)) >>> 0);
 
@@ -273,8 +304,13 @@ export function simulateCampaign(options: SimOptions): SimRunResult {
   const state = engine.state;
   let upgrades = 0;
   let removals = 0;
-  const finish = (result: SimRunResult): SimRunResult =>
-    options.buildVersion === 1 ? { ...result, upgrades, removals } : result;
+  let bossPhases = 0;
+  let newElites = 0;
+  const finish = (result: SimRunResult): SimRunResult => ({
+    ...result,
+    ...(options.buildVersion === 1 ? { upgrades, removals } : {}),
+    ...(options.encounterVersion === 1 ? { bossPhases, newElites } : {})
+  });
 
   while (steps < MAX_STEPS_PER_RUN) {
     steps += 1;
@@ -290,8 +326,14 @@ export function simulateCampaign(options: SimOptions): SimRunResult {
     if (state.phase === "battle") {
       battles += 1;
       let battleTurns = 0;
+      let observedPhase = false;
+      if (state.combat!.enemy.id.startsWith("p8b-")) newElites++;
       while (state.phase === "battle" && battleTurns < MAX_TURNS_PER_BATTLE) {
         steps += 1;
+        if (state.combat!.bossPhase?.phase === 2 && !observedPhase) {
+          bossPhases++;
+          observedPhase = true;
+        }
         // 战斗内道具：低血先回血
         const healItem = state.player!.items.indexOf("herbal-tea");
         if (healItem >= 0 && state.player!.hp / state.player!.maxHp < 0.4) {
@@ -544,6 +586,8 @@ export interface SimSummary {
   timeouts: number;
   upgrades?: number;
   removals?: number;
+  bossPhases?: number;
+  newElites?: number;
 }
 
 /** 幕级蒙特卡洛：种子流 = hash(baseSeed, act, runIndex)，全确定性可复现。 */
@@ -555,6 +599,7 @@ export function simulateAct(options: {
   profile?: Partial<BotProfile>;
   ruleset?: ContentRuleset;
   buildVersion?: 1;
+  encounterVersion?: 1;
 }): SimSummary {
   const { act, bot, runs } = options;
   const baseSeed = options.baseSeed ?? 0x2026_0919;
@@ -566,6 +611,8 @@ export function simulateAct(options: {
   let timeouts = 0;
   let upgrades = 0;
   let removals = 0;
+  let bossPhases = 0;
+  let newElites = 0;
   for (let index = 0; index < runs; index += 1) {
     const seed = (baseSeed + act * 0x1b873593 + index * 0x9e3779b9) >>> 0;
     const result = simulateCampaign({
@@ -574,7 +621,8 @@ export function simulateAct(options: {
       bot,
       profile: options.profile,
       ruleset: options.ruleset,
-      buildVersion: options.buildVersion
+      buildVersion: options.buildVersion,
+      encounterVersion: options.encounterVersion
     });
     if (result.win) wins += 1;
     floorSum += result.floor;
@@ -583,6 +631,8 @@ export function simulateAct(options: {
     if (result.timeout) timeouts += 1;
     upgrades += result.upgrades ?? 0;
     removals += result.removals ?? 0;
+    bossPhases += result.bossPhases ?? 0;
+    newElites += result.newElites ?? 0;
   }
   return {
     act,
@@ -595,6 +645,7 @@ export function simulateAct(options: {
     avgTurnsPerBattle: battlesSum ? turnsSum / battlesSum : 0,
     avgBattles: battlesSum / runs,
     timeouts,
-    ...(options.buildVersion === 1 ? { upgrades, removals } : {})
+    ...(options.buildVersion === 1 ? { upgrades, removals } : {}),
+    ...(options.encounterVersion === 1 ? { bossPhases, newElites } : {})
   };
 }

@@ -34,9 +34,12 @@ export interface Skill {
   description: string;
 }
 
-export type IntentType = "attack" | "guardAttack" | "guard" | "debuff" | "silence";
+export type IntentType = "attack" | "guardAttack" | "guard" | "debuff" | "silence" | "charge";
 
 export interface EnemyIntent {
+  /** P8-B 穿甲及行动后露隙（轮数）；仅新版本内容使用。 */
+  pierce?: boolean;
+  selfVulnerable?: number;
   type: IntentType;
   amount?: number;
   label: string;

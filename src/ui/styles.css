@@ -3144,3 +3144,59 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* P8-B：阶段/穿甲/逐段伤害全部用静态文字表达，规则不能被动画挡住。 */
+.encounter-brief {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: rgba(240, 207, 131, 0.04);
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.encounter-brief p {
+  margin: 5px 0;
+}
+.boss-phase-info {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+}
+.boss-phase-info strong {
+  color: var(--gold-bright);
+  font-size: 13px;
+}
+.boss-phase-info p,
+.intent-details,
+.intent-forecast {
+  font-size: 12px;
+}
+.boss-phase-info[data-phase="pending"] strong {
+  color: #f5aa90;
+}
+.intent-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.intent-heading span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.intent-heading strong {
+  font-size: 14px;
+}
+.encounter-brief small,
+.next-intent {
+  color: var(--muted);
+  font-size: 11px;
+}
+.intent-forecast {
+  font-weight: 600;
+}
+
+.enemy-state-line {
+  color: var(--gold-bright);
+  font-size: 12px;
+}

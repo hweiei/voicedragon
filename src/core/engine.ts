@@ -1,3 +1,13 @@
+import { BOSS_EVOLUTIONS, EVOLVED_ELITES } from "./content/encounters";
+import {
+  type BossPhaseState,
+  evolutionEnabled,
+  forecastEnemyAction,
+  intentAt,
+  resolveEnemyAction,
+  resolveIncomingHit,
+  shouldQueuePhase
+} from "./encounters";
 /**
  * 领域内核：GameEngine（原版 js/engine.js 的 1:1 TypeScript 化迁移）。
  *
@@ -26,6 +36,7 @@ import {
   DIFFICULTY_CURVE,
   MAX_ENERGY,
   P7_ACT_DIFFICULTY_TARGET,
+  P8B_ACT_DIFFICULTY_TARGET,
   P8_ACT_DIFFICULTY_TARGET,
   QUIZ_PER_NODE,
   REST_HEAL,
@@ -141,6 +152,8 @@ export interface ResolvedSkillResult {
 }
 
 export interface CombatState {
+  /** P8-B 序列化阶段进度；读档不重放阶段切换。 */
+  bossPhase?: BossPhaseState;
   kind: CombatKind;
   enemy: RuntimeEnemy;
   turn: number;
@@ -250,6 +263,7 @@ export interface GameState {
   ruleset?: ContentRuleset;
   /** 构筑规则独立于内容版本；只在显式开启的新战役中生效。 */
   buildVersion?: 1;
+  encounterVersion?: 1;
   challenge?: ChallengeState;
 }
 
@@ -257,6 +271,11 @@ export interface GameState {
 export type AdaptiveProvider = () => number;
 
 export interface IntentPreview {
+  forecast?: string;
+  hint?: string;
+  hpLoss?: number;
+  blocked?: number;
+  nextLabel?: string;
   label: string;
   detail: string;
   type: string;
@@ -420,7 +439,8 @@ export class GameEngine {
     act = 1,
     seed: number = makeSeed(),
     ruleset: ContentRuleset = "legacy",
-    buildVersion?: 1
+    buildVersion?: 1,
+    encounterVersion?: 1
   ): void {
     const pack = actContent(act);
     const actNo = pack.act;
@@ -432,6 +452,7 @@ export class GameEngine {
       this.state.player!.upgradedSlots = [];
       this.state.player!.removedCards = 0;
     }
+    if (ruleset === "p7" && encounterVersion === 1) this.state.encounterVersion = 1;
     const map = generateActMap(seed, actNo);
     this.state.campaign = {
       act: actNo,
@@ -704,11 +725,13 @@ export class GameEngine {
     // 难度目标折算等效层数（一幕顶 ≈ 第 6 层，三幕顶 = 第 10 层旧版终局强度）；
     // 经典/无尽模式沿用真实楼层，行为不变。
     const campaign = this.state.campaign;
-    const targets = buildEnabled(this.state)
-      ? P8_ACT_DIFFICULTY_TARGET
-      : this.state.ruleset === "p7"
-        ? P7_ACT_DIFFICULTY_TARGET
-        : ACT_DIFFICULTY_TARGET;
+    const targets = evolutionEnabled(this.state)
+      ? P8B_ACT_DIFFICULTY_TARGET
+      : buildEnabled(this.state)
+        ? P8_ACT_DIFFICULTY_TARGET
+        : this.state.ruleset === "p7"
+          ? P7_ACT_DIFFICULTY_TARGET
+          : ACT_DIFFICULTY_TARGET;
     const scaleFloor = campaign
       ? 1 +
         (this.state.floor / Math.max(1, campaign.map.rows - 1)) *
@@ -737,7 +760,9 @@ export class GameEngine {
     if (kind === "boss") {
       blueprint = pack.boss;
     } else if (kind === "elite") {
-      blueprint = this.pick(pack.elites);
+      blueprint = this.pick(
+        evolutionEnabled(this.state) ? [...pack.elites, EVOLVED_ELITES[pack.act]] : pack.elites
+      );
     } else {
       const unlocked = pack.enemies.slice(
         0,
@@ -784,6 +809,9 @@ export class GameEngine {
     combat.energy = Math.max(0, combat.energy + modifiers.energy);
     combat.voiceBoost += modifiers.voiceBoost;
     this.healPlayer(modifiers.heal);
+    if (evolutionEnabled(this.state) && kind === "boss" && BOSS_EVOLUTIONS[enemy.id]) {
+      combat.bossPhase = { phase: 1, pending: false, startTurn: 1 };
+    }
   }
 
   drawHand(count: number, omitIds: number[] = []): HandCard[] {
@@ -801,13 +829,33 @@ export class GameEngine {
   currentIntent(): EnemyIntent | null {
     if (!this.state.combat) return null;
     const { enemy, turn } = this.state.combat;
-    return enemy.pattern[(turn - 1) % enemy.pattern.length];
+    return intentAt(
+      enemy.pattern,
+      turn,
+      evolutionEnabled(this.state) ? this.state.combat.bossPhase : undefined
+    );
   }
 
   getIntentPreview(): IntentPreview | null {
     const intent = this.currentIntent();
     const combat = this.state.combat;
     if (!intent || !combat) return null;
+    if (evolutionEnabled(this.state)) {
+      const player = this.state.player!;
+      const preview = forecastEnemyAction(
+        resolveEnemyAction(intent, combat.enemy.baseAttack, combat.enemy.weakness),
+        {
+          hp: player.hp,
+          armor: player.armor,
+          vulnerable: player.buffs.some((buff) => buff.id === "vulnerable"),
+          dragonScale: this.hasRelic("dragon-scale")
+        }
+      );
+      const next = combat.bossPhase?.pending
+        ? BOSS_EVOLUTIONS[combat.enemy.id]?.pattern[0]
+        : intentAt(combat.enemy.pattern, combat.turn + 1, combat.bossPhase);
+      return { ...preview, nextLabel: next?.label };
+    }
     // 吞音意图预览同样按固定伤害展示（与 endTurn 的 P5 修复一致）
     const rawAttack =
       intent.type === "silence"
@@ -1011,7 +1059,17 @@ export class GameEngine {
     combat.log = combat.log.slice(0, 10);
 
     if (combat.enemy.hp <= 0) {
+      if (combat.bossPhase) combat.bossPhase.pending = false;
       this.finishCombatVictory();
+    } else if (
+      evolutionEnabled(this.state) &&
+      shouldQueuePhase(combat.enemy.id, combat.enemy.hp, combat.enemy.maxHp, combat.bossPhase)
+    ) {
+      combat.bossPhase!.pending = true;
+      combat.log.unshift(
+        `半血变招准备：本回合仍执行「${this.currentIntent()!.label}」，行动结束后进入${BOSS_EVOLUTIONS[combat.enemy.id].phaseName}。`
+      );
+      combat.log = combat.log.slice(0, 10);
     }
     this.emit({ save: true, effect: damageDone ? "hit" : "skill" });
     return combat.lastResult;
@@ -1024,20 +1082,22 @@ export class GameEngine {
     return player.hp - before;
   }
 
-  applyEnemyHit(amount: number): HitResult {
+  applyEnemyHit(amount: number, pierce = false): HitResult {
     const player = this.state.player!;
-    let damage = amount;
-    const vulnerable = player.buffs.find((buff) => buff.id === "vulnerable");
-    if (vulnerable) damage = Math.round(damage * 1.25);
-    // P5 龙鳞音甲：无甲受击时先张出 3 点鳞甲（每次被击破后可再次触发）
-    if (this.hasRelic("dragon-scale") && player.armor <= 0) player.armor = 3;
-    const blocked = Math.min(player.armor, damage);
-    player.armor -= blocked;
-    const actual = Math.max(0, damage - blocked);
-    player.hp = Math.max(0, player.hp - actual);
-    this.state.stats!.damageTaken += actual;
-    if (this.state.combat) this.state.combat.damageTaken += actual;
-    return { actual, blocked };
+    const hit = resolveIncomingHit(
+      amount,
+      {
+        armor: player.armor,
+        vulnerable: player.buffs.some((buff) => buff.id === "vulnerable"),
+        dragonScale: this.hasRelic("dragon-scale")
+      },
+      pierce
+    );
+    player.armor = hit.armorAfter;
+    player.hp = Math.max(0, player.hp - hit.actual);
+    this.state.stats!.damageTaken += hit.actual;
+    if (this.state.combat) this.state.combat.damageTaken += hit.actual;
+    return { actual: hit.actual, blocked: hit.blocked };
   }
 
   endTurn(): void {
@@ -1047,48 +1107,78 @@ export class GameEngine {
     const enemy = combat.enemy;
     const intent = this.currentIntent()!;
     combat.locked = true;
+    const action = evolutionEnabled(this.state)
+      ? resolveEnemyAction(intent, enemy.baseAttack, enemy.weakness)
+      : null;
 
     const messages: string[] = [];
-    // P5 修复（平衡仿真发现的原版遗留 bug）：「吞音」意图的 amount 是固定伤害值，
-    // 原实现误乘 baseAttack（铜钟 9×8=72 点，秒杀满血玩家）。其余意图仍按倍率。
-    const rawAttack =
-      intent.type === "silence" ? intent.amount || 0 : enemy.baseAttack * (intent.amount || 0);
-    const baseAttack = Math.max(1, Math.round(rawAttack));
-    const attack = enemy.weakness > 0 ? Math.max(1, Math.round(baseAttack * 0.65)) : baseAttack;
-
-    if (intent.type === "attack") {
+    if (action) {
       let total = 0;
       let blocked = 0;
-      const hits = intent.hits || 1;
-      for (let i = 0; i < hits; i += 1) {
-        const result = this.applyEnemyHit(attack);
-        total += result.actual;
-        blocked += result.blocked;
+      for (let i = 0; i < action.hits; i++) {
+        const hit = this.applyEnemyHit(action.damage, action.pierce);
+        total += hit.actual;
+        blocked += hit.blocked;
       }
       messages.push(
-        `${enemy.name}施展「${intent.label}」，造成 ${total} 点伤害${blocked ? `，护甲抵消 ${blocked}` : ""}。`
+        `${enemy.name}施展「${action.label}」${action.hits ? `，造成 ${total} 点伤害，护甲抵消 ${blocked}${action.pierce ? "（穿甲）" : ""}` : "，本招无伤害"}。`
       );
-    } else if (intent.type === "guardAttack") {
-      const result = this.applyEnemyHit(attack);
-      enemy.armor += intent.guard!;
-      messages.push(
-        `${enemy.name}施展「${intent.label}」，造成 ${result.actual} 点伤害并获得 ${intent.guard} 点护甲。`
-      );
-    } else if (intent.type === "guard") {
-      enemy.armor += intent.guard!;
-      messages.push(`${enemy.name}施展「${intent.label}」，获得 ${intent.guard} 点护甲。`);
-    } else if (intent.type === "debuff") {
-      const penalty = 7 * (intent.amount || 1);
-      player.buffs = player.buffs.filter((buff) => buff.id !== "voice-interference");
-      player.buffs.push({ id: "voice-interference", name: "错调干扰", value: penalty, turns: 1 });
-      messages.push(`${enemy.name}施展「${intent.label}」，下次语音得分 -${penalty}。`);
-    } else if (intent.type === "silence") {
-      const result = this.applyEnemyHit(attack);
-      player.buffs = player.buffs.filter((buff) => buff.id !== "voice-interference");
-      player.buffs.push({ id: "voice-interference", name: "吞音", value: 10, turns: 1 });
-      messages.push(
-        `${enemy.name}施展「${intent.label}」，造成 ${result.actual} 点伤害；下次语音得分 -10。`
-      );
+      if (action.guard) {
+        enemy.armor += action.guard;
+        messages.push(`敌方护甲 +${action.guard}。`);
+      }
+      if (action.voicePenalty) {
+        player.buffs = player.buffs.filter((buff) => buff.id !== "voice-interference");
+        player.buffs.push({
+          id: "voice-interference",
+          name: action.type === "silence" ? "吞音" : "错调干扰",
+          value: action.voicePenalty,
+          turns: 1
+        });
+        messages.push(`下次语音或破阵拍判定 -${action.voicePenalty}。`);
+      }
+    } else {
+      // P5 修复（平衡仿真发现的原版遗留 bug）：「吞音」意图的 amount 是固定伤害值，
+      // 原实现误乘 baseAttack（铜钟 9×8=72 点，秒杀满血玩家）。其余意图仍按倍率。
+      const rawAttack =
+        intent.type === "silence" ? intent.amount || 0 : enemy.baseAttack * (intent.amount || 0);
+      const baseAttack = Math.max(1, Math.round(rawAttack));
+      const attack = enemy.weakness > 0 ? Math.max(1, Math.round(baseAttack * 0.65)) : baseAttack;
+
+      if (intent.type === "attack") {
+        let total = 0;
+        let blocked = 0;
+        const hits = intent.hits || 1;
+        for (let i = 0; i < hits; i += 1) {
+          const result = this.applyEnemyHit(attack);
+          total += result.actual;
+          blocked += result.blocked;
+        }
+        messages.push(
+          `${enemy.name}施展「${intent.label}」，造成 ${total} 点伤害${blocked ? `，护甲抵消 ${blocked}` : ""}。`
+        );
+      } else if (intent.type === "guardAttack") {
+        const result = this.applyEnemyHit(attack);
+        enemy.armor += intent.guard!;
+        messages.push(
+          `${enemy.name}施展「${intent.label}」，造成 ${result.actual} 点伤害并获得 ${intent.guard} 点护甲。`
+        );
+      } else if (intent.type === "guard") {
+        enemy.armor += intent.guard!;
+        messages.push(`${enemy.name}施展「${intent.label}」，获得 ${intent.guard} 点护甲。`);
+      } else if (intent.type === "debuff") {
+        const penalty = 7 * (intent.amount || 1);
+        player.buffs = player.buffs.filter((buff) => buff.id !== "voice-interference");
+        player.buffs.push({ id: "voice-interference", name: "错调干扰", value: penalty, turns: 1 });
+        messages.push(`${enemy.name}施展「${intent.label}」，下次语音得分 -${penalty}。`);
+      } else if (intent.type === "silence") {
+        const result = this.applyEnemyHit(attack);
+        player.buffs = player.buffs.filter((buff) => buff.id !== "voice-interference");
+        player.buffs.push({ id: "voice-interference", name: "吞音", value: 10, turns: 1 });
+        messages.push(
+          `${enemy.name}施展「${intent.label}」，造成 ${result.actual} 点伤害；下次语音得分 -10。`
+        );
+      }
     }
 
     const layerArmor = mutationEffects(this.state.challenge?.mutatorIds).armorPerTurn;
@@ -1098,6 +1188,10 @@ export class GameEngine {
     }
     if (enemy.weakness > 0) enemy.weakness -= 1;
     if (enemy.vulnerable > 0) enemy.vulnerable -= 1;
+    if (action?.selfVulnerable) {
+      enemy.vulnerable = Math.max(enemy.vulnerable, action.selfVulnerable);
+      messages.push(`敌人露隙 ${action.selfVulnerable} 轮：所受攻击伤害 +25%。`);
+    }
     combat.log.unshift(...messages);
     combat.log = combat.log.slice(0, 10);
 
@@ -1109,6 +1203,15 @@ export class GameEngine {
     }
 
     combat.turn += 1;
+    if (evolutionEnabled(this.state) && combat.bossPhase?.phase === 1 && combat.bossPhase.pending) {
+      const phase = BOSS_EVOLUTIONS[enemy.id];
+      if (phase) {
+        enemy.pattern = clone(phase.pattern);
+        combat.bossPhase = { phase: 2, pending: false, startTurn: combat.turn };
+        combat.log.unshift(`进入第二阶段「${phase.phaseName}」。下一招为蓄势，无直接伤害。`);
+        combat.log = combat.log.slice(0, 10);
+      }
+    }
     combat.energy = MAX_ENERGY;
     player.armor = 0;
     combat.teaTriggered = false;

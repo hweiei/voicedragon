@@ -109,10 +109,10 @@ export function campaignActMeta(act: number): CampaignActMeta | null {
 /** 开新战役时，把本地同种子同幕的历史★注入新局（重打刷新只升不降；同幕地图种子复用）。 */
 const startCampaignBase = engine.startCampaign.bind(engine);
 engine.startCampaign = (...args: Parameters<typeof startCampaignBase>) => {
-  const [act = 1, seed, ruleset, buildVersion] = args;
+  const [act = 1, seed, ruleset, buildVersion, encounterVersion] = args;
   const actMeta = campaignActMeta(act);
   const resolvedSeed = seed ?? actMeta?.mapSeed;
-  startCampaignBase(act, resolvedSeed, ruleset, buildVersion);
+  startCampaignBase(act, resolvedSeed, ruleset, buildVersion, encounterVersion);
   const campaign = engine.state.campaign;
   if (campaign && actMeta && actMeta.mapSeed === campaign.map.seed) {
     Object.assign(campaign.stars, actMeta.stars);

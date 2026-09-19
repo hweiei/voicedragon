@@ -33,27 +33,32 @@ npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 
 - `src/adapters/` 是端口实现（audio/tts/voice/storage/platform）。
 - `src/ui/` 渲染与演出：模板字符串直渲 + `src/ui/fx/` 演出编排（FxDirector）。
 - 设计决策的单一事实源：`docs/REDESIGN-PLAN.md`（P0–P5 历史）与
-  `docs/FX-UPGRADE-PLAN.md`（P6 三期完成）及 `docs/CONTENT-EXPANSION-PLAN.md`（P7 三幕深耕）与 `docs/BUILDCRAFT-PLAN.md`（P8-A 构筑成型）。
+  `docs/FX-UPGRADE-PLAN.md`（P6 三期完成）及 `docs/CONTENT-EXPANSION-PLAN.md`（P7 三幕深耕）与 `docs/BUILDCRAFT-PLAN.md`（P8-A 构筑成型）与 `docs/ENCOUNTER-EVOLUTION-PLAN.md`（P8-B 对手进化）。
 - 内容兼容：缺失 `ruleset` 的旧局按 legacy；P7 新内容只经 `skillsFor/eventsFor/itemsFor` 进入对应新局。
   不直接修改基础内容表或用扩展池替换基础池。新增参数须审查组合根包装器是否完整转发。
 - 构筑独立版本 `buildVersion:1` 仅用于新战役；缺失时保留旧玩法。升级按 `upgradedSlots` 记录具体牌组槽位，
   不改原 skillId；删牌必须重映射槽位；P8 施法必须从 UI/模拟器传入 deckIndex，不能按同名技能猜副本。
 
+- 对手独立版本 `encounterVersion:1` 仅用于p7新战役；与build版本分离。第五个startCampaign参数必须经组合根完整转发。
+  Boss半血只标记pending，本回合旧意图结算后才提交阶段；不能中途换招/锁血/重放读档切换。阶段pattern必须克隆。
+  预测与实际受击共用纯规则，龙鳞逐段触发，穿甲不耗甲、不补甲；新平衡只改P8-B曲线。
+
 ## 2. 黄金契约与确定性
 
 - 引擎行为由 `tests/contract/` 九个黄金契约测试锁定：**改行为先改契约并获得确认**。
-- 同一 (act, seed) 必须同一局；特效随机走独立种子流，禁止消费游戏 `rngState`。
+- 同一规则版本下 (act, seed) 必须同一局；特效随机走独立种子流，禁止消费游戏 `rngState`。
 
 ## 3. 质量门（每次提交前全绿）
 
 ```bash
 npx biome check .          # 风格（或 npm run check:fix）
 npx tsc --noEmit           # 严格类型
-npx vitest run             # 单测+契约+仿真（现 303 条）
-npx vite build && npx vite-node scripts/perf-budget.ts   # 首包 ≤350KB gzip（现 ~75.2）
+npx vitest run             # 单测+契约+仿真（现 336 条）
+npx vite build && npx vite-node scripts/perf-budget.ts   # 首包 ≤350KB gzip（现 ~78.2）
+npm run sim:p8b           # 对手进化参考门45–65%、零超时；随机Bot异常须如实记录
 npm run sim:p8            # 构筑版独立仿真（含真实升级/删牌计数）
 npm run sim:p7            # 扩展版独立平衡报表（基础版仍用 npm run sim）
-npx playwright test        # E2E（现 20 条；需 npx playwright install chromium）
+npx playwright test        # E2E（现 27 条；需 npx playwright install chromium）
 ```
 
 ## 4. 不可触碰的红线
