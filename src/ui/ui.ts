@@ -1,6 +1,8 @@
+import { ultimateEnabled } from "../core/bravo";
 import { buildEnabled, removalPrice, removalReason, upgradeReason } from "../core/buildcraft";
 import { BOSS_EVOLUTIONS } from "../core/content/encounters";
 import { CHARACTERS } from "../core/content/roster";
+import { ULTIMATE_FOR_CHARACTER } from "../core/content/ultimates";
 import { counterEnabled } from "../core/counter";
 import { evolutionEnabled } from "../core/encounters";
 import { characterUnlocked, rosterEnabled } from "../core/roster";
@@ -608,6 +610,20 @@ function statusChips(state: GameState): string {
   return chips.map((chip) => `<span class="status-chip">${escapeHtml(chip)}</span>`).join("");
 }
 
+/** P11 满堂彩计：三点彩 + 彩满时的绝技按钮（reduce-motion 无动效，纯静态点亮）。 */
+function bravoMeter(bravo: number, locked: boolean, used: boolean): string {
+  const pips = Array.from(
+    { length: 3 },
+    (_, index) =>
+      `<span class="bravo-pip${index < bravo ? " lit" : ""}" aria-hidden="true">${index < bravo ? "彩" : "·"}</span>`
+  ).join("");
+  const full = bravo >= 3;
+  return `<div class="bravo-meter${full ? " full" : ""}" aria-label="满堂彩 ${bravo}/3${used ? "，本场绝技已用" : ""}">
+    <span class="bravo-label">彩</span>${pips}
+    ${full && !locked && !used ? `<button class="primary-button bravo-cast" type="button" data-action="cast-ultimate">满堂彩 · 发动绝技</button>` : used ? '<small class="bravo-used">绝技已用</small>' : ""}
+  </div>`;
+}
+
 function battleTemplate(state: GameState, engine: GameEngine): string {
   const combat = state.combat!;
   const enemy = combat.enemy;
@@ -664,6 +680,7 @@ function battleTemplate(state: GameState, engine: GameEngine): string {
       </div>
 
       <p class="battle-log-line">${escapeHtml(log)}</p>
+      ${ultimateEnabled(state) ? bravoMeter(combat.bravo ?? 0, combat.locked, Boolean(combat.ultimateUsed)) : ""}
       <div class="hand-header">
         <div class="energy-orbs" aria-label="本回合声气">${energy}</div>
         <button class="end-turn-button" type="button" data-action="end-turn" ${combat.locked ? "disabled" : ""}>结束回合</button>
@@ -849,6 +866,8 @@ interface PendingVoice {
   combat: GameState["combat"];
   skill: Skill;
   result: VoiceScoreResult | null;
+  /** P11：满堂彩绝技（castUltimate 通道，非普通施法） */
+  ultimate?: boolean;
 }
 
 export class GameUI {
@@ -986,6 +1005,7 @@ export class GameUI {
     if (action === "show-help") this.openHelp();
     if (action === "open-settings") this.openSettings();
     if (action === "choose-floor") this.engine.chooseFloorOption(button.dataset.optionId!);
+    if (action === "cast-ultimate") this.openUltimate();
     if (action === "cast-skill") {
       const index =
         button.dataset.deckIndex === undefined ? undefined : Number(button.dataset.deckIndex);
@@ -1320,6 +1340,7 @@ export class GameUI {
       encounterVersion: 1,
       counterVersion: 1,
       rosterVersion: 1,
+      ultimateVersion: 1,
       character: character.id
     });
   }
@@ -1342,6 +1363,11 @@ export class GameUI {
   private openVoice(skill: Skill | undefined, deckIndex?: number): void {
     if (!skill || !this.engine.canUseSkill(skill.id, deckIndex)) return;
     this.pendingVoice = { skill, result: null, deckIndex, combat: this.engine.state.combat };
+    this.renderVoiceSheet(skill, "开声发动技能", "照着粤拼说出短句，识别越准确，技能威力越高。");
+  }
+
+  /** P11：施法/绝技共用的语音弹层（双通道与开发者面板行为一致）。 */
+  private renderVoiceSheet(skill: Skill, title: string, subtitle: string): void {
     const adapter = this.adapter;
     const canListen = Boolean(adapter?.ready);
     const engineLabel = adapter ? adapter.id : "loading";
@@ -1356,7 +1382,7 @@ export class GameUI {
     this.modalRoot.innerHTML = `
       <div class="modal-sheet voice-sheet">
         <div class="modal-head">
-          <div><h2>开声发动技能</h2><p>照着粤拼说出短句，识别越准确，技能威力越高。</p></div>
+          <div><h2>${escapeHtml(title)}</h2><p>${escapeHtml(subtitle)}</p></div>
           <button class="close-button" type="button" data-action="close-modal">×</button>
         </div>
         <div class="voice-phrase">
@@ -1529,11 +1555,39 @@ export class GameUI {
       </div>`;
   }
 
+  /** P11 发动绝技：彩满时打开语音弹层（复用施法双通道），结算走 castUltimate。 */
+  private openUltimate(): void {
+    const combat = this.engine.state.combat;
+    if (!combat || (combat.bravo ?? 0) < 3 || combat.locked || combat.ultimateUsed) return;
+    const skill = ULTIMATE_FOR_CHARACTER[this.engine.state.characterId ?? "man-mou-saang"];
+    this.pendingVoice = { skill, result: null, combat, ultimate: true };
+    // 复用施法弹层（文案按绝技语境）
+    this.renderVoiceSheet(
+      skill,
+      "满堂彩 · 绝技",
+      "说出绝技长句，分数照常计档；不消耗声气，消耗三点彩。"
+    );
+  }
+
   private applyVoiceResult(): void {
     if (!this.pendingVoice?.result) return;
-    const { skill, result, deckIndex, combat } = this.pendingVoice;
+    const { skill, result, deckIndex, combat, ultimate } = this.pendingVoice;
     this.pendingVoice = null;
     this.closeModal(false);
+    if (ultimate) {
+      if (combat !== this.engine.state.combat) {
+        this.showToast("战斗已变化，绝技未发动，彩未消耗。");
+        return;
+      }
+      // P3：真实语音尝试进入学习闭环（绝技句同样计入 SRS）
+      this.recordVoiceAttempt(skill.id, result);
+      if (result.source !== "qte" && result.source !== "manual-test") {
+        persistProfile((profile) => recordVoiceCast(profile, result.score));
+        this.checkNewAchievements();
+      }
+      this.engine.castUltimate(result.score, result);
+      return;
+    }
     if (combat !== this.engine.state.combat || !this.engine.canUseSkill(skill.id, deckIndex)) {
       this.showToast("战斗或手牌已变化，本次未消耗声气，请重新选牌。");
       return;

@@ -67,9 +67,9 @@ export function applyCastPassive(context: CastPassiveContext): CastPassiveEffect
 
 /** endTurn 重置每回合标记（亮相等每场标记保留）。 */
 export function resetTurnPassives(passives: Record<string, boolean>): Record<string, boolean> {
-  const next = { ...passives };
-  delete next["jest-turn"];
-  return next;
+  // 解构省略替代 delete（biome noDelete）：键同样被移除，行为与 P10 基线逐位一致
+  const { "jest-turn": _jestTurn, ...rest } = passives;
+  return rest;
 }
 
 /** 解锁判定纯函数（本地数据注入：战役元存档与成就数）。 */

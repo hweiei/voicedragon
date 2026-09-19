@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, test } from "vitest";
-import { bgmMoodForPhase, sfxForEffect } from "../../src/adapters/audio";
+import { bgmLayersFor, bgmMoodForPhase, sfxForEffect } from "../../src/adapters/audio";
 
 describe("sfxForEffect", () => {
   test("maps every engine effect to a sound", () => {
@@ -39,5 +39,43 @@ describe("bgmMoodForPhase", () => {
     expect(bgmMoodForPhase("title")).toBe("title");
     expect(bgmMoodForPhase("victory")).toBe("none");
     expect(bgmMoodForPhase("defeat")).toBe("none");
+  });
+});
+
+describe("P11 bgmLayersFor（纵向分层纯函数）", () => {
+  test("非战斗相位两层全关", () => {
+    expect(bgmLayersFor({ phase: "title" })).toEqual({ rhythm: false, sparkle: false });
+    expect(bgmLayersFor({ phase: "tower", combat: { bravo: 3 } })).toEqual({
+      rhythm: false,
+      sparkle: false
+    });
+  });
+  test("节奏层：Boss 二阶段或生命 <40%", () => {
+    expect(
+      bgmLayersFor({
+        phase: "battle",
+        combat: { bossPhase: { phase: 2 } },
+        player: { hp: 100, maxHp: 100 }
+      })
+    ).toEqual({ rhythm: true, sparkle: false });
+    expect(bgmLayersFor({ phase: "battle", combat: {}, player: { hp: 39, maxHp: 100 } })).toEqual({
+      rhythm: true,
+      sparkle: false
+    });
+    expect(
+      bgmLayersFor({
+        phase: "battle",
+        combat: { bossPhase: { phase: 1 } },
+        player: { hp: 80, maxHp: 100 }
+      })
+    ).toEqual({ rhythm: false, sparkle: false });
+  });
+  test("彩层：彩 ≥2", () => {
+    expect(
+      bgmLayersFor({ phase: "battle", combat: { bravo: 2 }, player: { hp: 100, maxHp: 100 } })
+    ).toEqual({ rhythm: false, sparkle: true });
+    expect(
+      bgmLayersFor({ phase: "battle", combat: { bravo: 1 }, player: { hp: 100, maxHp: 100 } })
+    ).toEqual({ rhythm: false, sparkle: false });
   });
 });

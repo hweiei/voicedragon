@@ -5,7 +5,7 @@
  */
 
 import "./ui/styles.css";
-import { GameAudio, bgmMoodForPhase, sfxForEffect } from "./adapters/audio";
+import { GameAudio, bgmLayersFor, bgmMoodForPhase, sfxForEffect } from "./adapters/audio";
 import { setKeepScreenOn } from "./adapters/platform";
 import {
   loadCampaignMeta,
@@ -246,6 +246,10 @@ engine.subscribe((state: GameState, options: EmitOptions) => {
   const sfx = sfxForEffect(options.effect);
   if (sfx) audio.playSfx(sfx);
   audio.setMood(bgmMoodForPhase(state.phase));
+  // P11 纵向分层与 stinger：层开关由纯函数计算，音乐关闭时适配器内部 no-op
+  audio.setLayers(bgmLayersFor(state));
+  if (options.effect === "ultimate") audio.stinger("ultimate");
+  if (options.effect === "star") audio.stinger("star");
   if (options.effect === "hit" || options.effect === "victory") ambient?.pulse();
 });
 

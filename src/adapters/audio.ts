@@ -95,6 +95,30 @@ const MOODS: Record<Exclude<BgmMood, "none">, BgmPattern> = {
   battle: { step: 0.34, density: 0.62, gain: 0.12, pulse: true, wave: "sawtooth" }
 };
 
+/** P11 纵向分层：由公开状态计算层开关（纯函数，main 订阅时注入）。 */
+export interface BgmLayers {
+  /** 节奏层：Boss 二阶段或生命 <40% */
+  rhythm: boolean;
+  /** 彩层：满堂彩 ≥2 */
+  sparkle: boolean;
+}
+
+export function bgmLayersFor(state: {
+  phase?: string;
+  combat?: { bravo?: number; bossPhase?: { phase?: number } } | null;
+  player?: { hp: number; maxHp: number } | null;
+}): BgmLayers {
+  const combat = state.combat ?? null;
+  const player = state.player ?? null;
+  const inBattle = state.phase === "battle" && combat !== null;
+  return {
+    rhythm:
+      inBattle &&
+      (combat!.bossPhase?.phase === 2 || (player !== null && player.hp / player.maxHp < 0.4)),
+    sparkle: inBattle && (combat!.bravo ?? 0) >= 2
+  };
+}
+
 export class GameAudio {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
@@ -110,6 +134,8 @@ export class GameAudio {
 
   // BGM 调度状态
   private mood: BgmMood = "none";
+  // P11 纵向分层状态
+  private layers: BgmLayers = { rhythm: false, sparkle: false };
   private nextStepAt = 0;
   private stepIndex = 0;
   private schedulerId: ReturnType<typeof setInterval> | null = null;
@@ -200,6 +226,41 @@ export class GameAudio {
   }
 
   /** 切换 BGM 情绪（交叉淡出旧声部；"none" 停止）。幂等。 */
+  /** P11 纵向分层：下次调度步进即生效（层内音量渐进由包络自然完成）。 */
+  setLayers(layers: BgmLayers): void {
+    this.layers = { rhythm: Boolean(layers.rhythm), sparkle: Boolean(layers.sparkle) };
+  }
+
+  /** P11 stinger：绝技/三星结算的短句（上行三连音，接 musicGain，零素材）。 */
+  stinger(kind: "ultimate" | "star"): void {
+    const ctx = this.readyContext();
+    if (!ctx || !this.settings.music) return;
+    const base = kind === "ultimate" ? 392.0 : 523.25;
+    const step = kind === "ultimate" ? 0.09 : 0.11;
+    const freqs =
+      kind === "ultimate" ? [base, base * 1.125, base * 1.5] : [base, base * 1.25, base * 1.5];
+    for (let i = 0; i < freqs.length; i += 1) {
+      const at = ctx.currentTime + 0.02 + i * step;
+      const osc = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const env = ctx.createGain();
+      osc.type = "triangle";
+      osc2.type = "triangle";
+      osc.frequency.value = freqs[i];
+      osc2.frequency.value = freqs[i] * 1.005;
+      env.gain.setValueAtTime(0.0001, at);
+      env.gain.exponentialRampToValueAtTime(0.14, at + 0.015);
+      env.gain.exponentialRampToValueAtTime(0.001, at + 0.5);
+      osc.connect(env);
+      osc2.connect(env);
+      env.connect(this.musicGain!);
+      osc.start(at);
+      osc2.start(at);
+      osc.stop(at + 0.55);
+      osc2.stop(at + 0.55);
+    }
+  }
+
   setMood(mood: BgmMood): void {
     if (mood === this.mood) return;
     this.mood = mood;
@@ -391,6 +452,17 @@ export class GameAudio {
       if (pattern.pulse && this.stepIndex % 2 === 0) {
         this.kick(at);
       }
+      // P11 节奏层：紧张时每步加一记短促高频打击（噪声 hat）
+      if (this.layers.rhythm) {
+        this.hat(at, this.stepIndex % 2 === 0 ? 0.05 : 0.03);
+      }
+      // P11 彩层：彩满临近时高八度拨弦概率叠加
+      if (this.layers.sparkle && Math.random() < 0.4) {
+        this.pluck(at, PENTATONIC[Math.min(PENTATONIC.length - 1, this.lastNoteIndex + 2)] * 2, {
+          ...pattern,
+          gain: pattern.gain * 0.45
+        });
+      }
       this.nextStepAt += pattern.step * (0.92 + Math.random() * 0.16);
     }
   }
@@ -433,6 +505,24 @@ export class GameAudio {
     osc.connect(env).connect(this.musicGain!);
     osc.start(at);
     osc.stop(at + 0.2);
+    this.trackFade(env);
+  }
+
+  /** P11 节奏层短促打击（噪声 hat）。 */
+  private hat(at: number, gain: number): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.noiseBuffer) return;
+    const src = ctx.createBufferSource();
+    src.buffer = this.noiseBuffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "highpass";
+    filter.frequency.value = 5200;
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(gain, at);
+    env.gain.exponentialRampToValueAtTime(0.001, at + 0.06);
+    src.connect(filter).connect(env).connect(this.musicGain!);
+    src.start(at);
+    src.stop(at + 0.08);
     this.trackFade(env);
   }
 

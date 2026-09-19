@@ -71,6 +71,8 @@ export interface SimRunResult {
   counterHits?: number;
   /** P10：名伶一次性被动实际触发次数（亮相/打诨；花旦为逐次判定不计数）。 */
   passiveHits?: number;
+  /** P11：绝技实际发动次数（彩满且发动）。 */
+  ultimateCasts?: number;
 }
 
 export interface SimOptions {
@@ -88,6 +90,8 @@ export interface SimOptions {
   character?: CharacterId;
   /** P10：以破阵拍通道施法（丑生「打诨」被动可触发；= 全程无声玩法的乐观界） */
   qteSource?: boolean;
+  /** P11：满堂彩绝技版本 */
+  ultimateVersion?: 1;
 }
 
 const MAX_TURNS_PER_BATTLE = 60;
@@ -319,7 +323,8 @@ export function simulateCampaign(options: SimOptions): SimRunResult {
     encounterVersion: options.encounterVersion,
     counterVersion: options.counterVersion,
     rosterVersion: options.rosterVersion,
-    character: options.character
+    character: options.character,
+    ultimateVersion: options.ultimateVersion
   });
   // Bot 决策流独立于引擎 LCG：同种子下游戏随机与决策随机都可复现
   const rng = mulberry32((options.seed ^ 0x5eed_b07 ^ (options.act * 0x85eb_ca6b)) >>> 0);
@@ -336,12 +341,14 @@ export function simulateCampaign(options: SimOptions): SimRunResult {
   let newElites = 0;
   let counterHits = 0;
   let passiveHits = 0;
+  let ultimateCasts = 0;
   const finish = (result: SimRunResult): SimRunResult => ({
     ...result,
     ...(options.buildVersion === 1 ? { upgrades, removals } : {}),
     ...(options.encounterVersion === 1 ? { bossPhases, newElites } : {}),
     ...(options.counterVersion === 1 ? { counterHits } : {}),
-    ...(options.rosterVersion === 1 ? { passiveHits } : {})
+    ...(options.rosterVersion === 1 ? { passiveHits } : {}),
+    ...(options.ultimateVersion === 1 ? { ultimateCasts } : {})
   });
 
   while (steps < MAX_STEPS_PER_RUN) {
@@ -409,6 +416,20 @@ export function simulateCampaign(options: SimOptions): SimRunResult {
           if (tactical >= 0) {
             engine.useItem(tactical);
             continue;
+          }
+        }
+        // P11 满堂彩：彩满且本场未用即发动绝技（null = 已用/守卫拒绝，回落出牌路径）
+        if (options.ultimateVersion === 1 && (state.combat!.bravo ?? 0) >= 3) {
+          const ultimate = engine.castUltimate(
+            sampleScore(rng, profile.voiceMean, profile.voiceSd),
+            {
+              source: options.qteSource ? "qte" : "sim"
+            }
+          );
+          if (ultimate) {
+            ultimateCasts += 1;
+            if (state.phase !== "battle") break;
+            continue; // 重估场面（绝技可能已终结战斗/换手）
           }
         }
         // 出牌：贪心按权重降序；随机打乱
@@ -631,6 +652,7 @@ export interface SimSummary {
   newElites?: number;
   counterHits?: number;
   passiveHits?: number;
+  ultimateCasts?: number;
 }
 
 /** 幕级蒙特卡洛：种子流 = hash(baseSeed, act, runIndex)，全确定性可复现。 */
@@ -647,6 +669,7 @@ export function simulateAct(options: {
   rosterVersion?: 1;
   character?: CharacterId;
   qteSource?: boolean;
+  ultimateVersion?: 1;
 }): SimSummary {
   const { act, bot, runs } = options;
   const baseSeed = options.baseSeed ?? 0x2026_0919;
@@ -662,6 +685,7 @@ export function simulateAct(options: {
   let newElites = 0;
   let counterHits = 0;
   let passiveHits = 0;
+  let ultimateCasts = 0;
   for (let index = 0; index < runs; index += 1) {
     const seed = (baseSeed + act * 0x1b873593 + index * 0x9e3779b9) >>> 0;
     const result = simulateCampaign({
@@ -675,7 +699,8 @@ export function simulateAct(options: {
       counterVersion: options.counterVersion,
       rosterVersion: options.rosterVersion,
       character: options.character,
-      qteSource: options.qteSource
+      qteSource: options.qteSource,
+      ultimateVersion: options.ultimateVersion
     });
     if (result.win) wins += 1;
     floorSum += result.floor;
@@ -688,6 +713,7 @@ export function simulateAct(options: {
     newElites += result.newElites ?? 0;
     counterHits += result.counterHits ?? 0;
     passiveHits += result.passiveHits ?? 0;
+    ultimateCasts += result.ultimateCasts ?? 0;
   }
   return {
     act,
@@ -703,6 +729,7 @@ export function simulateAct(options: {
     ...(options.buildVersion === 1 ? { upgrades, removals } : {}),
     ...(options.encounterVersion === 1 ? { bossPhases, newElites } : {}),
     ...(options.counterVersion === 1 ? { counterHits } : {}),
-    ...(options.rosterVersion === 1 ? { passiveHits } : {})
+    ...(options.rosterVersion === 1 ? { passiveHits } : {}),
+    ...(options.ultimateVersion === 1 ? { ultimateCasts } : {})
   };
 }

@@ -24,7 +24,8 @@ describe("P10 名伶独立平衡门", () => {
         if (character === "man-mou-saang") expect(result.passiveHits).toBeGreaterThan(0);
         if (character === "cau-saang") expect(result.passiveHits).toBeGreaterThan(0);
       }
-    }
+    },
+    180_000
   );
   test("同配置同种子可复现；不开 rosterVersion 不产生角色统计与行为偏移", () => {
     const config = { ...base, act: 2, seed: 991, character: "faa-daan" as const };

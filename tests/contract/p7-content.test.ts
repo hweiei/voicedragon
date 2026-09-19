@@ -22,9 +22,9 @@ function battle(act = 1, seed = 123): GameEngine {
 }
 
 describe("P7 版本化内容契约", () => {
-  test("40 技能 / 26 事件 / 8 道具；基础池与旧默认不变（P9 反击卡/P10 签名技仅进对应版本池）", () => {
-    // P9：ALL_SKILLS 收录还返俾你；P10：收录三张签名技（图鉴可见），未开版本时池不变
-    expect(ALL_SKILLS).toHaveLength(40);
+  test("43 技能 / 26 事件 / 8 道具；基础池与旧默认不变（P9 反击卡/P10 签名技/P11 绝技句仅进对应版本池）", () => {
+    // P9/P10/P11：ALL_SKILLS 收录版本内容（图鉴/练习场可见），未开版本时池不变
+    expect(ALL_SKILLS).toHaveLength(43);
     expect(ALL_EVENTS).toHaveLength(26);
     expect(ALL_ITEMS).toHaveLength(8);
     expect([1, 2, 3].map((act) => skillsFor(act, "p7").length)).toEqual([16, 26, 36]);

@@ -22,6 +22,7 @@ import {
  * 节点 ★ 评价（无伤/声韵≥85/限时）与宝箱/问答节点纯函数规则见 levelgen.ts。
  */
 
+import { bravoTransition, ultimateEnabled, ultimateResolve } from "./bravo";
 import {
   buildEnabled,
   deckSkill,
@@ -54,6 +55,7 @@ import {
   skillsFor
 } from "./content";
 import { type CharacterId, lookupCharacter } from "./content/roster";
+import { ULTIMATE_FOR_CHARACTER } from "./content/ultimates";
 import { type CounterStance, counterEnabled, resolveCounterDamage } from "./counter";
 import { FLOOR_NAMES, MAX_FLOOR, QUIZ_QUESTIONS, clone } from "./data";
 import type { EnemyBlueprint, EnemyIntent, GameEventContent, QuizQuestion, Skill } from "./data";
@@ -183,6 +185,10 @@ export interface CombatState {
   counter?: CounterStance;
   /** P10 名伶一次性被动标记（亮相=每场；jest-turn=每回合）；旧档缺省不启用。 */
   passives?: Record<string, boolean>;
+  /** P11 满堂彩（0–3）；连续正音累积，非正音归零；彩满可发动绝技。 */
+  bravo?: number;
+  /** P11 本场绝技已发动（每场一次）；旧档缺省未用。 */
+  ultimateUsed?: boolean;
 }
 
 export interface EventState extends GameEventContent {
@@ -278,6 +284,8 @@ export interface GameState {
   /** P10 名伶版本；缺省 = 旧局，起始牌组与被动逐位不变。 */
   rosterVersion?: 1;
   characterId?: CharacterId;
+  /** P11 满堂彩版本；缺省 = 旧局，无彩槽与绝技。 */
+  ultimateVersion?: 1;
   challenge?: ChallengeState;
 }
 
@@ -313,6 +321,8 @@ export interface CampaignConfig {
   rosterVersion?: 1;
   /** 仅 rosterVersion=1 生效；缺省文武生（确定性缺省） */
   character?: CharacterId;
+  /** P11 满堂彩绝技版本 */
+  ultimateVersion?: 1;
 }
 
 /** startCampaign 兼容两种形态：位置参数（旧）或 CampaignConfig（新）。 */
@@ -493,6 +503,7 @@ export class GameEngine {
     const buildVersion = config.buildVersion;
     const encounterVersion = config.encounterVersion;
     const counterVersion = config.counterVersion;
+    const ultimateVersion = config.ultimateVersion;
     const pack = actContent(act);
     const actNo = pack.act;
     // P5 修复：种子同时驱动地图与战斗 LCG——同 (act, seed) 必得同局（可复现/回放的基石）
@@ -505,6 +516,7 @@ export class GameEngine {
     }
     if (ruleset === "p7" && encounterVersion === 1) this.state.encounterVersion = 1;
     if (ruleset === "p7" && counterVersion === 1) this.state.counterVersion = 1;
+    if (ruleset === "p7" && ultimateVersion === 1) this.state.ultimateVersion = 1;
     // P10 名伶：独立版本门控；角色缺省文武生（确定性缺省）；起始牌组覆写不耗 RNG
     if (ruleset === "p7" && config.rosterVersion === 1) {
       this.state.rosterVersion = 1;
@@ -1034,6 +1046,10 @@ export class GameEngine {
     const tier = this.getScoreTier(score);
     combat.energy -= skill.cost;
     combat.scoreHistory.push(score);
+    // P11 满堂彩：按裸分累积/断彩（不含声韵加成——彩要真本事；绝技不经此路径）
+    if (ultimateEnabled(this.state)) {
+      combat.bravo = bravoTransition(combat.bravo ?? 0, rawScore);
+    }
     this.state.stats!.voiceAttempts += 1;
     this.state.stats!.voiceScoreTotal += score;
     this.state.stats!.bestVoiceScore = Math.max(this.state.stats!.bestVoiceScore, score);
@@ -1220,6 +1236,119 @@ export class GameEngine {
       combat.log = combat.log.slice(0, 10);
     }
     this.emit({ save: true, effect: damageDone ? "hit" : "skill" });
+    return combat.lastResult;
+  }
+
+  /**
+   * P11 满堂彩绝技：彩满 3 时发动角色绝技句，走与施法同式的最终计分
+   * （声韵/骊珠/干扰照常），效果由 bravo.ts ultimateResolve 纯规则给出。
+   * 不消耗声气；消耗全部彩；绝技分数不回馈蓄彩；不触发 firstAttack 与施法类遗物。
+   */
+  castUltimate(rawScore: number, voiceMeta: VoiceResultMeta = {}): ResolvedSkillResult | null {
+    const combat = this.state.combat;
+    if (
+      this.state.phase !== "battle" ||
+      !combat ||
+      combat.locked ||
+      !ultimateEnabled(this.state) ||
+      (combat.bravo ?? 0) < 3 ||
+      combat.ultimateUsed
+    )
+      return null;
+    const player = this.state.player!;
+    const enemy = combat.enemy;
+
+    let bonus = player.voiceMastery + combat.voiceBoost;
+    if (this.hasRelic("metronome")) bonus += 5;
+    const interference = player.buffs.find((buff) => buff.id === "voice-interference")?.value || 0;
+    const score = clamp(Math.round(rawScore + bonus - interference), 0, 100);
+    const tier = this.getScoreTier(score);
+    const ultimateSkill = ULTIMATE_FOR_CHARACTER[this.state.characterId ?? "man-mou-saang"];
+    const plan = ultimateResolve(
+      this.state.characterId ?? "man-mou-saang",
+      tier.multiplier,
+      score,
+      voiceMeta.toneScore ?? null
+    );
+
+    combat.bravo = 0;
+    combat.ultimateUsed = true;
+    combat.scoreHistory.push(score);
+    this.state.stats!.voiceAttempts += 1;
+    this.state.stats!.voiceScoreTotal += score;
+    this.state.stats!.bestVoiceScore = Math.max(this.state.stats!.bestVoiceScore, score);
+
+    const messages = [`绝技「${ultimateSkill.name}」：${tier.label} ${score} 分。`];
+    let damageDone = 0;
+    let healing = 0;
+
+    if (plan.damage > 0) {
+      let damage = Math.max(0, plan.damage + player.strength);
+      if (enemy.vulnerable > 0) damage = Math.round(damage * 1.25);
+      const blocked = plan.bypassArmor ? 0 : Math.min(enemy.armor, damage);
+      if (!plan.bypassArmor) enemy.armor -= blocked;
+      const actual = Math.max(0, damage - blocked);
+      enemy.hp = Math.max(0, enemy.hp - actual);
+      damageDone += actual;
+      this.state.stats!.damageDealt += actual;
+      if (plan.bypassArmor && score >= 85) messages.push("正音绝技，无视护甲。");
+    }
+    if (plan.heal > 0) healing += this.healPlayer(plan.heal);
+    if (plan.armor > 0) player.armor += plan.armor;
+    if (plan.clearInterference) {
+      const before = player.buffs.length;
+      player.buffs = player.buffs.filter((buff) => buff.id !== "voice-interference");
+      if (player.buffs.length < before) messages.push("莺声清朗，发音干扰已清除。");
+    }
+    if (plan.weaknessTurns > 0) {
+      enemy.weakness = Math.max(enemy.weakness, plan.weaknessTurns);
+      messages.push(`敌人进入虚弱状态 ${plan.weaknessTurns} 回合。`);
+    }
+    if (plan.stealAllArmor && enemy.armor > 0) {
+      const stolen = enemy.armor;
+      enemy.armor = 0;
+      player.armor += stolen;
+      messages.push(`反客为主，夺其 ${stolen} 点护甲。`);
+    }
+    if (plan.redraw) {
+      combat.hand = this.drawHand(combat.handSize ?? 3);
+      messages.push("你借势换了一组技能。");
+    }
+    if (damageDone) messages.push(`造成 ${damageDone} 点伤害。`);
+    if (plan.armor) messages.push(`获得 ${plan.armor} 点护甲。`);
+    if (healing) messages.push(`回复 ${healing} 点生命。`);
+
+    combat.lastResult = {
+      skillId: ultimateSkill.id,
+      rawScore,
+      score,
+      tier,
+      damage: damageDone,
+      armor: plan.armor,
+      healing,
+      transcript: voiceMeta.transcript || "",
+      confidence: voiceMeta.confidence ?? null,
+      similarity: voiceMeta.similarity ?? null,
+      source: voiceMeta.source || "unknown"
+    };
+    // 绝技句置顶为头条（与被动消息同策略；效果明细紧随其后）
+    combat.log.unshift(...messages);
+    combat.log = combat.log.slice(0, 10);
+
+    if (enemy.hp <= 0) {
+      if (combat.bossPhase) combat.bossPhase.pending = false;
+      this.finishCombatVictory();
+    } else if (
+      evolutionEnabled(this.state) &&
+      shouldQueuePhase(enemy.id, enemy.hp, enemy.maxHp, combat.bossPhase)
+    ) {
+      combat.bossPhase!.pending = true;
+      combat.log.unshift(
+        `绝技把对手打到半血：本回合意图不变，行动结束后进入${BOSS_EVOLUTIONS[enemy.id].phaseName}。`
+      );
+      combat.log = combat.log.slice(0, 10);
+    }
+    this.emit({ save: true, effect: damageDone ? "ultimate" : "skill" });
     return combat.lastResult;
   }
 

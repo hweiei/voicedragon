@@ -132,8 +132,8 @@ describe("P9 守势反击契约", () => {
     const restored = JSON.parse(JSON.stringify(e.state)) as GameState;
     expect(restored.combat!.counter).toEqual({ ratio: 50 });
     expect(counterEnabled(restored)).toBe(true);
-    const legacy = JSON.parse(JSON.stringify(e.state)) as GameState;
-    delete legacy.counterVersion;
+    const legacyFull = JSON.parse(JSON.stringify(e.state)) as GameState;
+    const { counterVersion: _cv, ...legacy } = legacyFull;
     expect(counterEnabled(legacy)).toBe(false);
   });
 

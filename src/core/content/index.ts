@@ -20,6 +20,7 @@ import {
 import { COUNTER_SKILLS } from "./counter";
 import { EXPANSION_EVENTS, EXPANSION_ITEMS, EXPANSION_SKILLS } from "./expansion";
 import { type CharacterId, SIGNATURE_SKILLS, SIGNATURE_SKILL_LIST } from "./roster";
+import { ULTIMATE_SKILLS } from "./ultimates";
 
 /** 缺失版本字段 = legacy；进行中旧局不会被静默升级。 */
 export type ContentRuleset = "legacy" | "p7";
@@ -59,7 +60,8 @@ export function relicsUpToAct(act: number): Relic[] {
 export const ALL_SKILLS: readonly Skill[] = [
   ...ACT_PACKS.flatMap((pack) => [...pack.skills, ...EXPANSION_SKILLS[pack.act]]),
   ...COUNTER_SKILLS,
-  ...SIGNATURE_SKILL_LIST
+  ...SIGNATURE_SKILL_LIST,
+  ...ULTIMATE_SKILLS
 ];
 export const ALL_RELICS: readonly Relic[] = ACT_PACKS.flatMap((pack) => pack.relics);
 export const ALL_EVENTS: readonly GameEventContent[] = ACT_PACKS.flatMap((pack) => [

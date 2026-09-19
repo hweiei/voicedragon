@@ -3564,3 +3564,52 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* ─── P11 满堂彩 ───────────────────────────────────────────────── */
+.bravo-meter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 2px;
+  min-height: 34px;
+}
+.bravo-label {
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0.75;
+}
+.bravo-pip {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.05);
+  opacity: 0.5;
+}
+.bravo-pip.lit {
+  opacity: 1;
+  border-color: rgba(255, 214, 120, 0.65);
+  background: rgba(255, 214, 120, 0.16);
+  color: #ffd678;
+  font-weight: 700;
+}
+.bravo-meter.full .bravo-pip.lit {
+  box-shadow: 0 0 0 2px rgba(255, 214, 120, 0.28);
+}
+.bravo-cast {
+  margin-left: 10px;
+  padding: 6px 14px;
+  font-size: 13px;
+}
+body.reduce-motion .bravo-meter.full .bravo-pip.lit {
+  box-shadow: none; /* 降级：仅静态点亮，无光晕 */
+}
+
+.bravo-used {
+  margin-left: 10px;
+  opacity: 0.55;
+  font-size: 12px;
+}
