@@ -1,5 +1,6 @@
 import { buildEnabled, removalPrice, removalReason, upgradeReason } from "../core/buildcraft";
 import { BOSS_EVOLUTIONS } from "../core/content/encounters";
+import { counterEnabled } from "../core/counter";
 import { evolutionEnabled } from "../core/encounters";
 import {
   type BuildOperation,
@@ -384,7 +385,7 @@ function titleTemplate(): string {
         <div class="title-kicker">粤语声攻 · 十层试炼</div>
         <h1 class="title-name"><span>声震</span>龙楼</h1>
         <p class="title-tagline">讲得准，打得狠；一路开声，一路登楼</p>
-        <p class="content-version">三幕深耕 · ${ALL_SKILLS.length} 招式 · ${ALL_EVENTS.length} 奇遇 · ${ITEMS.length} 道具<br />战役开新局体验；旧存档保留原规则<br />构筑新玩法：歇脚升级 · 夜市删牌<br />新战役：首领二阶段 · 三名特色精英</p>
+        <p class="content-version">三幕深耕 · ${ALL_SKILLS.length} 招式 · ${ALL_EVENTS.length} 奇遇 · ${ITEMS.length} 道具<br />战役开新局体验；旧存档保留原规则<br />构筑新玩法：歇脚升级 · 夜市删牌<br />新战役：首领二阶段 · 三名特色精英 · 守势反击</p>
       </div>
 
       <div class="tower-illustration" aria-hidden="true">
@@ -598,6 +599,7 @@ function statusChips(state: GameState): string {
   if (player.armor) chips.push(`护甲 ${player.armor}`);
   if (player.strength) chips.push(`声势 +${player.strength}`);
   for (const buff of player.buffs) chips.push(`${buff.name} -${buff.value}`);
+  if (combat.counter && counterEnabled(state)) chips.push(`反击 ${combat.counter.ratio}%`);
   if (combat.enemy.armor) chips.push(`敌甲 ${combat.enemy.armor}`);
   if (combat.enemy.weakness) chips.push(`敌虚弱 ${combat.enemy.weakness}`);
   if (combat.voiceBoost) chips.push(`下次声韵 +${combat.voiceBoost}`);
@@ -648,7 +650,7 @@ function battleTemplate(state: GameState, engine: GameEngine): string {
             ? ""
             : `<div class="intent-card">
           <small>敌方意图</small>
-          <strong>${escapeHtml(intent.label)} · ${escapeHtml(intent.detail)}</strong>
+          <strong>${escapeHtml(intent.label)} · ${escapeHtml(intent.detail)}${intent.counter !== undefined ? ` · 反击预计 ${intent.counter} 点` : ""}</strong>
         </div>`
         }
         <div class="enemy-avatar hue-${escapeHtml(enemy.hue)}">${escapeHtml(enemy.glyph)}</div>
@@ -946,7 +948,7 @@ export class GameUI {
     if (action === "new-run") this.confirmNewRun();
     if (action === "new-campaign") {
       const act = Number(button.dataset.act ?? 1);
-      this.engine.startCampaign(Number.isFinite(act) ? act : 1, undefined, "p7", 1, 1);
+      this.engine.startCampaign(Number.isFinite(act) ? act : 1, undefined, "p7", 1, 1, 1);
     }
     if (action === "campaign-next-act") this.engine.continueNextAct();
     if (action === "continue-run") {
@@ -1007,7 +1009,7 @@ export class GameUI {
       if (this.engine.state.endless) this.engine.startEndless(undefined, "p7");
       else if (this.engine.state.challenge?.mode === "daily") this.startDailyChallenge();
       else if (this.engine.state.campaign)
-        this.engine.startCampaign(this.engine.state.campaign.act, undefined, "p7", 1, 1);
+        this.engine.startCampaign(this.engine.state.campaign.act, undefined, "p7", 1, 1, 1);
       else this.engine.startNew();
     }
     if (action === "back-title") {

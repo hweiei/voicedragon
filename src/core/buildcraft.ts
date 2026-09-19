@@ -51,6 +51,13 @@ export const BUILD_FLOWS = [
   { id: "cycle", name: "调息周转", description: "净化、治疗与换手改善续航；换手仍可能抽回同一张。" }
 ] as const;
 
+/** P9：反击战役的流派文案覆盖；旧局保持 BUILD_FLOWS 原文逐字不变。 */
+export function flowDescription(flow: (typeof BUILD_FLOWS)[number], counterOn: boolean): string {
+  return counterOn && flow.id === "guard"
+    ? "用护甲与虚弱抵挡威胁；反击姿态能把被挡下的伤害还击回去，穿甲招不触发。"
+    : flow.description;
+}
+
 /** 仅单卡一次强化，费用、技能 id、短句和全部特殊钩子保持原样。 */
 export const UPGRADE_POWER: Readonly<Record<string, number>> = {
   "ding-ngang-soeng": 10,
@@ -64,7 +71,8 @@ export const UPGRADE_POWER: Readonly<Record<string, number>> = {
   "p7-m-hou-gam-gap": 8,
   "p7-waan-gwo-gok-dou": 10,
   "p7-m-hou-fong-hei": 16,
-  "p7-jau-gung-jau-sau": 13
+  "p7-jau-gung-jau-sau": 13,
+  "p9-waan-faan-bei-nei": 10
 };
 export const MIN_DECK_SIZE = 5;
 export function buildEnabled(state: {

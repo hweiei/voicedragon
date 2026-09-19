@@ -22,11 +22,13 @@ function battle(act = 1, seed = 123): GameEngine {
 }
 
 describe("P7 版本化内容契约", () => {
-  test("36 技能 / 26 事件 / 8 道具；基础池与旧默认不变", () => {
-    expect(ALL_SKILLS).toHaveLength(36);
+  test("37 技能 / 26 事件 / 8 道具；基础池与旧默认不变（P9 反击卡仅进 counterVersion 池）", () => {
+    // P9：ALL_SKILLS 收录还返俾你（图鉴/查找可见），但 skillsFor 未开 counterVersion 时池不变
+    expect(ALL_SKILLS).toHaveLength(37);
     expect(ALL_EVENTS).toHaveLength(26);
     expect(ALL_ITEMS).toHaveLength(8);
     expect([1, 2, 3].map((act) => skillsFor(act, "p7").length)).toEqual([16, 26, 36]);
+    expect([1, 2, 3].map((act) => skillsFor(act, "p7", 1).length)).toEqual([17, 27, 37]);
     expect([1, 2, 3].map((act) => eventsFor(act, "p7").length)).toEqual([10, 8, 8]);
     expect(skillsFor(1)).toEqual(SKILLS);
     expect(itemsFor()).toBe(ITEMS);

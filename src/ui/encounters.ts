@@ -31,6 +31,7 @@ export function encounterPanel(state: GameState, intent: IntentPreview): string 
     <div class="intent-heading"><span>当前意图</span><strong>${esc(intent.label)}</strong></div>
     <p class="intent-details">${esc(intent.detail)}</p>
     <p class="intent-forecast" data-hp-loss="${intent.hpLoss ?? 0}">${esc(intent.forecast ?? "")}${(intent.hpLoss ?? 0) >= state.player!.hp ? " ⚠ 当前预计致命" : ""}</p>
+    ${intent.counter !== undefined ? `<p class="intent-counter" aria-label="反击预测">反击姿态待发：此招被护甲挡下时，预计还击 ${intent.counter} 点。</p>` : ""}
     <small>${esc(intent.hint ?? "")}</small>
     ${intent.nextLabel ? `<p class="next-intent">下一招（按当前计划）：${esc(intent.nextLabel)}</p>` : ""}
   </aside>`;

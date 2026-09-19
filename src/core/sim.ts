@@ -16,6 +16,7 @@ import { evolutionEnabled, intentAt, resolveEnemyAction } from "./encounters";
  */
 
 import { type ContentRuleset, lookupSkill } from "./content";
+import { counterEnabled } from "./counter";
 import type { Skill } from "./data";
 import { GameEngine } from "./engine";
 import type { GameState } from "./engine";
@@ -65,6 +66,8 @@ export interface SimRunResult {
   removals?: number;
   bossPhases?: number;
   newElites?: number;
+  /** P9：实际打出伤害 ≥1 的还击次数（仅 counterVersion 统计）。 */
+  counterHits?: number;
 }
 
 export interface SimOptions {
@@ -76,6 +79,7 @@ export interface SimOptions {
   ruleset?: ContentRuleset;
   buildVersion?: 1;
   encounterVersion?: 1;
+  counterVersion?: 1;
 }
 
 const MAX_TURNS_PER_BATTLE = 60;
@@ -149,6 +153,7 @@ function p7CardWeight(skill: Skill, state: GameState): number {
   if (["attack", "multi", "hybrid", "weaken"].includes(skill.type))
     weight += state.player!.strength * (skill.hits ?? 1);
   if (skill.id === "dim-gwo-luk-ze" && state.combat!.enemy.armor > 0) weight += 10;
+  let pierceIncoming = false;
   if (evolutionEnabled(state)) {
     const combat = state.combat!;
     const action = resolveEnemyAction(
@@ -156,10 +161,22 @@ function p7CardWeight(skill: Skill, state: GameState): number {
       combat.enemy.baseAttack,
       combat.enemy.weakness
     );
+    pierceIncoming = action.pierce;
     if (action.pierce) {
       if (["guard", "cleanse", "tempo"].includes(skill.type)) weight *= 0.2;
       if (skill.type === "hybrid") weight = skill.power + state.player!.strength;
       if (skill.type === "weaken") weight += 5;
+    }
+  }
+  // P9 反击卡：威胁 ≥10 且非穿甲、当前无姿态时按「护甲 + 预期还击」估值；
+  // 姿态已存在或穿甲将至时按普通护甲处理（不重复摆、不给穿甲送分）。
+  if (skill.counter && counterEnabled(state)) {
+    if (state.combat!.counter) {
+      weight = skill.power * 0.3;
+    } else if (incoming >= 10 && !pierceIncoming) {
+      weight = skill.power + incoming * 0.5;
+    } else {
+      weight = skill.power * (pierceIncoming ? 0.4 : 0.7);
     }
   }
   return weight / Math.max(1, skill.cost);
@@ -291,7 +308,8 @@ export function simulateCampaign(options: SimOptions): SimRunResult {
     options.seed,
     options.ruleset,
     options.buildVersion,
-    options.encounterVersion
+    options.encounterVersion,
+    options.counterVersion
   );
   // Bot 决策流独立于引擎 LCG：同种子下游戏随机与决策随机都可复现
   const rng = mulberry32((options.seed ^ 0x5eed_b07 ^ (options.act * 0x85eb_ca6b)) >>> 0);
@@ -306,10 +324,12 @@ export function simulateCampaign(options: SimOptions): SimRunResult {
   let removals = 0;
   let bossPhases = 0;
   let newElites = 0;
+  let counterHits = 0;
   const finish = (result: SimRunResult): SimRunResult => ({
     ...result,
     ...(options.buildVersion === 1 ? { upgrades, removals } : {}),
-    ...(options.encounterVersion === 1 ? { bossPhases, newElites } : {})
+    ...(options.encounterVersion === 1 ? { bossPhases, newElites } : {}),
+    ...(options.counterVersion === 1 ? { counterHits } : {})
   });
 
   while (steps < MAX_STEPS_PER_RUN) {
@@ -412,7 +432,10 @@ export function simulateCampaign(options: SimOptions): SimRunResult {
         }
         if (state.phase !== "battle") break; // 已分胜负
         if (!cast || state.combat!.energy <= 0) {
+          // P9 统计：姿态存在且行动后消失 = 本次还击实际打出（只看公开状态，不偷看内部）
+          const stanceBefore = Boolean(state.combat?.counter);
           engine.endTurn();
+          if (stanceBefore && !state.combat?.counter) counterHits += 1;
           battleTurns += 1;
           turns += 1;
         }
@@ -433,11 +456,14 @@ export function simulateCampaign(options: SimOptions): SimRunResult {
         let bestScore = 0;
         for (const id of choices) {
           const skill = lookupSkill(id)!;
+          // P9：反击卡按「护甲 + 预期还击」估值（参考玩家视角，不偷看内部状态）
           const score =
-            (skill.power *
-              (skill.hits ?? 1) *
-              (skill.type === "attack" || skill.type === "multi" ? 1.1 : 0.9)) /
-            skill.cost;
+            skill.counter && counterEnabled(state)
+              ? (skill.power + 6) / skill.cost
+              : (skill.power *
+                  (skill.hits ?? 1) *
+                  (skill.type === "attack" || skill.type === "multi" ? 1.1 : 0.9)) /
+                skill.cost;
           if (score > bestScore) {
             bestScore = score;
             best = id;
@@ -588,6 +614,7 @@ export interface SimSummary {
   removals?: number;
   bossPhases?: number;
   newElites?: number;
+  counterHits?: number;
 }
 
 /** 幕级蒙特卡洛：种子流 = hash(baseSeed, act, runIndex)，全确定性可复现。 */
@@ -600,6 +627,7 @@ export function simulateAct(options: {
   ruleset?: ContentRuleset;
   buildVersion?: 1;
   encounterVersion?: 1;
+  counterVersion?: 1;
 }): SimSummary {
   const { act, bot, runs } = options;
   const baseSeed = options.baseSeed ?? 0x2026_0919;
@@ -613,6 +641,7 @@ export function simulateAct(options: {
   let removals = 0;
   let bossPhases = 0;
   let newElites = 0;
+  let counterHits = 0;
   for (let index = 0; index < runs; index += 1) {
     const seed = (baseSeed + act * 0x1b873593 + index * 0x9e3779b9) >>> 0;
     const result = simulateCampaign({
@@ -622,7 +651,8 @@ export function simulateAct(options: {
       profile: options.profile,
       ruleset: options.ruleset,
       buildVersion: options.buildVersion,
-      encounterVersion: options.encounterVersion
+      encounterVersion: options.encounterVersion,
+      counterVersion: options.counterVersion
     });
     if (result.win) wins += 1;
     floorSum += result.floor;
@@ -633,6 +663,7 @@ export function simulateAct(options: {
     removals += result.removals ?? 0;
     bossPhases += result.bossPhases ?? 0;
     newElites += result.newElites ?? 0;
+    counterHits += result.counterHits ?? 0;
   }
   return {
     act,
@@ -646,6 +677,7 @@ export function simulateAct(options: {
     avgBattles: battlesSum / runs,
     timeouts,
     ...(options.buildVersion === 1 ? { upgrades, removals } : {}),
-    ...(options.encounterVersion === 1 ? { bossPhases, newElites } : {})
+    ...(options.encounterVersion === 1 ? { bossPhases, newElites } : {}),
+    ...(options.counterVersion === 1 ? { counterHits } : {})
   };
 }

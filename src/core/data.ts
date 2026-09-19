@@ -32,6 +32,8 @@ export interface Skill {
   power: number;
   hits?: number;
   description: string;
+  /** P9 反击姿态；仅 counterVersion 内容使用，缺省表示无（旧内容逐位不变）。 */
+  counter?: { ratio: number };
 }
 
 export type IntentType = "attack" | "guardAttack" | "guard" | "debuff" | "silence" | "charge";

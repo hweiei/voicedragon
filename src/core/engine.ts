@@ -53,6 +53,7 @@ import {
   relicsUpToAct,
   skillsFor
 } from "./content";
+import { type CounterStance, counterEnabled, resolveCounterDamage } from "./counter";
 import { FLOOR_NAMES, MAX_FLOOR, QUIZ_QUESTIONS, clone } from "./data";
 import type { EnemyBlueprint, EnemyIntent, GameEventContent, QuizQuestion, Skill } from "./data";
 import { availableNodeIds, evaluateCombatStars, generateActMap, nodeById } from "./levelgen";
@@ -174,6 +175,8 @@ export interface CombatState {
   bellTriggered?: boolean;
   /** P5 咸柠茶盅：本回合回血标记。 */
   lemonTriggered?: boolean;
+  /** P9 反击姿态：敌方下次攻击被挡下时按比率还击，触发后消耗；随存档序列化。 */
+  counter?: CounterStance;
 }
 
 export interface EventState extends GameEventContent {
@@ -264,6 +267,8 @@ export interface GameState {
   /** 构筑规则独立于内容版本；只在显式开启的新战役中生效。 */
   buildVersion?: 1;
   encounterVersion?: 1;
+  /** P9 反击姿态版本；与 build/encounter 版本分离，缺省保留旧行为。 */
+  counterVersion?: 1;
   challenge?: ChallengeState;
 }
 
@@ -276,6 +281,8 @@ export interface IntentPreview {
   hpLoss?: number;
   blocked?: number;
   nextLabel?: string;
+  /** P9：反击姿态下的预计还击伤害（与实际结算共用 resolveCounterDamage；穿甲/无伤害意图缺省）。 */
+  counter?: number;
   label: string;
   detail: string;
   type: string;
@@ -440,7 +447,8 @@ export class GameEngine {
     seed: number = makeSeed(),
     ruleset: ContentRuleset = "legacy",
     buildVersion?: 1,
-    encounterVersion?: 1
+    encounterVersion?: 1,
+    counterVersion?: 1
   ): void {
     const pack = actContent(act);
     const actNo = pack.act;
@@ -453,6 +461,7 @@ export class GameEngine {
       this.state.player!.removedCards = 0;
     }
     if (ruleset === "p7" && encounterVersion === 1) this.state.encounterVersion = 1;
+    if (ruleset === "p7" && counterVersion === 1) this.state.counterVersion = 1;
     const map = generateActMap(seed, actNo);
     this.state.campaign = {
       act: actNo,
@@ -840,6 +849,7 @@ export class GameEngine {
     const intent = this.currentIntent();
     const combat = this.state.combat;
     if (!intent || !combat) return null;
+    const counter = this.counterForecast(intent);
     if (evolutionEnabled(this.state)) {
       const player = this.state.player!;
       const preview = forecastEnemyAction(
@@ -854,7 +864,7 @@ export class GameEngine {
       const next = combat.bossPhase?.pending
         ? BOSS_EVOLUTIONS[combat.enemy.id]?.pattern[0]
         : intentAt(combat.enemy.pattern, combat.turn + 1, combat.bossPhase);
-      return { ...preview, nextLabel: next?.label };
+      return { ...preview, nextLabel: next?.label, ...(counter === null ? {} : { counter }) };
     }
     // 吞音意图预览同样按固定伤害展示（与 endTurn 的 P5 修复一致）
     const rawAttack =
@@ -867,23 +877,55 @@ export class GameEngine {
       return {
         label: intent.label,
         detail: `${adjusted}${intent.hits ? ` × ${intent.hits}` : ""} 伤害`,
-        type: "attack"
+        type: "attack",
+        ...(counter === null ? {} : { counter })
       };
     }
     if (intent.type === "guardAttack") {
       return {
         label: intent.label,
         detail: `${adjusted} 伤害 / ${intent.guard} 护甲`,
-        type: "mixed"
+        type: "mixed",
+        ...(counter === null ? {} : { counter })
       };
     }
     if (intent.type === "guard") {
       return { label: intent.label, detail: `${intent.guard} 护甲`, type: "guard" };
     }
     if (intent.type === "silence") {
-      return { label: intent.label, detail: `${adjusted} 伤害 / 扰乱发音`, type: "debuff" };
+      return {
+        label: intent.label,
+        detail: `${adjusted} 伤害 / 扰乱发音`,
+        type: "debuff",
+        ...(counter === null ? {} : { counter })
+      };
     }
     return { label: intent.label, detail: "施加发音干扰", type: "debuff" };
+  }
+
+  /**
+   * P9 反击预测：与 endTurn 实际结算共用 resolveEnemyAction / forecastEnemyAction /
+   * resolveCounterDamage 纯规则；穿甲或无伤害意图返回 null（不显示预测）。
+   */
+  private counterForecast(intent: EnemyIntent): number | null {
+    const combat = this.state.combat;
+    if (!combat || !counterEnabled(this.state) || !combat.counter) return null;
+    const player = this.state.player!;
+    const action = resolveEnemyAction(intent, combat.enemy.baseAttack, combat.enemy.weakness);
+    if (action.pierce || action.hits === 0) return null;
+    const blocked = forecastEnemyAction(action, {
+      hp: player.hp,
+      armor: player.armor,
+      vulnerable: player.buffs.some((buff) => buff.id === "vulnerable"),
+      dragonScale: this.hasRelic("dragon-scale")
+    }).blocked;
+    if (blocked <= 0) return null;
+    return resolveCounterDamage({
+      blocked,
+      ratio: combat.counter.ratio,
+      enemyArmor: combat.enemy.armor,
+      enemyVulnerable: combat.enemy.vulnerable > 0
+    }).damage;
   }
 
   /** 读取一张实体卡的有效数值；旧局忽略所有升级附加字段。 */
@@ -984,6 +1026,13 @@ export class GameEngine {
     } else if (skill.type === "guard") {
       gainArmor(scaledPower + (score >= 65 && skill.id === "m-sai-geng" ? 2 : 0));
       if (skill.id === "dak-haan-jam-caa") healing += this.healPlayer(3);
+      // P9 反击姿态：数据化字段驱动（skill.counter），仅反击版本战役生效。
+      if (skill.counter && counterEnabled(this.state)) {
+        combat.counter = { ratio: skill.counter.ratio };
+        messages.push(
+          `摆出反击姿态：敌方下次攻击被护甲挡下时，还击 ${skill.counter.ratio}% 被挡伤害（穿甲不触发）。`
+        );
+      }
     } else if (skill.type === "hybrid") {
       dealDamage(scaledPower);
       gainArmor(scaledPower);
@@ -1112,6 +1161,7 @@ export class GameEngine {
       : null;
 
     const messages: string[] = [];
+    let counterBlocked = 0; // P9：本次敌方行动被护甲挡下的总伤害（穿甲段为 0）
     if (action) {
       let total = 0;
       let blocked = 0;
@@ -1120,6 +1170,7 @@ export class GameEngine {
         total += hit.actual;
         blocked += hit.blocked;
       }
+      counterBlocked = blocked;
       messages.push(
         `${enemy.name}施展「${action.label}」${action.hits ? `，造成 ${total} 点伤害，护甲抵消 ${blocked}${action.pierce ? "（穿甲）" : ""}` : "，本招无伤害"}。`
       );
@@ -1154,11 +1205,13 @@ export class GameEngine {
           total += result.actual;
           blocked += result.blocked;
         }
+        counterBlocked = blocked;
         messages.push(
           `${enemy.name}施展「${intent.label}」，造成 ${total} 点伤害${blocked ? `，护甲抵消 ${blocked}` : ""}。`
         );
       } else if (intent.type === "guardAttack") {
         const result = this.applyEnemyHit(attack);
+        counterBlocked = result.blocked;
         enemy.armor += intent.guard!;
         messages.push(
           `${enemy.name}施展「${intent.label}」，造成 ${result.actual} 点伤害并获得 ${intent.guard} 点护甲。`
@@ -1173,10 +1226,48 @@ export class GameEngine {
         messages.push(`${enemy.name}施展「${intent.label}」，下次语音得分 -${penalty}。`);
       } else if (intent.type === "silence") {
         const result = this.applyEnemyHit(attack);
+        counterBlocked = result.blocked;
         player.buffs = player.buffs.filter((buff) => buff.id !== "voice-interference");
         player.buffs.push({ id: "voice-interference", name: "吞音", value: 10, turns: 1 });
         messages.push(
           `${enemy.name}施展「${intent.label}」，造成 ${result.actual} 点伤害；下次语音得分 -10。`
+        );
+      }
+    }
+
+    // P9 守势反击：敌方行动完全结算后（含其护甲获取），按被挡总伤害还击；
+    // 结算次序在层甲词缀与虚弱/露隙递减之前——还击打在旧护甲上，行动自带的露隙下回合才生效。
+    if (counterEnabled(this.state) && combat.counter && counterBlocked > 0) {
+      const stance = combat.counter;
+      combat.counter = undefined;
+      const counterResult = resolveCounterDamage({
+        blocked: counterBlocked,
+        ratio: stance.ratio,
+        enemyArmor: enemy.armor,
+        enemyVulnerable: enemy.vulnerable > 0
+      });
+      const armorAbsorbed = enemy.armor - counterResult.armorAfter;
+      enemy.armor = counterResult.armorAfter;
+      enemy.hp = Math.max(0, enemy.hp - counterResult.damage);
+      this.state.stats!.damageDealt += counterResult.damage;
+      // 置顶为本回合头条（与施法块新消息在前一致；敌方行动紧随其后供上下文）
+      messages.unshift(
+        `反击姿态生效：挡下 ${counterBlocked} 点，还击 ${counterResult.damage} 点伤害${armorAbsorbed > 0 ? `（其护甲挡下 ${armorAbsorbed}）` : ""}。`
+      );
+      if (enemy.hp <= 0) {
+        if (combat.bossPhase) combat.bossPhase.pending = false;
+        combat.log.unshift(...messages.reverse());
+        combat.log = combat.log.slice(0, 10);
+        this.finishCombatVictory();
+        return;
+      }
+      if (
+        evolutionEnabled(this.state) &&
+        shouldQueuePhase(enemy.id, enemy.hp, enemy.maxHp, combat.bossPhase)
+      ) {
+        combat.bossPhase!.pending = true;
+        messages.push(
+          `还击把对手打到半血：本回合行动已结束，进入${BOSS_EVOLUTIONS[enemy.id].phaseName}。`
         );
       }
     }
@@ -1265,7 +1356,11 @@ export class GameEngine {
     const gold = this.randomInt(10, 16) + (isElite ? 10 : 0);
     this.state.player!.gold += gold;
     // P5：奖励卡池按幕累计（act 1 = 既有 12 张，行为不变）
-    const skillPool = skillsFor(this.state.campaign?.act ?? 1, this.state.ruleset);
+    const skillPool = skillsFor(
+      this.state.campaign?.act ?? 1,
+      this.state.ruleset,
+      this.state.counterVersion
+    );
     const relicPool = relicsUpToAct(this.state.campaign?.act ?? 1);
     const choices = this.pickDistinct(skillPool, 3).map((skill) => skill.id);
     let bonus: RewardBonus | null = null;
@@ -1331,7 +1426,9 @@ export class GameEngine {
     } else if (choice.action === "buySkill") {
       if (player.gold >= choice.value) {
         player.gold -= choice.value;
-        const learned = this.pick(skillsFor(this.state.campaign?.act ?? 1, this.state.ruleset));
+        const learned = this.pick(
+          skillsFor(this.state.campaign?.act ?? 1, this.state.ruleset, this.state.counterVersion)
+        );
         player.deck.push(learned.id);
         this.state.stats!.skillsLearned += 1;
         outcome = `你花了 ${choice.value} 两，学会「${learned.name}」。`;
@@ -1473,7 +1570,7 @@ export class GameEngine {
     const discount = this.hasRelic("night-market-vip") ? 0.85 : 1;
     const priceOf = (base: number) => Math.round(base * discount);
     const skillOffers = this.pickDistinct(
-      skillsFor(this.state.campaign?.act ?? 1, this.state.ruleset),
+      skillsFor(this.state.campaign?.act ?? 1, this.state.ruleset, this.state.counterVersion),
       2
     ).map((skill, index) => ({
       key: `skill-${index}`,

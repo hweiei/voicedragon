@@ -17,6 +17,7 @@ import {
   type Relic,
   type Skill
 } from "../data";
+import { COUNTER_SKILLS } from "./counter";
 import { EXPANSION_EVENTS, EXPANSION_ITEMS, EXPANSION_SKILLS } from "./expansion";
 
 /** 缺失版本字段 = legacy；进行中旧局不会被静默升级。 */
@@ -54,10 +55,10 @@ export function relicsUpToAct(act: number): Relic[] {
 }
 
 /** 跨幕合并注册表（图鉴 / 练习场 / 雷达分母）。act 1 在前，顺序稳定。 */
-export const ALL_SKILLS: readonly Skill[] = ACT_PACKS.flatMap((pack) => [
-  ...pack.skills,
-  ...EXPANSION_SKILLS[pack.act]
-]);
+export const ALL_SKILLS: readonly Skill[] = [
+  ...ACT_PACKS.flatMap((pack) => [...pack.skills, ...EXPANSION_SKILLS[pack.act]]),
+  ...COUNTER_SKILLS
+];
 export const ALL_RELICS: readonly Relic[] = ACT_PACKS.flatMap((pack) => pack.relics);
 export const ALL_EVENTS: readonly GameEventContent[] = ACT_PACKS.flatMap((pack) => [
   ...pack.events,
@@ -87,12 +88,14 @@ export const ALL_ITEMS: readonly Item[] = [...ITEMS, ...EXPANSION_ITEMS];
 export function itemsFor(ruleset?: ContentRuleset): Item[] {
   return ruleset === "p7" ? [...ALL_ITEMS] : ITEMS;
 }
-export function skillsFor(act: number, ruleset?: ContentRuleset): Skill[] {
+export function skillsFor(act: number, ruleset?: ContentRuleset, counterVersion?: 1): Skill[] {
   if (ruleset !== "p7") return skillsUpToAct(act);
-  return ACT_PACKS.slice(0, actContent(act).act).flatMap((pack) => [
+  const base = ACT_PACKS.slice(0, actContent(act).act).flatMap((pack) => [
     ...pack.skills,
     ...EXPANSION_SKILLS[pack.act]
   ]);
+  // P9：反击卡只在显式开启 counterVersion 的新战役进入卡池（奖励/夜市/事件学艺共用）。
+  return counterVersion === 1 ? [...base, ...COUNTER_SKILLS] : base;
 }
 export function eventsFor(act: number, ruleset?: ContentRuleset): GameEventContent[] {
   const pack = actContent(act);

@@ -7,12 +7,14 @@ import {
   buildOverview,
   capabilities,
   deckSkill,
+  flowDescription,
   removalPrice,
   removalReason,
   synergyHints,
   upgradeReason,
   upgradedSkill
 } from "../core/buildcraft";
+import { counterEnabled } from "../core/counter";
 import type { Skill } from "../core/data";
 import type { GameState } from "../core/engine";
 
@@ -69,7 +71,7 @@ export function buildViewTemplate(state: GameState, mode: BuildView): string {
     <p class="build-intro">${intro}</p>
     ${!enabled ? '<p class="notice-strip">本局保留旧规则，仅可查看；新开战役可删牌与升级。</p>' : ""}
     <div class="cost-summary" aria-label="声气费用分布">${overview.costs.map((count, cost) => `<span>${cost === 3 ? "3+" : cost} 气 <b>${count}</b> 张</span>`).join("")}</div>
-    <div class="build-flows">${BUILD_FLOWS.map((flow, index) => `<div><strong>${flow.name}</strong><p>${overview.flowStatus[index]}</p><small>${flow.description}</small></div>`).join("")}</div>
+    <div class="build-flows">${BUILD_FLOWS.map((flow, index) => `<div><strong>${flow.name}</strong><p>${overview.flowStatus[index]}</p><small>${flowDescription(flow, counterEnabled(state))}</small></div>`).join("")}</div>
     <div class="build-card-list">${cards}</div>
     <button class="ghost-button full-button" type="button" data-action="close-modal">${mode === "view" ? "返回游戏" : "取消，不做改动"}</button>
   </div>`;
