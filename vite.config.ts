@@ -28,7 +28,8 @@ export default defineConfig({
   plugins: [
     VitePWA({
       registerType: "autoUpdate",
-      injectRegister: "auto",
+      // defer 避免 136B 的注册器成为首屏阻塞脚本；SW 语义不变。
+      injectRegister: "script-defer",
       includeAssets: ["icon.svg", "pwa-192.png", "pwa-512.png"],
       devOptions: {
         enabled: false

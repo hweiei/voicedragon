@@ -37,6 +37,8 @@ jobs:
       - run: npm ci
       - name: Build（项目页子路径 base）
         run: npx vite build --base=/voicedragon/
+      - name: Verify release artifact under project subpath
+        run: npx vite-node scripts/release-readiness.ts --base=/voicedragon/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

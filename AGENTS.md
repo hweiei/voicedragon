@@ -33,7 +33,7 @@ npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 
 - `src/adapters/` 是端口实现（audio/tts/voice/storage/platform）。
 - `src/ui/` 渲染与演出：模板字符串直渲 + `src/ui/fx/` 演出编排（FxDirector）。
 - 设计决策的单一事实源：`docs/REDESIGN-PLAN.md`（P0–P5 历史）与
-  `docs/FX-UPGRADE-PLAN.md`（P6 三期完成）及 `docs/CONTENT-EXPANSION-PLAN.md`（P7 三幕深耕）与 `docs/BUILDCRAFT-PLAN.md`（P8-A 构筑成型）、`docs/ENCOUNTER-EVOLUTION-PLAN.md`（P8-B 对手进化）、`docs/VOICE-MASTERY-PLAN.md`（P8-C 语音深化）、`docs/LEARNING-LOOP-PLAN.md`（P8-D 学习闭环）。
+  `docs/FX-UPGRADE-PLAN.md`（P6 三期完成）及 `docs/CONTENT-EXPANSION-PLAN.md`（P7 三幕深耕）与 `docs/BUILDCRAFT-PLAN.md`（P8-A 构筑成型）、`docs/ENCOUNTER-EVOLUTION-PLAN.md`（P8-B 对手进化）、`docs/VOICE-MASTERY-PLAN.md`（P8-C 语音深化）、`docs/LEARNING-LOOP-PLAN.md`（P8-D 学习闭环）、`docs/RELEASE-READINESS-PLAN.md`（P8-E 发布与设备验收）。
 - 内容兼容：缺失 `ruleset` 的旧局按 legacy；P7 新内容只经 `skillsFor/eventsFor/itemsFor` 进入对应新局。
   不直接修改基础内容表或用扩展池替换基础池。新增参数须审查组合根包装器是否完整转发。
 - 构筑独立版本 `buildVersion:1` 仅用于新战役；缺失时保留旧玩法。升级按 `upgradedSlots` 记录具体牌组槽位，
@@ -46,6 +46,8 @@ npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 
   Web Speech / QTE 不伪造 F0 结论。SRS 沿用 v1 键并补齐 `toneMastery`，只存分数聚合，禁止持久化录音或 F0 帧。
 - P8-D 日历历史只保留最多 90 个练习日的分数聚合和不同技能 ID；每日目标按 3 个不同短句计数，连续天数不提供战斗加成。
   学习档案固定 `kind: voice-tower-learning` / `version: 1`，严格白名单、上限 1 MiB；导入须预览后二次确认并覆盖恢复，不盲目累加聚合数据。
+- P8-E 发布必须同时通过默认相对 base 与 GitHub Pages `/voicedragon/` 产物契约；CSP 变更须保留同源 Worker、Blob AudioWorklet/WASM 与 Hugging Face CDN 下载。
+  Playwright WebKit 模拟不等于 Safari 真机；离线模拟器限制必须明确 skip 并留在 `docs/DEVICE-TEST-MATRIX.md`，不得写成已通过。
 
 ## 2. 黄金契约与确定性
 
@@ -59,10 +61,15 @@ npx biome check .          # 风格（或 npm run check:fix）
 npx tsc --noEmit           # 严格类型
 npx vitest run             # 单测+契约+仿真（现 356 条）
 npx vite build && npx vite-node scripts/perf-budget.ts   # 首包 ≤350KB gzip（现 84.5）
+npx vite-node scripts/release-readiness.ts               # dist PWA/路径/安全头 44 项契约
 npm run sim:p8b           # 对手进化参考门45–65%、零超时；随机Bot异常须如实记录
 npm run sim:p8            # 构筑版独立仿真（含真实升级/删牌计数）
 npm run sim:p7            # 扩展版独立平衡报表（基础版仍用 npm run sim）
-npx playwright test        # E2E（现 32 条；需 npx playwright install chromium）
+npx playwright install --with-deps chromium firefox webkit  # 新环境一次性安装
+npx playwright test        # Chromium 业务 E2E（现 32 条）
+npm run test:release      # Chromium/Firefox/WebKit 发布矩阵（现 19 通过、1 明确跳过）
+npm run test:lighthouse   # 移动端+桌面四类分数及 LCP/TBT/CLS 硬预算
+npm run release:check      # 提交发布前串行执行全部门（需先安装三种 Playwright 浏览器）
 ```
 
 ## 4. 不可触碰的红线

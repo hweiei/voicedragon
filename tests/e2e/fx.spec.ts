@@ -25,29 +25,62 @@ async function enterFirstBattle(page: Page): Promise<void> {
   await expect(page.locator(".battle-screen")).toBeVisible();
 }
 
-/** 破阵拍（QTE）完成一次施法结算。 */
-async function castViaQte(page: Page): Promise<void> {
+/** 破阵拍（QTE）完成一次施法结算，并在点击结算前监听短生命周期浮字。 */
+async function castViaQte(page: Page, expectedFloater: string): Promise<void> {
   await page.locator(".skill-card:not([disabled])").first().click();
   await page.getByRole("button", { name: "破阵拍（无声施法）" }).click();
   await page.locator("#qte-strike").click();
+  await page.evaluate((selector) => {
+    const state = window as typeof window & {
+      __fxFloaterSeen?: boolean;
+      __fxFloaterObserver?: MutationObserver;
+    };
+    state.__fxFloaterSeen = false;
+    state.__fxFloaterObserver = new MutationObserver((records) => {
+      for (const record of records) {
+        for (const node of record.addedNodes) {
+          if (
+            node instanceof HTMLElement &&
+            (node.matches(selector) || node.querySelector(selector))
+          ) {
+            state.__fxFloaterSeen = true;
+          }
+        }
+      }
+    });
+    state.__fxFloaterObserver.observe(document.body, { childList: true, subtree: true });
+  }, expectedFloater);
   await page.locator('[data-action="apply-voice"]').click();
-  await expect(page.locator(".voice-sheet")).toBeHidden({ timeout: 10_000 });
+  await Promise.all([
+    expect
+      .poll(
+        () =>
+          page.evaluate(
+            () => (window as typeof window & { __fxFloaterSeen?: boolean }).__fxFloaterSeen === true
+          ),
+        { timeout: 6_000 }
+      )
+      .toBe(true),
+    expect(page.locator(".voice-sheet")).toBeHidden({ timeout: 10_000 })
+  ]);
+  await page.evaluate(() => {
+    const state = window as typeof window & { __fxFloaterObserver?: MutationObserver };
+    state.__fxFloaterObserver?.disconnect();
+  });
 }
 
 test("normal motion: cast spawns pooled floaters", async ({ page }) => {
   await preset(page, false);
   await enterFirstBattle(page);
-  await castViaQte(page);
-  await expect(page.locator(".fx-floater").first()).toBeVisible({ timeout: 6_000 });
+  await castViaQte(page, ".fx-floater");
 });
 
 test("reduce motion: floaters degrade to calm fades, no shake classes", async ({ page }) => {
   await preset(page, true);
   await enterFirstBattle(page);
-  await castViaQte(page);
+  await expect(page.locator("body")).toHaveClass(/reduce-motion/);
+  await castViaQte(page, ".fx-floater.fx-calm");
 
-  // 6s 窗口：并行负载下施法结算可能变慢（单跑 3/3 绿，属环境 flake）
-  await expect(page.locator(".fx-floater.fx-calm").first()).toBeVisible({ timeout: 6_000 });
   // 降级承诺：演出归零，信息保留——无任何抖动/红闪类
   await expect(page.locator(".fx-shake, .fx-jolt, .fx-hurt")).toHaveCount(0);
 });

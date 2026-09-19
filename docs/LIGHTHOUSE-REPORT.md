@@ -1,38 +1,39 @@
-# Lighthouse 实测报告（本地 preview）
+# Lighthouse 自动预算报告（本地 preview）
 
-> 2026-09-19 · `vite build` 产物 + `vite preview`（4173 端口）· `--preset=desktop`
-> 命令：`npx lighthouse http://localhost:4173 --preset=desktop --only-categories=performance,accessibility,best-practices,seo`
+> P8-E 更新：2026-09-19 · `vite build` 真实产物 + `vite preview` · Lighthouse 12.8.2。
+> 命令：`npm run test:lighthouse`。脚本自动启动/停止 preview；移动端按三次审计中位数、桌面单次审计执行，原始 JSON 写入临时缓存后删除。
 
-## 得分
+## 1. 硬预算
 
-| 类目 | 得分 |
+| 类目 / 指标 | 门限 |
 | --- | --- |
-| Performance | **100** |
-| Accessibility | **100**（修复 viewport 缩放限制后） |
-| Best Practices | **100** |
-| SEO | **100**（补 robots.txt 后） |
+| Performance | ≥ 95 |
+| Accessibility | ≥ 95 |
+| Best Practices | ≥ 95 |
+| SEO | ≥ 95 |
+| LCP | ≤ 2500 ms |
+| TBT | ≤ 200 ms |
+| CLS | ≤ 0.10 |
+| 游戏本体 JS gzip | ≤ 350 KB（独立 `perf-budget.ts`） |
 
-> Lighthouse v12 已移除 PWA 评分类目；可安装性核验：`manifest.webmanifest`（相对 start_url，子路径部署友好）
-> + `sw.js`（Workbox 预缓存 16 项）+ 192/512/maskable 图标齐备，E2E 四条流均跑在 preview 产物上。
+## 2. 最近一次本地结果
 
-## 关键指标（预算 vs 实测）
+| 配置 | Performance | Accessibility | Best Practices | SEO | FCP | LCP | TBT | CLS |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Mobile（三次默认移动仿真中位数） | **99** | **100** | **100** | **100** | 1426 ms | 1619 ms | 35 ms | 0.000 |
+| Desktop | **100** | **100** | **100** | **100** | 365 ms | 432 ms | 0 ms | 0.006 |
 
-| 指标 | 预算 | 实测 |
-| --- | --- | --- |
-| LCP | < 2.5 s | **0.4 s** |
-| FCP | — | 0.4 s |
-| TBT | < 200 ms | **0 ms** |
-| CLS | < 0.1 | 0.006 |
-| TTI | ≤ 2.5 s | 0.4 s |
-| 首包游戏 JS（gzip） | ≤ 350 KB | **59.2 KB**（CI 守卫：`npm run perf`） |
+游戏本体 JS 最近实测 **84.5 / 350 KB gzip**。Lighthouse v12 已移除 PWA 类目；安装壳改由 44 项构建产物契约与跨浏览器离线测试守护。
 
-## 本轮依据报告做的修复
+## 3. P8-E 修复与自动化
 
-1. **viewport**：移除 `maximum-scale=1, user-scalable=no`（无障碍：允许缩放）；
-   误触双击缩放改由 `body { touch-action: manipulation }` 压制。
-2. **robots.txt**：新增 `public/robots.txt`（允许全部抓取）。
+1. `vite-plugin-pwa` 注册器从阻塞脚本改为 `script-defer`；Service Worker 更新与缓存语义不变。
+2. `scripts/lighthouse-budget.ts` 把四类得分、LCP、TBT 与 CLS 变为可失败质量门，并同时覆盖移动/桌面配置。
+3. `scripts/release-readiness.ts` 验证 manifest、SW 预缓存、图标实际尺寸、相对路径、安全头和发布物隐私边界。
+4. CI 安装 Chromium / Firefox / WebKit：完整业务流仍只跑 Chromium，轻量发布矩阵跨四个桌面/触屏项目执行。
 
-## 遗留提示（不影响得分）
+## 4. 诚实边界
 
-- render-blocking CSS 约 50 ms、未用 JS 约 34 KiB（首屏外的练习场/海报模块）——余量极大，暂不处理。
-- 线上（真实网络）LCP/INP 请部署后按 `docs/DEPLOY.md` 清单复跑。
+- 本报告是 localhost 的确定性预算，不代表真实 CDN、移动基站、DNS 或第三方模型源性能。
+- 线上 URL 必须在部署后复跑；结果、URL、设备与日期记录到 `docs/DEVICE-TEST-MATRIX.md`。
+- WebKit 模拟不等于 iOS Safari 真机；主屏安装、断网冷启动、麦克风和系统粤语 TTS 仍待实机。

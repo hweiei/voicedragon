@@ -34,6 +34,9 @@ jobs:
       - name: Performance budget (first-bundle JS gzip)
         run: npx vite-node scripts/perf-budget.ts
 
+      - name: Release artifact contract (PWA shell, paths, headers)
+        run: npx vite-node scripts/release-readiness.ts
+
   e2e:
     runs-on: ubuntu-latest
     steps:
@@ -47,8 +50,12 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
-      - name: Build & run E2E (title → map → battle → QTE cast → save resume)
+          key: playwright-matrix-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Install browser matrix
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Build & run Chromium E2E (title → map → battle → QTE cast → save resume)
         run: npm run test:e2e
+      - name: Cross-browser release matrix (desktop, touch, offline, invalid archives)
+        run: npm run test:release
+      - name: Lighthouse mobile + desktop budgets
+        run: npm run test:lighthouse

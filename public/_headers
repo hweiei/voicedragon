@@ -3,15 +3,24 @@
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 
-# Service Worker 与入口：始终走网络校验，保证发版即时生效
+# Service Worker、入口与 manifest：始终走网络校验，保证发版即时生效
 /sw.js
   Cache-Control: no-cache, max-age=0
 
 /index.html
   Cache-Control: no-cache, max-age=0
 
-# 基础安全头（PWA 同源，无 COOP/COEP：sherpa WASM 单线程 SIMD 已够用，避免隔离头带来的兼容成本）
+/manifest.webmanifest
+  Cache-Control: no-cache, max-age=0
+
+# 基础安全头。CSP 保留同源脚本、Blob AudioWorklet/Worker、WASM 与官方模型下载；
+# 不开放第三方 frame、表单、摄像头或地理位置。
 /*
   X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  X-Permitted-Cross-Domain-Policies: none
   Referrer-Policy: strict-origin-when-cross-origin
+  Cross-Origin-Resource-Policy: same-origin
+  Strict-Transport-Security: max-age=31536000
   Permissions-Policy: microphone=(self), geolocation=(), camera=()
+  Content-Security-Policy: default-src 'self'; script-src 'self' blob: 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' blob: https://huggingface.co https://*.huggingface.co https://*.hf.co; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'
