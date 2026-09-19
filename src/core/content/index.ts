@@ -9,7 +9,18 @@
  * - lookupSkill / lookupRelic 供引擎在战斗中按 id 取卡（旧 getSkill 只认识第一幕）。
  */
 
-import type { EnemyBlueprint, GameEventContent, Relic, Skill } from "../data";
+import {
+  type EnemyBlueprint,
+  type GameEventContent,
+  ITEMS,
+  type Item,
+  type Relic,
+  type Skill
+} from "../data";
+import { EXPANSION_EVENTS, EXPANSION_ITEMS, EXPANSION_SKILLS } from "./expansion";
+
+/** 缺失版本字段 = legacy；进行中旧局不会被静默升级。 */
+export type ContentRuleset = "legacy" | "p7";
 import { ACT1_CONTENT } from "./act1";
 import { ACT2_CONTENT } from "./act2";
 import { ACT3_CONTENT } from "./act3";
@@ -42,9 +53,15 @@ export function relicsUpToAct(act: number): Relic[] {
 }
 
 /** 跨幕合并注册表（图鉴 / 练习场 / 雷达分母）。act 1 在前，顺序稳定。 */
-export const ALL_SKILLS: readonly Skill[] = ACT_PACKS.flatMap((pack) => pack.skills);
+export const ALL_SKILLS: readonly Skill[] = ACT_PACKS.flatMap((pack) => [
+  ...pack.skills,
+  ...EXPANSION_SKILLS[pack.act]
+]);
 export const ALL_RELICS: readonly Relic[] = ACT_PACKS.flatMap((pack) => pack.relics);
-export const ALL_EVENTS: readonly GameEventContent[] = ACT_PACKS.flatMap((pack) => pack.events);
+export const ALL_EVENTS: readonly GameEventContent[] = ACT_PACKS.flatMap((pack) => [
+  ...pack.events,
+  ...EXPANSION_EVENTS[pack.act]
+]);
 
 /** 图鉴「楼中对手」全集：普通敌人 + 精英 + 各幕 Boss。 */
 export function codexEnemyList(): EnemyBlueprint[] {
@@ -57,4 +74,21 @@ export function lookupSkill(id: string): Skill | undefined {
 
 export function lookupRelic(id: string): Relic | undefined {
   return ALL_RELICS.find((relic) => relic.id === id);
+}
+
+/** 新旧内容查询共用全集；抽取使用版本化池。 */
+export const ALL_ITEMS: readonly Item[] = [...ITEMS, ...EXPANSION_ITEMS];
+export function itemsFor(ruleset?: ContentRuleset): Item[] {
+  return ruleset === "p7" ? [...ALL_ITEMS] : ITEMS;
+}
+export function skillsFor(act: number, ruleset?: ContentRuleset): Skill[] {
+  if (ruleset !== "p7") return skillsUpToAct(act);
+  return ACT_PACKS.slice(0, actContent(act).act).flatMap((pack) => [
+    ...pack.skills,
+    ...EXPANSION_SKILLS[pack.act]
+  ]);
+}
+export function eventsFor(act: number, ruleset?: ContentRuleset): GameEventContent[] {
+  const pack = actContent(act);
+  return ruleset === "p7" ? [...pack.events, ...EXPANSION_EVENTS[pack.act]] : pack.events;
 }

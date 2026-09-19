@@ -62,7 +62,15 @@ export interface Relic {
   description: string;
 }
 
-export type ItemEffect = "heal" | "voiceBoost" | "weakenEnemy";
+export type ItemEffect =
+  | "heal"
+  | "voiceBoost"
+  | "weakenEnemy"
+  | "armor"
+  | "cleanse"
+  | "energy"
+  | "redraw"
+  | "expose";
 
 export interface Item {
   id: string;

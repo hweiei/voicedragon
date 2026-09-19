@@ -17,15 +17,27 @@ import {
   CAMPAIGN_SUSTAIN,
   DIFFICULTY_CURVE,
   MAX_ENERGY,
+  P7_ACT_DIFFICULTY_TARGET,
   QUIZ_PER_NODE,
   REST_HEAL,
   TREASURE
 } from "./config/balance";
-import { ACT_COUNT, actContent, lookupSkill, relicsUpToAct, skillsUpToAct } from "./content";
-import { FLOOR_NAMES, ITEMS, MAX_FLOOR, QUIZ_QUESTIONS, clone } from "./data";
+import {
+  ACT_COUNT,
+  ALL_ITEMS,
+  type ContentRuleset,
+  actContent,
+  eventsFor,
+  itemsFor,
+  lookupSkill,
+  relicsUpToAct,
+  skillsFor
+} from "./content";
+import { FLOOR_NAMES, MAX_FLOOR, QUIZ_QUESTIONS, clone } from "./data";
 import type { EnemyBlueprint, EnemyIntent, GameEventContent, QuizQuestion, Skill } from "./data";
 import { availableNodeIds, evaluateCombatStars, generateActMap, nodeById } from "./levelgen";
 import type { ActMap, MapNodeType } from "./levelgen";
+import { type ChallengeState, mutationEffects, mutationStage, selectMutators } from "./mutators";
 
 export type Phase =
   | "title"
@@ -221,6 +233,9 @@ export interface GameState {
   endless?: boolean;
   /** P4 自适应难度系数（± 生命/攻击缩放，由组合根注入，存档自恢复） */
   adaptiveBoost?: number;
+  /** P7 可选版本：缺失保留基础池，跨幕/读档不变。 */
+  ruleset?: ContentRuleset;
+  challenge?: ChallengeState;
 }
 
 /** P4 自适应难度注入点（组合根接 profile / 设置；默认 0，行为与原版一致）。 */
@@ -386,11 +401,12 @@ export class GameEngine {
    * 同一 act 种子 = 同一张地图（★最高纪录可跨局累计，由组合根注入/同步）。
    * P5 起：内容（敌/精英/Boss/事件/楼层名）随幕切换，act 越界钳到 [1, ACT_COUNT]。
    */
-  startCampaign(act = 1, seed: number = makeSeed()): void {
+  startCampaign(act = 1, seed: number = makeSeed(), ruleset: ContentRuleset = "legacy"): void {
     const pack = actContent(act);
     const actNo = pack.act;
     // P5 修复：种子同时驱动地图与战斗 LCG——同 (act, seed) 必得同局（可复现/回放的基石）
     this.state = this.createRunState(seed);
+    if (ruleset === "p7") this.state.ruleset = ruleset;
     const map = generateActMap(seed, actNo);
     this.state.campaign = {
       act: actNo,
@@ -437,11 +453,37 @@ export class GameEngine {
   }
 
   /** P4 无尽塔：无终点的单段爬楼，楼层无限延伸（5 的倍数为强敌关，永不出现 Boss）。 */
-  startEndless(seed?: number): void {
+  startEndless(seed?: number, ruleset: ContentRuleset = "legacy"): void {
     this.state = this.createRunState(seed);
+    if (ruleset === "p7") {
+      this.state.ruleset = ruleset;
+      this.state.challenge = {
+        mode: "endless",
+        seed: this.state.seed,
+        stage: 0,
+        mutatorIds: selectMutators(this.state.seed)
+      };
+    }
     this.state.endless = true;
     this.state.maxFloor = Number.MAX_SAFE_INTEGER;
     this.state.notice = "无尽塔开楼：没有天台，只有下一层。";
+    this.prepareFloorOptions();
+    this.emit({ save: true });
+  }
+
+  /** P7 每日挑战：日期身份随存档保存；个人自适应不参与同日挑战。 */
+  startDaily(seed: number, dateKey: string): void {
+    this.state = this.createRunState(seed);
+    this.state.ruleset = "p7";
+    this.state.adaptiveBoost = 0;
+    this.state.challenge = {
+      mode: "daily",
+      seed,
+      dateKey,
+      stage: 0,
+      mutatorIds: selectMutators(seed)
+    };
+    this.state.notice = "每日挑战：同一本地日期使用同一种子与词缀；本局不启用自适应难度。";
     this.prepareFloorOptions();
     this.emit({ save: true });
   }
@@ -496,6 +538,11 @@ export class GameEngine {
     }
 
     const nextFloor = this.state.floor + 1;
+    const challenge = this.state.challenge;
+    if (challenge) {
+      challenge.stage = mutationStage(challenge.mode, nextFloor);
+      challenge.mutatorIds = selectMutators(challenge.seed, challenge.stage);
+    }
     const endless = Boolean(this.state.endless);
     if (!endless && nextFloor > MAX_FLOOR) return;
 
@@ -568,7 +615,7 @@ export class GameEngine {
     player.gold += gold;
     const finds: string[] = [`${gold} 两`];
     if (this.random() < TREASURE.itemChance) {
-      const item = this.pick(ITEMS);
+      const item = this.pick(itemsFor(this.state.ruleset));
       player.items.push(item.id);
       finds.push(`「${item.name}」`);
     }
@@ -632,10 +679,11 @@ export class GameEngine {
     // 难度目标折算等效层数（一幕顶 ≈ 第 6 层，三幕顶 = 第 10 层旧版终局强度）；
     // 经典/无尽模式沿用真实楼层，行为不变。
     const campaign = this.state.campaign;
+    const targets = this.state.ruleset === "p7" ? P7_ACT_DIFFICULTY_TARGET : ACT_DIFFICULTY_TARGET;
     const scaleFloor = campaign
       ? 1 +
         (this.state.floor / Math.max(1, campaign.map.rows - 1)) *
-          ((ACT_DIFFICULTY_TARGET[campaign.act] ?? MAX_FLOOR) - 1)
+          ((targets[campaign.act] ?? MAX_FLOOR) - 1)
       : this.state.floor;
     const steps = Math.max(0, scaleFloor - 1);
     const hpScale =
@@ -693,6 +741,20 @@ export class GameEngine {
       bellTriggered: false,
       lemonTriggered: false
     };
+    // P7：只消费已存档词缀，独立随机采样不触碰游戏 LCG。
+    const modifiers = mutationEffects(this.state.challenge?.mutatorIds);
+    const combat = this.state.combat;
+    const enemy = combat.enemy;
+    enemy.maxHp = Math.max(1, Math.round(enemy.maxHp * modifiers.hpScale));
+    enemy.hp = enemy.maxHp;
+    enemy.baseAttack = Math.max(1, Math.round(enemy.baseAttack * modifiers.attackScale));
+    enemy.armor += modifiers.enemyArmor;
+    enemy.vulnerable = modifiers.vulnerable;
+    player.armor += modifiers.playerArmor;
+    player.strength += modifiers.strength;
+    combat.energy = Math.max(0, combat.energy + modifiers.energy);
+    combat.voiceBoost += modifiers.voiceBoost;
+    this.healPlayer(modifiers.heal);
   }
 
   drawHand(count: number, omitIds: number[] = []): HandCard[] {
@@ -982,6 +1044,11 @@ export class GameEngine {
       );
     }
 
+    const layerArmor = mutationEffects(this.state.challenge?.mutatorIds).armorPerTurn;
+    if (layerArmor > 0) {
+      enemy.armor += layerArmor;
+      messages.push(`层甲词缀：敌人护甲 +${layerArmor}。`);
+    }
     if (enemy.weakness > 0) enemy.weakness -= 1;
     if (enemy.vulnerable > 0) enemy.vulnerable -= 1;
     combat.log.unshift(...messages);
@@ -1048,7 +1115,7 @@ export class GameEngine {
     const gold = this.randomInt(10, 16) + (isElite ? 10 : 0);
     this.state.player!.gold += gold;
     // P5：奖励卡池按幕累计（act 1 = 既有 12 张，行为不变）
-    const skillPool = skillsUpToAct(this.state.campaign?.act ?? 1);
+    const skillPool = skillsFor(this.state.campaign?.act ?? 1, this.state.ruleset);
     const relicPool = relicsUpToAct(this.state.campaign?.act ?? 1);
     const choices = this.pickDistinct(skillPool, 3).map((skill) => skill.id);
     let bonus: RewardBonus | null = null;
@@ -1060,7 +1127,7 @@ export class GameEngine {
         bonus = { type: "relic", id: relic.id };
       }
     } else if (this.random() < 0.35) {
-      const item = this.pick(ITEMS);
+      const item = this.pick(itemsFor(this.state.ruleset));
       this.state.player!.items.push(item.id);
       bonus = { type: "item", id: item.id };
     }
@@ -1088,7 +1155,7 @@ export class GameEngine {
 
   startEvent(): void {
     this.state.phase = "event";
-    const eventPool = actContent(this.state.campaign?.act ?? 1).events;
+    const eventPool = eventsFor(this.state.campaign?.act ?? 1, this.state.ruleset);
     this.state.event = {
       ...clone(this.pick(eventPool)),
       resolved: false,
@@ -1114,7 +1181,7 @@ export class GameEngine {
     } else if (choice.action === "buySkill") {
       if (player.gold >= choice.value) {
         player.gold -= choice.value;
-        const learned = this.pick(skillsUpToAct(this.state.campaign?.act ?? 1));
+        const learned = this.pick(skillsFor(this.state.campaign?.act ?? 1, this.state.ruleset));
         player.deck.push(learned.id);
         this.state.stats!.skillsLearned += 1;
         outcome = `你花了 ${choice.value} 两，学会「${learned.name}」。`;
@@ -1150,7 +1217,7 @@ export class GameEngine {
         outcome = "你已集齐这里的旧物，老师傅改送 24 两。";
       }
     } else if (choice.action === "item") {
-      const item = this.pick(ITEMS);
+      const item = this.pick(itemsFor(this.state.ruleset));
       player.items.push(item.id);
       outcome = `雨停时，你在檐角发现「${item.name}」。`;
     } else if (choice.action === "gamble") {
@@ -1207,16 +1274,17 @@ export class GameEngine {
     // P5：夜市卡池按幕累计；夜市贵宾牌全场 -15%
     const discount = this.hasRelic("night-market-vip") ? 0.85 : 1;
     const priceOf = (base: number) => Math.round(base * discount);
-    const skillOffers = this.pickDistinct(skillsUpToAct(this.state.campaign?.act ?? 1), 2).map(
-      (skill, index) => ({
-        key: `skill-${index}`,
-        type: "skill" as const,
-        id: skill.id,
-        price: priceOf(skill.rarity === "rare" ? 34 : 22),
-        sold: false
-      })
-    );
-    const item = this.pick(ITEMS);
+    const skillOffers = this.pickDistinct(
+      skillsFor(this.state.campaign?.act ?? 1, this.state.ruleset),
+      2
+    ).map((skill, index) => ({
+      key: `skill-${index}`,
+      type: "skill" as const,
+      id: skill.id,
+      price: priceOf(skill.rarity === "rare" ? 34 : 22),
+      sold: false
+    }));
+    const item = this.pick(itemsFor(this.state.ruleset));
     const relic = this.pickDistinct(
       relicsUpToAct(this.state.campaign?.act ?? 1),
       1,
@@ -1268,10 +1336,26 @@ export class GameEngine {
   }
 
   useItem(index: number): void {
-    const player = this.state.player!;
+    const player = this.state.player;
+    if (!player || !Number.isInteger(index) || index < 0) return;
     const itemId = player.items[index];
-    const item = ITEMS.find((entry) => entry.id === itemId);
+    const item = ALL_ITEMS.find((entry) => entry.id === itemId);
     if (!item) return;
+    // 新道具必须在未锁定战斗中使用；拒绝时不消耗。
+    const tactical = ["armor", "cleanse", "energy", "redraw", "expose"].includes(item.effect);
+    if (
+      tactical &&
+      (this.state.phase !== "battle" || !this.state.combat || this.state.combat.locked)
+    ) {
+      this.state.notice = "这件战术道具要在战斗出招前使用。";
+      this.emit({ save: false });
+      return;
+    }
+    if (item.effect === "energy" && this.state.combat!.energy >= MAX_ENERGY) {
+      this.state.notice = "声气已满，道具保留。";
+      this.emit({ save: false });
+      return;
+    }
 
     if (item.effect === "heal") {
       const healed = this.healPlayer(item.power);
@@ -1294,6 +1378,22 @@ export class GameEngine {
       this.state.notice = "锣声扰乱敌人，它的下一轮攻击减弱。";
     }
 
+    if (tactical) {
+      const combat = this.state.combat!;
+      if (item.effect === "armor") player.armor += item.power;
+      if (item.effect === "cleanse") {
+        player.buffs = player.buffs.filter(
+          (buff) => !["voice-interference", "vulnerable"].includes(buff.id)
+        );
+        player.armor += item.power;
+      }
+      if (item.effect === "energy")
+        combat.energy = Math.min(MAX_ENERGY, combat.energy + item.power);
+      if (item.effect === "redraw") combat.hand = this.drawHand(combat.handSize ?? 3);
+      if (item.effect === "expose")
+        combat.enemy.vulnerable = Math.max(combat.enemy.vulnerable, item.power);
+      this.state.notice = `使用「${item.name}」：${item.description}`;
+    }
     player.items.splice(index, 1);
     this.emit({ save: true, effect: "item" });
   }

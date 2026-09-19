@@ -2957,3 +2957,35 @@ body {
 .tutorial-body .phrase-ribbon {
   margin: 0.2rem 0;
 }
+
+/* P7 常驻规则文字：无动画，无障碍不隐藏规则。 */
+.content-version {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 10px 0;
+}
+.challenge-banner {
+  border: 1px solid rgba(240, 207, 131, 0.3);
+  border-radius: 12px;
+  padding: 12px;
+  margin: 12px 0;
+  background: rgba(240, 207, 131, 0.04);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.challenge-banner > strong {
+  display: block;
+  margin-bottom: 6px;
+}
+.mutation-rule {
+  display: grid;
+  grid-template-columns: 6em 1fr;
+  gap: 8px;
+}
+.mutation-rule[data-kind="pressure"] b {
+  color: #f5aa90;
+}
+.mutation-rule[data-kind="boon"] b {
+  color: #9cceae;
+}

@@ -226,9 +226,9 @@ export function saveSrsStore(store: SrsStore): void {
   }
 }
 
-export function loadDailyRecords(): Record<string, DailyRecord> {
+export function loadDailyRecords(ruleset: "legacy" | "p7" = "legacy"): Record<string, DailyRecord> {
   try {
-    const raw = platformStorage().get(DAILY_KEY);
+    const raw = platformStorage().get(ruleset === "p7" ? `${DAILY_KEY}-p7` : DAILY_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as Record<string, DailyRecord>;
     return parsed && typeof parsed === "object" ? parsed : {};
@@ -239,11 +239,14 @@ export function loadDailyRecords(): Record<string, DailyRecord> {
 
 export function saveDailyRecord(record: DailyRecord): void {
   try {
-    const records = loadDailyRecords();
+    const records = loadDailyRecords(record.ruleset);
     const existing = records[record.dateKey];
     if (!existing || compareDailyRecords(record, existing) > 0) {
       records[record.dateKey] = record;
-      platformStorage().set(DAILY_KEY, JSON.stringify(records));
+      platformStorage().set(
+        record.ruleset === "p7" ? `${DAILY_KEY}-p7` : DAILY_KEY,
+        JSON.stringify(records)
+      );
     }
   } catch (error) {
     console.warn("Unable to save daily record", error);

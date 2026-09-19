@@ -40,18 +40,19 @@ import {
   ALL_EVENTS,
   ALL_RELICS,
   ALL_SKILLS,
+  ALL_ITEMS as ITEMS,
   actContent,
   codexEnemyList,
   lookupRelic,
   lookupSkill
 } from "../core/content";
 import { dailySeedForKey, dateKeyFor } from "../core/daily";
-import { ITEMS } from "../core/data";
 import type { Skill } from "../core/data";
 import { NODE_META } from "../core/engine";
 import type { EmitOptions, GameEngine, GameState, RunSummary } from "../core/engine";
 import { generateActMap } from "../core/levelgen";
 import type { ActNode } from "../core/levelgen";
+import { mutationList } from "../core/mutators";
 import { countSrsGraduated, markCodexSeen, recordRunEnd, recordVoiceCast } from "../core/profile";
 import type { ProfileStore } from "../core/profile";
 import { scoreLabel, scorePronunciation } from "../core/scoring";
@@ -258,6 +259,21 @@ function skillCard(skill: Skill, options: { action?: string; disabled?: boolean 
     </button>`;
 }
 
+function challengeBanner(state: GameState): string {
+  const challenge = state.challenge;
+  if (!challenge)
+    return state.ruleset === "p7" ? '<div class="content-version">三幕深耕 · 扩展内容池</div>' : "";
+  return `<aside class="challenge-banner" aria-label="本局变异词缀">
+    <strong>${challenge.mode === "daily" ? `每日挑战 · ${escapeHtml(challenge.dateKey ?? "")}` : `无尽变异 · 第 ${challenge.stage * 5 + 1}–${challenge.stage * 5 + 5} 层`}</strong>
+    ${mutationList(challenge.mutatorIds)
+      .map(
+        (entry) =>
+          `<div class="mutation-rule" data-kind="${entry.kind}"><b>${entry.kind === "pressure" ? "试炼" : "助力"} · ${escapeHtml(entry.name)}</b><span>${escapeHtml(entry.description)}</span></div>`
+      )
+      .join("")}
+  </aside>`;
+}
+
 function hud(state: GameState): string {
   const player = state.player!;
   return `
@@ -276,7 +292,7 @@ function hud(state: GameState): string {
 /** P3 每日挑战状态的展示文案。 */
 function dailyStatusLabel(): string {
   const todayKey = dateKeyFor(new Date());
-  const record = loadDailyRecords()[todayKey];
+  const record = loadDailyRecords("p7")[todayKey];
   if (!record) return "今日未挑战";
   if (record.victory) return `今日已通关 · 综合 ${record.averageScore}`;
   return `今日已到第 ${record.floor} 层 · 综合 ${record.averageScore}`;
@@ -312,6 +328,7 @@ function titleTemplate(): string {
         <div class="title-kicker">粤语声攻 · 十层试炼</div>
         <h1 class="title-name"><span>声震</span>龙楼</h1>
         <p class="title-tagline">讲得准，打得狠；一路开声，一路登楼</p>
+        <p class="content-version">三幕深耕 · ${ALL_SKILLS.length} 招式 · ${ALL_EVENTS.length} 奇遇 · ${ITEMS.length} 道具<br />战役开新局体验；旧存档保留原规则</p>
       </div>
 
       <div class="tower-illustration" aria-hidden="true">
@@ -376,6 +393,7 @@ function towerTemplate(state: GameState, engine: GameEngine): string {
   return `
     <section class="screen tower-screen">
       ${hud(state)}
+      ${challengeBanner(state)}
       ${state.endless ? "" : `<div class="floor-progress">${dots}</div>`}
       <div class="floor-heading">
         <div>
@@ -459,6 +477,7 @@ function campaignMapTemplate(state: GameState): string {
   return `
     <section class="screen map-screen">
       ${hud(state)}
+      ${challengeBanner(state)}
       <div class="map-head">
         <div>
           <p class="eyebrow">第${ACT_NUMERALS[campaign.act - 1]}幕 · ${escapeHtml(actContent(campaign.act).theme)}</p>
@@ -503,6 +522,7 @@ function quizTemplate(state: GameState): string {
   return `
     <section class="screen story-screen">
       ${hud(state)}
+      ${challengeBanner(state)}
       <p class="eyebrow">街坊问答 · 第 ${quiz.index + 1} / ${quiz.questions.length} 题 · 已答对 ${quiz.correct} 题</p>
       <h1 class="screen-title quiz-question">${escapeHtml(question.question)}</h1>
       <div class="choice-list">${options}</div>
@@ -548,6 +568,7 @@ function battleTemplate(state: GameState, engine: GameEngine): string {
 
   return `
     <section class="battle-screen">
+      ${challengeBanner(state)}
       <div class="battle-status">
         <div class="combatant-mini">
           <div class="label-line"><strong>你</strong><small>${player.hp}/${player.maxHp}</small></div>
@@ -585,17 +606,25 @@ function battleTemplate(state: GameState, engine: GameEngine): string {
 
 function eventTemplate(state: GameState): string {
   const event = state.event!;
+  // P7 问义事件：作答前不把答案印在释义或分支提示里。
+  const quizPending =
+    state.ruleset === "p7" &&
+    !event.resolved &&
+    event.choices.some((choice) => choice.action === "quizCorrect");
+  const wrongCost = event.choices.find((choice) => choice.action === "quizWrong")?.value ?? 0;
+  const quizHint = `答对声韵 +2（上限 15）；答错失去 ${wrongCost} 生命`;
   const choices = event.choices
     .map(
       (choice) => `
     <button class="choice-button" type="button" data-action="event-choice" data-choice-id="${escapeHtml(choice.id)}">
-      <span><strong>${escapeHtml(choice.label)}</strong><small>${escapeHtml(choice.hint)}</small></span><span>›</span>
+      <span><strong>${escapeHtml(choice.label)}</strong><small>${escapeHtml(quizPending ? quizHint : choice.hint)}</small></span><span>›</span>
     </button>`
     )
     .join("");
   return `
     <section class="screen story-screen">
       ${hud(state)}
+      ${challengeBanner(state)}
       <p class="eyebrow">${escapeHtml(event.kicker)} · 第 ${state.floor} 层</p>
       <h1 class="screen-title">${escapeHtml(event.title)}</h1>
       <div class="story-art"><span class="story-glyph">遇</span></div>
@@ -604,7 +633,7 @@ function eventTemplate(state: GameState): string {
         <div class="phrase-ribbon">
           <strong>${escapeHtml(event.lesson.phrase)}</strong>
           <span>${escapeHtml(event.lesson.jyutping)}</span>
-          <small>${escapeHtml(event.lesson.meaning)}</small>
+          <small>${quizPending ? "选择后揭晓释义" : escapeHtml(event.lesson.meaning)}</small>
         </div>
       </div>
       ${
@@ -619,6 +648,7 @@ function restTemplate(state: GameState): string {
   return `
     <section class="screen story-screen">
       ${hud(state)}
+      ${challengeBanner(state)}
       <p class="eyebrow">歇脚处 · 第 ${state.floor} 层</p>
       <h1 class="screen-title">调息练声</h1>
       <p class="screen-subtitle">烛火很稳。你只能选择一种休整方式。</p>
@@ -663,6 +693,7 @@ function shopTemplate(state: GameState): string {
   return `
     <section class="screen story-screen">
       ${hud(state)}
+      ${challengeBanner(state)}
       <p class="eyebrow">夜市 · 第 ${state.floor} 层</p>
       <h1 class="screen-title">榕树头声货摊</h1>
       <p class="screen-subtitle">货物每局不同，卖出后概不退换。</p>
@@ -691,6 +722,7 @@ function rewardTemplate(state: GameState): string {
   return `
     <section class="screen">
       ${hud(state)}
+      ${challengeBanner(state)}
       <p class="eyebrow">战斗胜利 · 获得 ${reward.gold} 两</p>
       <h1 class="screen-title">听声学招</h1>
       <p class="screen-subtitle">选择一个粤语短语加入本局技能组，或保留现有构筑。</p>
@@ -773,7 +805,7 @@ export class GameUI {
   private practiceResult: VoiceScoreResult | null = null;
   private practiceRaf: number | null = null;
   /** P3：本局为每日挑战时记录其日期键（结算时写入战绩） */
-  private sessionDaily: string | null = null;
+  private recordedDailyKey: string | null = null;
   /** P4：本局档案结算去重键（同一局结束只写一次档案） */
   private recordedRunKey: string | null = null;
   /** P4：复用的海报画布（结算屏分享按钮生成） */
@@ -827,7 +859,7 @@ export class GameUI {
     if (action === "new-run") this.confirmNewRun();
     if (action === "new-campaign") {
       const act = Number(button.dataset.act ?? 1);
-      this.engine.startCampaign(Number.isFinite(act) ? act : 1);
+      this.engine.startCampaign(Number.isFinite(act) ? act : 1, undefined, "p7");
     }
     if (action === "campaign-next-act") this.engine.continueNextAct();
     if (action === "continue-run") {
@@ -851,7 +883,7 @@ export class GameUI {
     // ─── P4 标题层动作 ───
     if (action === "endless-run") {
       clearSave();
-      this.engine.startEndless();
+      this.engine.startEndless(undefined, "p7");
     }
     if (action === "open-achievements") this.openView("achievements");
     if (action === "open-codex") this.openView("codex");
@@ -872,7 +904,10 @@ export class GameUI {
     if (action === "restart-run") {
       clearSave();
       // P4：无尽局结算后「再闯一局」仍回无尽塔，其余按经典开局
-      if (this.engine.state.endless) this.engine.startEndless();
+      if (this.engine.state.endless) this.engine.startEndless(undefined, "p7");
+      else if (this.engine.state.challenge?.mode === "daily") this.startDailyChallenge();
+      else if (this.engine.state.campaign)
+        this.engine.startCampaign(this.engine.state.campaign.act, undefined, "p7");
       else this.engine.startNew();
     }
     if (action === "back-title") {
@@ -999,17 +1034,24 @@ export class GameUI {
 
   render(state: GameState, options: EmitOptions = {}): void {
     // P3 每日挑战记账：本局挑战在通关/倒下瞬间写入本地战绩（取更优者保留）
-    if (this.sessionDaily && (state.phase === "victory" || state.phase === "defeat")) {
+    const daily = state.challenge?.mode === "daily" ? state.challenge : null;
+    const dailyKey = daily ? `${daily.dateKey}:${daily.seed}:${state.floor}:${state.phase}` : null;
+    if (
+      daily?.dateKey &&
+      dailyKey !== this.recordedDailyKey &&
+      (state.phase === "victory" || state.phase === "defeat")
+    ) {
       const summary = this.engine.getRunSummary();
       saveDailyRecord({
-        dateKey: this.sessionDaily,
-        seed: dailySeedForKey(this.sessionDaily),
+        dateKey: daily.dateKey,
+        seed: daily.seed,
+        ruleset: "p7",
         floor: state.floor,
         victory: state.phase === "victory",
         averageScore: summary.averageScore,
         finishedAt: new Date().toISOString()
       });
-      this.sessionDaily = null;
+      this.recordedDailyKey = dailyKey;
     }
 
     // P4 档案结算：同一局结束只写一次（种+层+相 去重）
@@ -1670,7 +1712,7 @@ export class GameUI {
           <div class="help-step"><b>1</b><div><strong>逐层择路</strong><small>普通楼层随机出现战斗、事件、歇脚处与夜市；第五层为强敌，第十层为最终首领。</small></div></div>
           <div class="help-step"><b>2</b><div><strong>开声出招 / 破阵拍</strong><small>说出卡牌上的粤语短句即可施法；无声环境改用「破阵拍」节奏判定，随时可在设置页切换引擎。</small></div></div>
           <div class="help-step"><b>3</b><div><strong>发音影响威力</strong><small>未稳 0.52 倍、入门 0.78 倍、清晰 1 倍、正音 1.32 倍。端侧引擎额外按粤语六调评「调准」；标题屏「练习场」可看基频曲线逐句校准。</small></div></div>
-          <div class="help-step"><b>4</b><div><strong>构筑与存档</strong><small>战后从三张技能中选一张，收集遗物和道具。每次行动都会自动保存到当前设备。</small></div></div>
+          <div class="help-step"><b>4</b><div><strong>构筑与存档</strong><small>战役新局启用 36 招式 / 26 奇遇 / 8 道具扩展池（逐幕解锁）。经典塔与旧存档保留原规则。每日固定两条词缀，无尽每五层重抽；每次行动自动保存。</small></div></div>
           <div class="help-step"><b>5</b><div><strong>开口有回响</strong><small>低分短句自动进「错词本」，标题屏每日推三句复习；「学习报告」看字准/调准/信心/词汇四维。</small></div></div>
         </div>
         <div class="notice-strip">端侧模型（约 230MB，可断点续传）下载一次即可完全离线游玩：设置 → 端侧模型。</div>
@@ -1681,11 +1723,12 @@ export class GameUI {
   // ─── P3 学习闭环：练习场 / 学习报告 / 每日挑战 / 错词记录 ─────────────────
 
   private startDailyChallenge(): void {
-    this.sessionDaily = dateKeyFor(new Date());
+    const dateKey = dateKeyFor(new Date());
+    this.recordedDailyKey = null;
     this.closeModal();
     clearSave();
-    this.engine.startNew(dailySeedForKey(this.sessionDaily));
-    this.showToast("今日挑战开局：全服同一局，比比谁走得远");
+    this.engine.startDaily(dailySeedForKey(dateKey), dateKey);
+    this.showToast("今日挑战开局：同一本地日期、同种子、同词缀");
   }
 
   private currentPracticeSkill(): Skill | null {

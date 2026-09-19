@@ -4,6 +4,8 @@
  */
 
 export interface DailyRecord {
+  /** 版本分榜，旧纪录不与扩展词缀局直接比较。 */
+  ruleset?: "legacy" | "p7";
   /** 挑战种子对应的日期键 */
   dateKey: string;
   seed: number;

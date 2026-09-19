@@ -33,7 +33,9 @@ npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 
 - `src/adapters/` 是端口实现（audio/tts/voice/storage/platform）。
 - `src/ui/` 渲染与演出：模板字符串直渲 + `src/ui/fx/` 演出编排（FxDirector）。
 - 设计决策的单一事实源：`docs/REDESIGN-PLAN.md`（P0–P5 历史）与
-  `docs/FX-UPGRADE-PLAN.md`（P6 动画升级，F1 已完成 / F2 声之形 / F3 治理）。
+  `docs/FX-UPGRADE-PLAN.md`（P6 三期完成）及 `docs/CONTENT-EXPANSION-PLAN.md`（P7 三幕深耕）。
+- 内容兼容：缺失 `ruleset` 的旧局按 legacy；P7 新内容只经 `skillsFor/eventsFor/itemsFor` 进入对应新局。
+  不直接修改基础内容表或用扩展池替换基础池。新增参数须审查组合根包装器是否完整转发。
 
 ## 2. 黄金契约与确定性
 
@@ -45,9 +47,10 @@ npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 
 ```bash
 npx biome check .          # 风格（或 npm run check:fix）
 npx tsc --noEmit           # 严格类型
-npx vitest run             # 单测+契约+仿真（现 174 条）
-npx vite build && npx vite-node scripts/perf-budget.ts   # 首包 ≤350KB gzip（现 ~61）
-npx playwright test        # E2E（现 6 条；需 npx playwright install chromium）
+npx vitest run             # 单测+契约+仿真（现 269 条）
+npx vite build && npx vite-node scripts/perf-budget.ts   # 首包 ≤350KB gzip（现 ~70.7）
+npm run sim:p7            # 扩展版独立平衡报表（基础版仍用 npm run sim）
+npx playwright test        # E2E（现 13 条；需 npx playwright install chromium）
 ```
 
 ## 4. 不可触碰的红线

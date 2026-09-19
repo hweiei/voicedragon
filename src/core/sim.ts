@@ -13,7 +13,7 @@
  * 随机 Bot（random）= 下限玩家：均匀决策。CI 只对 greedy 的胜率带 45–65% 设阈值。
  */
 
-import { lookupSkill } from "./content";
+import { type ContentRuleset, lookupSkill } from "./content";
 import type { Skill } from "./data";
 import { GameEngine } from "./engine";
 import type { GameState } from "./engine";
@@ -67,6 +67,7 @@ export interface SimOptions {
   seed: number;
   bot: BotId;
   profile?: Partial<BotProfile>;
+  ruleset?: ContentRuleset;
 }
 
 const MAX_TURNS_PER_BATTLE = 60;
@@ -82,7 +83,11 @@ function sampleScore(rng: () => number, mean: number, sd: number): number {
 function threatScore(state: GameState): number {
   const combat = state.combat!;
   const intent = combat.enemy.pattern[(combat.turn - 1) % combat.enemy.pattern.length];
-  const attack = Math.round(combat.enemy.baseAttack * (intent.amount || 0)) * (intent.hits || 1);
+  const raw =
+    state.ruleset === "p7" && intent.type === "silence"
+      ? intent.amount || 0
+      : combat.enemy.baseAttack * (intent.amount || 0);
+  const attack = Math.round(raw) * (intent.hits || 1);
   if (intent.type === "attack" || intent.type === "silence" || intent.type === "guardAttack") {
     return attack;
   }
@@ -116,6 +121,19 @@ function cardWeight(skill: Skill, state: GameState): number {
     default:
       return skill.power;
   }
+}
+
+/** P7 扩池策略：护甲足够时不继续盲目叠甲；按费用比较，声势计入多段。 */
+function p7CardWeight(skill: Skill, state: GameState): number {
+  let weight = cardWeight(skill, state);
+  const incoming = threatScore(state);
+  const armor = state.player!.armor;
+  if (["guard", "cleanse", "tempo"].includes(skill.type) && armor >= incoming) weight *= 0.15;
+  if (skill.type === "hybrid" && armor >= incoming) weight = skill.power;
+  if (["attack", "multi", "hybrid", "weaken"].includes(skill.type))
+    weight += state.player!.strength * (skill.hits ?? 1);
+  if (skill.id === "dim-gwo-luk-ze" && state.combat!.enemy.armor > 0) weight += 10;
+  return weight / Math.max(1, skill.cost);
 }
 
 /** 节点类型基准优先级：贪心 Bot 的登楼启发式（会再按场面动态调整）。 */
@@ -239,7 +257,7 @@ function pickEventChoice(state: GameState, rng: () => number, bot: BotId): strin
 export function simulateCampaign(options: SimOptions): SimRunResult {
   const profile = { ...BOTS[options.bot], ...options.profile };
   const engine = new GameEngine();
-  engine.startCampaign(options.act, options.seed);
+  engine.startCampaign(options.act, options.seed, options.ruleset);
   // Bot 决策流独立于引擎 LCG：同种子下游戏随机与决策随机都可复现
   const rng = mulberry32((options.seed ^ 0x5eed_b07 ^ (options.act * 0x85eb_ca6b)) >>> 0);
 
@@ -285,12 +303,34 @@ export function simulateCampaign(options: SimOptions): SimRunResult {
             continue;
           }
         }
+        // P7 新道具要有策略消费者，不能把不会使用道具的旧 Bot 当真人调平衡。
+        if (options.ruleset === "p7" && options.bot === "greedy") {
+          const player = state.player!;
+          const combat = state.combat!;
+          const tactical = player.items.findIndex((id) => {
+            if (id === "p7-bamboo-shield") return threatScore(state) > player.armor;
+            if (id === "p7-salt-rinse")
+              return player.buffs.some((buff) =>
+                ["voice-interference", "vulnerable"].includes(buff.id)
+              );
+            if (id === "p7-ginger-shot") return combat.energy <= 1;
+            if (id === "p7-crack-bell") return combat.enemy.vulnerable === 0 && combat.energy >= 2;
+            if (id === "p7-fan")
+              return combat.energy > 0 && !combat.hand.some((card) => engine.canUseSkill(card.id));
+            return false;
+          });
+          if (tactical >= 0) {
+            engine.useItem(tactical);
+            continue;
+          }
+        }
         // 出牌：贪心按权重降序；随机打乱
         const hand = [...state.combat!.hand];
         if (options.bot === "greedy") {
-          hand.sort(
-            (a, b) => cardWeight(lookupSkill(b.id)!, state) - cardWeight(lookupSkill(a.id)!, state)
-          );
+          hand.sort((a, b) => {
+            const weight = options.ruleset === "p7" ? p7CardWeight : cardWeight;
+            return weight(lookupSkill(b.id)!, state) - weight(lookupSkill(a.id)!, state);
+          });
         } else {
           for (let i = hand.length - 1; i > 0; i -= 1) {
             const j = Math.floor(rng() * (i + 1));
@@ -432,6 +472,7 @@ export function simulateAct(options: {
   runs: number;
   baseSeed?: number;
   profile?: Partial<BotProfile>;
+  ruleset?: ContentRuleset;
 }): SimSummary {
   const { act, bot, runs } = options;
   const baseSeed = options.baseSeed ?? 0x2026_0919;
@@ -443,7 +484,13 @@ export function simulateAct(options: {
   let timeouts = 0;
   for (let index = 0; index < runs; index += 1) {
     const seed = (baseSeed + act * 0x1b873593 + index * 0x9e3779b9) >>> 0;
-    const result = simulateCampaign({ act, seed, bot, profile: options.profile });
+    const result = simulateCampaign({
+      act,
+      seed,
+      bot,
+      profile: options.profile,
+      ruleset: options.ruleset
+    });
     if (result.win) wins += 1;
     floorSum += result.floor;
     turnsSum += result.turns;

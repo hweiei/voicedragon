@@ -18,7 +18,8 @@
     "test:e2e": "vite build && playwright test",
     "codegraph": "codegraph init --yes . || codegraph sync .",
     "codegraph:sync": "codegraph sync .",
-    "codegraph:status": "codegraph status ."
+    "codegraph:status": "codegraph status .",
+    "sim:p7": "vite-node scripts/p7-balance.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
