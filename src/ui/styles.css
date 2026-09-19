@@ -2571,9 +2571,91 @@ body.reduce-motion *::after {
   margin-bottom: 12px;
 }
 
-.practice-actions {
+.practice-actions,
+.voice-result-actions {
   display: grid;
   gap: 10px;
+}
+
+/* P8-C 音节教练：文字档位与边框并用，不依赖颜色传达。 */
+.voice-coach-card {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid rgba(214, 169, 77, 0.34);
+  border-radius: 14px;
+  background: rgba(214, 169, 77, 0.08);
+}
+
+.voice-coach-card.no-tone {
+  border-style: dashed;
+  background: rgba(232, 209, 167, 0.04);
+}
+
+.voice-coach-card h3,
+.voice-coach-card p {
+  margin: 0;
+}
+
+.voice-coach-card > p:last-child {
+  color: var(--paper-soft);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.tone-result-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.tone-result-chip {
+  display: grid;
+  gap: 2px;
+  min-width: 82px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--ink-3);
+}
+
+.tone-result-chip b {
+  color: var(--paper);
+  font-size: 12px;
+}
+
+.tone-result-chip small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.tone-result-chip.level-steady {
+  border-color: rgba(85, 190, 142, 0.5);
+}
+
+.tone-result-chip.level-close {
+  border-color: rgba(214, 169, 77, 0.55);
+}
+
+.tone-result-chip.level-focus,
+.tone-result-chip.focus {
+  border-width: 2px;
+  border-color: var(--red-bright);
+}
+
+.tone-chip small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.tone-chip.focus {
+  border-width: 2px;
+  border-color: var(--red-bright);
+}
+
+.tone-chip.level-steady small {
+  color: var(--jade);
 }
 
 /* 学习报告 */
@@ -2620,6 +2702,79 @@ body.reduce-motion *::after {
   margin: 6px 0;
   color: var(--paper-soft);
   font-size: 13px;
+}
+
+.tone-mastery-panel {
+  margin-bottom: 18px;
+}
+
+.tone-mastery-panel .section-label {
+  margin-top: 0;
+}
+
+.tone-mastery-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tone-mastery-card {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--ink-3);
+}
+
+.tone-mastery-card.focus {
+  border: 2px solid var(--red-bright);
+  padding: 8px;
+}
+
+.tone-mastery-card span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--paper-soft);
+  font-size: 12px;
+}
+
+.tone-mastery-card span b {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--gold);
+  color: var(--ink);
+}
+
+.tone-mastery-card strong {
+  font-size: 16px;
+}
+
+.tone-mastery-card small {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.focus-practice-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (max-width: 430px) {
+  .tone-mastery-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .focus-practice-list {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ═══════════════ P4 留存层：主题皮肤 · 成就 · 图鉴 · 自适应徽标 ═══════════════ */

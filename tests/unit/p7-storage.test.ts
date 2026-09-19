@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { loadDailyRecords, loadGame, saveDailyRecord, saveGame } from "../../src/adapters/storage";
+import {
+  loadDailyRecords,
+  loadGame,
+  loadSrsStore,
+  saveDailyRecord,
+  saveGame
+} from "../../src/adapters/storage";
 import type { DailyRecord } from "../../src/core/daily";
 import { GameEngine } from "../../src/core/engine";
 
@@ -29,6 +35,28 @@ test("同日新旧规则独立榜；各自只保留更优成绩", () => {
   expect(loadDailyRecords("p7")[record.dateKey].floor).toBe(3);
   saveDailyRecord({ ...record, ruleset: "p7", floor: 5, victory: false });
   expect(loadDailyRecords("p7")[record.dateKey].floor).toBe(5);
+});
+
+test("P8-C 加载旧 SRS 档案时补齐六调画像且保留原统计", () => {
+  localStorage.setItem(
+    "voice-tower-srs-v1",
+    JSON.stringify({
+      entries: {},
+      stats: {
+        voiceAttempts: 7,
+        sumWord: 500,
+        toneCount: 2,
+        sumTone: 140,
+        sumConfidence: 560,
+        skillsUsed: ["ding-ngang-soeng"]
+      }
+    })
+  );
+  const store = loadSrsStore();
+  expect(store.stats.voiceAttempts).toBe(7);
+  expect(store.stats.skillsUsed).toEqual(["ding-ngang-soeng"]);
+  expect(Object.keys(store.stats.toneMastery)).toEqual(["1", "2", "3", "4", "5", "6"]);
+  expect(store.stats.toneMastery[6].attempts).toBe(0);
 });
 
 test("存档适配器往返保留P7规则、词缀和新道具", () => {

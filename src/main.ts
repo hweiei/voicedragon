@@ -18,7 +18,7 @@ import {
 import type { CampaignActMeta } from "./adapters/storage";
 import { SpeechTts } from "./adapters/tts";
 import { createVoiceAdapter } from "./adapters/voice";
-import type { VoiceAdapter, VoiceMode } from "./adapters/voice";
+import type { VoiceAdapter, VoiceMode, VoiceScoreResult } from "./adapters/voice";
 import type { SenseVoiceAdapter } from "./adapters/voice/sensevoice/adapter";
 import {
   clearModel,
@@ -255,5 +255,6 @@ void buildAdapter(settings.voiceMode).then((adapter) => {
   getState: () => engine.state,
   startCampaign: (...args: Parameters<GameEngine["startCampaign"]>) =>
     engine.startCampaign(...args),
+  showVoiceResult: (result: VoiceScoreResult) => ui.debugShowVoiceResult(result),
   voiceServices
 };

@@ -144,6 +144,11 @@ export interface ToneScoreDetail {
   /** 每个音节各自的调准分（与 expectedTones 对齐） */
   perSyllable: number[];
   expectedTones: number[];
+  /**
+   * 保守的最接近调型：只有另一调型斜率显著不同且明显更接近时才与目标调不同；
+   * 水平调族/相近升调不武断报错，供学习反馈而非重新计分。
+   */
+  detectedTones: number[];
   /** 用户实际轮廓（相对半音，重采样长曲线，供练习场绘图） */
   userCurve: number[];
   /** 期望调型曲线（与 userCurve 同长） */
@@ -180,7 +185,7 @@ function scoreSegment(
   segment: ContourPoint[],
   expectedTone: number,
   templateMedian: number
-): number {
+): { score: number; detectedTone: number } {
   const user = resamplePoints(segment, TONE_TUNING.resamplePoints);
   let expectedDist = Number.POSITIVE_INFINITY;
   let bestDist = Number.POSITIVE_INFINITY;
@@ -204,10 +209,10 @@ function scoreSegment(
   const tonesDiffer =
     Math.abs(TONE_TEMPLATES[expectedTone].slope - TONE_TEMPLATES[bestTone].slope) >=
     TONE_TUNING.slopeSeparation;
-  if (bestTone !== expectedTone && tonesDiffer && expectedDist - bestDist > 0.55) {
-    score *= TONE_TUNING.mismatchPenalty;
-  }
-  return score;
+  const confidentMismatch =
+    bestTone !== expectedTone && tonesDiffer && expectedDist - bestDist > 0.55;
+  if (confidentMismatch) score *= TONE_TUNING.mismatchPenalty;
+  return { score, detectedTone: confidentMismatch ? bestTone : expectedTone };
 }
 
 /**
@@ -232,19 +237,21 @@ export function scoreToneContour(frames: PitchFrame[], jyutping: string): ToneSc
   const template = fullTemplate.map((value) => value - templateMedian).slice(0, DISPLAY_POINTS);
 
   const segments = splitSyllables(points, tones.length);
-  const perSyllable = segments.map((segment, index) =>
+  const segmentScores = segments.map((segment, index) =>
     scoreSegment(segment, tones[index], templateMedian)
   );
   // 几何平均（下限 0.5 防塌零）：单个错调音节会被显著放大，整句评价更接近人耳听感
   const geometric = Math.exp(
-    perSyllable.reduce((sum, value) => sum + Math.log(Math.max(0.5, value)), 0) / perSyllable.length
+    segmentScores.reduce((sum, value) => sum + Math.log(Math.max(0.5, value.score)), 0) /
+      segmentScores.length
   );
   const score = Math.round(geometric);
 
   return {
     score,
-    perSyllable: perSyllable.map((value) => Math.round(value)),
+    perSyllable: segmentScores.map((value) => Math.round(value.score)),
     expectedTones: tones,
+    detectedTones: segmentScores.map((value) => value.detectedTone),
     userCurve: resamplePoints(points, template.length),
     template
   };

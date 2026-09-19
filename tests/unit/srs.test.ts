@@ -11,6 +11,7 @@ import {
   dailyPicks,
   dueEntries,
   emptySrsStore,
+  normalizeToneMastery,
   qualityFromScore,
   recordAttempt
 } from "../../src/core/srs";
@@ -79,6 +80,81 @@ describe("srs deck", () => {
     expect(report.confidenceAvg).toBe(85);
     expect(report.vocab).toBe(2);
     expect(report.mistakes.map((entry) => entry.id)).toEqual(["s2"]); // s1 ≥65 不进错词本
+  });
+
+  test("P8-C accumulates six-tone syllable mastery and remembers the weakest syllable", () => {
+    const store = emptySrsStore();
+    recordAttempt(
+      store,
+      "ding-ngang-soeng",
+      {
+        score: 58,
+        wordScore: 82,
+        toneScore: 44,
+        expectedTones: [2, 6, 6],
+        toneSyllableScores: [78, 35, 51]
+      },
+      NOW
+    );
+    expect(store.stats.toneMastery[2]).toMatchObject({ attempts: 1, sumScore: 78, bestScore: 78 });
+    expect(store.stats.toneMastery[6]).toMatchObject({
+      attempts: 2,
+      sumScore: 86,
+      bestScore: 51,
+      lastScore: 51
+    });
+    expect(store.entries["ding-ngang-soeng"]).toMatchObject({
+      lastWordScore: 82,
+      lastToneScore: 44,
+      focusSyllable: 1,
+      focusTone: 6
+    });
+  });
+
+  test("malformed syllable arrays never pollute tone mastery", () => {
+    const store = emptySrsStore();
+    recordAttempt(store, "bad", {
+      score: 50,
+      expectedTones: [1, 9],
+      toneSyllableScores: [70]
+    });
+    expect(Object.values(store.stats.toneMastery).every((entry) => entry.attempts === 0)).toBe(
+      true
+    );
+  });
+
+  test("learning report identifies the weakest sampled tone and linked mistake phrases", () => {
+    const store = emptySrsStore();
+    recordAttempt(store, "tone-one", {
+      score: 55,
+      toneScore: 72,
+      expectedTones: [1],
+      toneSyllableScores: [72]
+    });
+    recordAttempt(store, "tone-four", {
+      score: 45,
+      toneScore: 31,
+      expectedTones: [4],
+      toneSyllableScores: [31]
+    });
+    const report = buildLearningReport(store, NOW);
+    expect(report.focusTone).toBe(4);
+    expect(report.focusPracticeIds).toEqual(["tone-four"]);
+    expect(report.toneMastery.find((entry) => entry.tone === 4)).toMatchObject({
+      average: 31,
+      attempts: 1
+    });
+    expect(report.toneMastery.find((entry) => entry.tone === 2)?.average).toBeNull();
+  });
+
+  test("old or partial tone mastery normalizes to six safe buckets", () => {
+    const normalized = normalizeToneMastery({
+      2: { attempts: 3, sumScore: 210, bestScore: 120, lastScore: -8 },
+      4: { attempts: Number.NaN, sumScore: 30 }
+    });
+    expect(Object.keys(normalized)).toEqual(["1", "2", "3", "4", "5", "6"]);
+    expect(normalized[2]).toEqual({ attempts: 3, sumScore: 210, bestScore: 100, lastScore: 0 });
+    expect(normalized[4].attempts).toBe(0);
   });
 });
 

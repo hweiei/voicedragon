@@ -64,6 +64,7 @@ describe("tone scoring on synthetic contours", () => {
     expect(first.score).toBeGreaterThanOrEqual(85);
     expect(first).toEqual(second); // 双通道评分回放一致
     expect(first.expectedTones).toEqual([2, 6, 6]);
+    expect(first.detectedTones).toEqual([2, 6, 6]);
     expect(first.perSyllable).toHaveLength(3);
     expect(first.userCurve).toHaveLength(first.template.length);
   });
@@ -81,9 +82,15 @@ describe("tone scoring on synthetic contours", () => {
     const flat = scoreToneContour(synthFrames([1, 1, 1]), jyutping)!.score;
     expect(flat).toBeLessThan(perfect - 20);
     // 升降完全颠倒 (4 1 2)——应重罚
-    const inverted = scoreToneContour(synthFrames([4, 1, 2]), jyutping)!.score;
+    const invertedResult = scoreToneContour(synthFrames([4, 1, 2]), jyutping)!;
+    const inverted = invertedResult.score;
     expect(inverted).toBeLessThanOrEqual(flat);
     expect(inverted).toBeLessThan(70);
+    expect(
+      invertedResult.detectedTones.some(
+        (tone, index) => tone !== invertedResult.expectedTones[index]
+      )
+    ).toBe(true);
   });
 
   test("same tones in a different voice pitch still score high (speaker independence)", () => {

@@ -4,6 +4,17 @@
  * 「每日三句」= 到期优先 → 最弱优先。所有函数确定性、可单测。
  */
 
+export type TrackedTone = 1 | 2 | 3 | 4 | 5 | 6;
+
+export interface ToneMasteryStat {
+  attempts: number;
+  sumScore: number;
+  bestScore: number;
+  lastScore: number;
+}
+
+export type ToneMasteryMap = Record<TrackedTone, ToneMasteryStat>;
+
 export interface SrsEntry {
   /** 技能卡 id */
   id: string;
@@ -19,6 +30,12 @@ export interface SrsEntry {
   lapses: number;
   addedAt: string;
   lastReviewAt: string;
+  /** P8-C 最近一次真实语音维度；旧档可缺失。 */
+  lastWordScore?: number;
+  lastToneScore?: number | null;
+  /** 最近一次最低分音节（0-based）及其目标调。 */
+  focusSyllable?: number;
+  focusTone?: TrackedTone;
 }
 
 /** 全局练习聚合（学习报告四轴：字准 / 调准 / 信心 / 词汇量）。 */
@@ -29,6 +46,8 @@ export interface SrsStats {
   sumTone: number;
   sumConfidence: number;
   skillsUsed: string[];
+  /** P8-C 六调音节画像；只累计有本地 F0 明细的真实语音。 */
+  toneMastery: ToneMasteryMap;
 }
 
 export interface SrsStore {
@@ -40,6 +59,36 @@ export interface SrsStore {
 export const SRS_LEECH_THRESHOLD = 65;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const TRACKED_TONES: TrackedTone[] = [1, 2, 3, 4, 5, 6];
+
+export function emptyToneMastery(): ToneMasteryMap {
+  return Object.fromEntries(
+    TRACKED_TONES.map((tone) => [tone, { attempts: 0, sumScore: 0, bestScore: 0, lastScore: 0 }])
+  ) as ToneMasteryMap;
+}
+
+/** 旧档/异常局部字段归一；不修改传入对象。 */
+export function normalizeToneMastery(input: unknown): ToneMasteryMap {
+  const base = emptyToneMastery();
+  const finite = (value: unknown): value is number =>
+    typeof value === "number" && Number.isFinite(value);
+  if (!input || typeof input !== "object") return base;
+  const source = input as Partial<Record<TrackedTone, Partial<ToneMasteryStat>>>;
+  for (const tone of TRACKED_TONES) {
+    const value = source[tone];
+    if (!value || typeof value !== "object") continue;
+    const attempts = finite(value.attempts) ? Math.max(0, Math.floor(value.attempts)) : 0;
+    const sumScore = finite(value.sumScore) ? Math.max(0, Math.round(value.sumScore)) : 0;
+    const bestScore = finite(value.bestScore)
+      ? Math.max(0, Math.min(100, Math.round(value.bestScore)))
+      : 0;
+    const lastScore = finite(value.lastScore)
+      ? Math.max(0, Math.min(100, Math.round(value.lastScore)))
+      : 0;
+    base[tone] = { attempts, sumScore, bestScore, lastScore };
+  }
+  return base;
+}
 
 export function emptySrsStore(): SrsStore {
   return {
@@ -50,7 +99,8 @@ export function emptySrsStore(): SrsStore {
       toneCount: 0,
       sumTone: 0,
       sumConfidence: 0,
-      skillsUsed: []
+      skillsUsed: [],
+      toneMastery: emptyToneMastery()
     }
   };
 }
@@ -86,6 +136,56 @@ export interface AttemptInput {
   wordScore?: number | null;
   toneScore?: number | null;
   confidence?: number | null;
+  /** P8-C 音节明细；两数组等长且合法时才累计六调画像。 */
+  expectedTones?: number[] | null;
+  toneSyllableScores?: number[] | null;
+}
+
+interface AttemptFocus {
+  syllable: number;
+  tone: TrackedTone;
+  score: number;
+}
+
+function isTrackedTone(value: number): value is TrackedTone {
+  return Number.isInteger(value) && value >= 1 && value <= 6;
+}
+
+function accumulateToneMastery(stats: SrsStats, attempt: AttemptInput): AttemptFocus | null {
+  const tones = attempt.expectedTones;
+  const scores = attempt.toneSyllableScores;
+  if (!tones || !scores || !tones.length || tones.length !== scores.length) return null;
+  stats.toneMastery = normalizeToneMastery(stats.toneMastery);
+  let focus: AttemptFocus | null = null;
+  for (let index = 0; index < tones.length; index += 1) {
+    const tone = tones[index];
+    const rawScore = scores[index];
+    if (!isTrackedTone(tone) || !Number.isFinite(rawScore)) continue;
+    const score = Math.max(0, Math.min(100, Math.round(rawScore)));
+    const bucket = stats.toneMastery[tone];
+    bucket.attempts += 1;
+    bucket.sumScore += score;
+    bucket.bestScore = Math.max(bucket.bestScore, score);
+    bucket.lastScore = score;
+    if (!focus || score < focus.score) focus = { syllable: index, tone, score };
+  }
+  return focus;
+}
+
+function applyAttemptDetail(
+  entry: SrsEntry,
+  attempt: AttemptInput,
+  focus: AttemptFocus | null
+): void {
+  entry.lastWordScore = Math.round(attempt.wordScore ?? attempt.score);
+  entry.lastToneScore =
+    attempt.toneScore != null && Number.isFinite(attempt.toneScore)
+      ? Math.round(attempt.toneScore)
+      : null;
+  if (focus) {
+    entry.focusSyllable = focus.syllable;
+    entry.focusTone = focus.tone;
+  }
 }
 
 /**
@@ -107,12 +207,14 @@ export function recordAttempt(
   }
   stats.sumConfidence += Math.round(attempt.confidence ?? 0);
   if (!stats.skillsUsed.includes(skillId)) stats.skillsUsed.push(skillId);
+  const focus = accumulateToneMastery(stats, attempt);
 
   const existing = store.entries[skillId];
   if (existing) {
     const quality = qualityFromScore(attempt.score);
     existing.lastScore = attempt.score;
     existing.bestScore = Math.max(existing.bestScore, attempt.score);
+    applyAttemptDetail(existing, attempt, focus);
     nextSchedule(existing, quality, now);
     return store;
   }
@@ -131,6 +233,7 @@ export function recordAttempt(
     };
     entry.intervalDays = 1;
     entry.dueAt = new Date(now.getTime() + DAY_MS).toISOString();
+    applyAttemptDetail(entry, attempt, focus);
     store.entries[skillId] = entry;
   }
   return store;
@@ -151,8 +254,18 @@ export function dailyPicks(store: SrsStore, now = new Date(), count = 3): SrsEnt
   const picked = new Set(due.map((entry) => entry.id));
   const rest = Object.values(store.entries)
     .filter((entry) => !picked.has(entry.id))
-    .sort((a, b) => a.bestScore - b.bestScore || b.lapses - a.lapses);
+    .sort(
+      (a, b) =>
+        a.bestScore - b.bestScore ||
+        (a.lastToneScore ?? 101) - (b.lastToneScore ?? 101) ||
+        b.lapses - a.lapses
+    );
   return [...due, ...rest].slice(0, count);
+}
+
+export interface ToneMasteryReport extends ToneMasteryStat {
+  tone: TrackedTone;
+  average: number | null;
 }
 
 export interface LearningReport {
@@ -167,13 +280,39 @@ export interface LearningReport {
   /** 错词本全量（按 worst 排序） */
   mistakes: SrsEntry[];
   dueCount: number;
+  toneMastery: ToneMasteryReport[];
+  /** 已采样声调中均分最低者；没有 F0 音节数据时为 null。 */
+  focusTone: TrackedTone | null;
+  /** 与 focusTone 对应的错词练习入口（最多三句）。 */
+  focusPracticeIds: string[];
 }
 
 export function buildLearningReport(store: SrsStore, now = new Date()): LearningReport {
   const stats = store.stats;
   const mistakes = Object.values(store.entries).sort(
-    (a, b) => a.bestScore - b.bestScore || b.lapses - a.lapses
+    (a, b) =>
+      a.bestScore - b.bestScore ||
+      (a.lastToneScore ?? 101) - (b.lastToneScore ?? 101) ||
+      b.lapses - a.lapses
   );
+  const mastery = normalizeToneMastery(stats.toneMastery);
+  const toneMastery: ToneMasteryReport[] = TRACKED_TONES.map((tone) => ({
+    tone,
+    ...mastery[tone],
+    average: mastery[tone].attempts
+      ? Math.round(mastery[tone].sumScore / mastery[tone].attempts)
+      : null
+  }));
+  const focusTone =
+    toneMastery
+      .filter((entry) => entry.average != null)
+      .sort((a, b) => a.average! - b.average! || a.tone - b.tone)[0]?.tone ?? null;
+  const focusPracticeIds = focusTone
+    ? mistakes
+        .filter((entry) => entry.focusTone === focusTone)
+        .slice(0, 3)
+        .map((entry) => entry.id)
+    : [];
   return {
     voiceAttempts: stats.voiceAttempts,
     wordAvg: stats.voiceAttempts ? Math.round(stats.sumWord / stats.voiceAttempts) : 0,
@@ -181,6 +320,9 @@ export function buildLearningReport(store: SrsStore, now = new Date()): Learning
     confidenceAvg: stats.voiceAttempts ? Math.round(stats.sumConfidence / stats.voiceAttempts) : 0,
     vocab: stats.skillsUsed.length,
     mistakes,
-    dueCount: dueEntries(store, now).length
+    dueCount: dueEntries(store, now).length,
+    toneMastery,
+    focusTone,
+    focusPracticeIds
   };
 }

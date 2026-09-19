@@ -78,6 +78,7 @@ import {
   previewTemplateCurve,
   resamplePoints
 } from "../core/tone";
+import { buildVoiceCoach } from "../core/voice-coach";
 import { playBattleFx } from "./fx";
 import { VoiceAura } from "./fx/voice-aura";
 import { drawRunPoster, sharePoster } from "./poster";
@@ -150,6 +151,26 @@ function escapeHtml(value = ""): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+/** P8-C 可解释语音反馈；只翻译评分元数据，不参与战斗数值。 */
+function voiceCoachMarkup(jyutping: string, result: VoiceScoreResult): string {
+  if (result.source === "qte" || result.source === "manual-test") return "";
+  const coach = buildVoiceCoach(jyutping, result.toneDetail, result.similarity ?? result.score);
+  const syllables = coach.syllables
+    .map(
+      (part) => `<span class="tone-result-chip level-${part.level}${part.isFocus ? " focus" : ""}">
+        <b>${escapeHtml(part.text)}</b>
+        <small>${part.tone}调 · ${part.score}分 · ${part.levelLabel}</small>
+      </span>`
+    )
+    .join("");
+  return `<aside class="voice-coach-card${coach.hasToneData ? "" : " no-tone"}" aria-label="本次发音建议">
+    <p class="eyebrow">下一遍怎么练</p>
+    <h3>${escapeHtml(coach.headline)}</h3>
+    ${syllables ? `<div class="tone-result-row">${syllables}</div>` : ""}
+    <p>${escapeHtml(coach.advice)}</p>
+  </aside>`;
 }
 
 function percent(value: number, max: number): number {
@@ -327,7 +348,7 @@ function titleReviewStrip(): string {
       return `<button class="review-chip" type="button" data-action="practice-select" data-skill-id="${escapeHtml(skill.id)}">
         <strong>${escapeHtml(skill.phrase)}</strong>
         <small>${escapeHtml(skill.jyutping)}</small>
-        <span class="review-score">${entry.lastScore}分</span>
+        <span class="review-score">${entry.lastScore}分${entry.focusTone ? ` · 焦点${entry.focusTone}调` : ""}</span>
       </button>`;
     })
     .join("");
@@ -880,6 +901,11 @@ export class GameUI {
     this.voiceAdapter = adapter;
   }
 
+  /** 自动化验收钩子：必须先由真实卡牌动作建立 pendingVoice；不持久化、不结算。 */
+  debugShowVoiceResult(result: VoiceScoreResult): void {
+    this.showVoiceResult(result);
+  }
+
   private get adapter(): VoiceAdapter | null {
     return this.voiceAdapter;
   }
@@ -1390,8 +1416,12 @@ export class GameUI {
                 }<div><strong>${result.score}分</strong><small>综合录入</small></div>`
           }
         </div>
-        <button class="primary-button full-button" type="button" data-action="apply-voice">发动「${escapeHtml(skill.name)}」</button>
-        <p class="voice-disclaimer">遗物、喉糖、永久声韵与敌方干扰会在发动时计入最终战斗分数。</p>
+        ${voiceCoachMarkup(skill.jyutping, result)}
+        <div class="voice-result-actions">
+          <button class="primary-button full-button" type="button" data-action="apply-voice">发动「${escapeHtml(skill.name)}」</button>
+          ${isQte ? "" : '<button class="secondary-button full-button" type="button" data-action="listen-sample">🔊 再听整句</button>'}
+        </div>
+        <p class="voice-disclaimer">遗物、喉糖、永久声韵与敌方干扰会在发动时计入最终战斗分数。音节切分为短句近似，不等同专业测评。</p>
       </div>`;
   }
 
@@ -1894,7 +1924,9 @@ export class GameUI {
       score: result.score,
       wordScore: result.similarity ?? result.score,
       toneScore: result.toneScore ?? null,
-      confidence: result.confidence ?? null
+      confidence: result.confidence ?? null,
+      expectedTones: result.toneDetail?.expectedTones ?? null,
+      toneSyllableScores: result.toneDetail?.perSyllable ?? null
     });
     saveSrsStore(store);
   }
@@ -1906,14 +1938,20 @@ export class GameUI {
       (entry) =>
         `<button class="practice-chip${entry.id === skill.id ? " active" : ""}" type="button" data-action="practice-select" data-skill-id="${escapeHtml(entry.id)}">${escapeHtml(entry.phrase)}</button>`
     ).join("");
-    const toneChips = guides
-      .map(
-        (guide) =>
-          `<span class="tone-chip" title="${escapeHtml(guide.hint)}"><b>${guide.tone}</b>${escapeHtml(guide.name)}</span>`
-      )
-      .join("");
     const result = this.practiceResult;
-    const detail = result?.toneDetail;
+    const coach = result
+      ? buildVoiceCoach(skill.jyutping, result.toneDetail, result.similarity ?? result.score)
+      : null;
+    const toneChips = guides
+      .map((guide, index) => {
+        const part = coach?.syllables[index];
+        const classes = part ? ` level-${part.level}${part.isFocus ? " focus" : ""}` : "";
+        return `<span class="tone-chip${classes}" title="${escapeHtml(guide.hint)}">
+          <b>${guide.tone}</b><span>${escapeHtml(guide.name)}</span>
+          ${part ? `<small>${part.score}分 · ${part.levelLabel}</small>` : ""}
+        </span>`;
+      })
+      .join("");
     const breakdown = result
       ? `
       <div class="score-breakdown practice-breakdown">
@@ -1921,16 +1959,7 @@ export class GameUI {
         <div><strong>${result.toneScore != null ? `${result.toneScore}分` : "—"}</strong><small>调准${result.toneScore == null ? "（无基频通道）" : ""}</small></div>
         <div><strong>${result.score}分</strong><small>综合 · ${escapeHtml(scoreLabel(result.score))}</small></div>
       </div>
-      ${
-        detail
-          ? `<p class="settings-note">音节调准（对应上方圆点）：${detail.perSyllable
-              .map(
-                (value, index) =>
-                  `第${index + 1}音节 ${value}分（${detail.expectedTones[index]}调 ${TONE_TEMPLATES[detail.expectedTones[index]].name}）`
-              )
-              .join(" · ")}</p>`
-          : ""
-      }`
+      ${voiceCoachMarkup(skill.jyutping, result)}`
       : "";
     const toneCapable = this.adapter?.id === "sensevoice";
     return `
@@ -2164,6 +2193,31 @@ export class GameUI {
         return `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" class="radar-label">${escapeHtml(axis.label)} ${axis.muted ? "" : `${axis.value}`}</text>`;
       })
       .join("");
+    const toneCards = report.toneMastery
+      .map(
+        (
+          entry
+        ) => `<div class="tone-mastery-card${entry.tone === report.focusTone ? " focus" : ""}">
+          <span><b>${entry.tone}</b>${escapeHtml(TONE_TEMPLATES[entry.tone].name)}</span>
+          <strong>${entry.average == null ? "待采样" : `${entry.average}分`}</strong>
+          <small>${entry.attempts ? `${entry.attempts} 个音节 · 最佳 ${entry.bestScore}` : "端侧跟读后生成"}</small>
+        </div>`
+      )
+      .join("");
+    const focusSkills = report.focusPracticeIds
+      .map((id) => lookupSkill(id))
+      .filter((skill): skill is Skill => Boolean(skill));
+    const focusPractice = focusSkills.length
+      ? `<div class="focus-practice-list">${focusSkills
+          .map(
+            (
+              skill
+            ) => `<button class="review-chip" type="button" data-action="practice-select" data-skill-id="${escapeHtml(skill.id)}">
+              <strong>${escapeHtml(skill.phrase)}</strong><small>${escapeHtml(skill.jyutping)}</small>
+            </button>`
+          )
+          .join("")}</div>`
+      : "";
     const mistakes = report.mistakes.slice(0, 8).map((entry) => {
       const skill = lookupSkill(entry.id);
       if (!skill) return "";
@@ -2171,7 +2225,8 @@ export class GameUI {
       return `<div class="inventory-item">
         <span class="item-mark">${escapeHtml(skill.phrase.slice(0, 1))}</span>
         <div><strong>${escapeHtml(skill.phrase)} <small>${escapeHtml(skill.jyutping)}</small></strong>
-        <small>上次 ${entry.lastScore} 分 · 最佳 ${entry.bestScore} 分 · ${dueDays === 0 ? "今日到期" : `${dueDays} 天后复习`} · 已练 ${entry.attempts} 次</small></div>
+        <small>上次 ${entry.lastScore} 分 · 最佳 ${entry.bestScore} 分 · ${dueDays === 0 ? "今日到期" : `${dueDays} 天后复习`} · 已练 ${entry.attempts} 次</small>
+        ${entry.lastWordScore != null || entry.lastToneScore != null ? `<small>最近维度：${entry.lastWordScore != null ? `字准 ${entry.lastWordScore}` : ""}${entry.lastWordScore != null && entry.lastToneScore != null ? " · " : ""}${entry.lastToneScore != null ? `调准 ${entry.lastToneScore}` : ""}${entry.focusTone ? ` · 焦点 ${entry.focusTone} 调` : ""}</small>` : ""}</div>
         <button class="mini-button" type="button" data-action="practice-select" data-skill-id="${escapeHtml(entry.id)}">去练</button>
       </div>`;
     });
@@ -2197,6 +2252,11 @@ export class GameUI {
           <p class="settings-note">今日挑战：${escapeHtml(todayRecord ? (todayRecord.victory ? `已通关 · 综合 ${todayRecord.averageScore}` : `到第 ${todayRecord.floor} 层 · 综合 ${todayRecord.averageScore}`) : "未挑战")}</p>
         </div>
       </div>
+      <section class="panel tone-mastery-panel" aria-labelledby="tone-mastery-title">
+        <div class="section-label"><h2 id="tone-mastery-title">六调画像</h2><p>${report.focusTone ? `今日重点 · ${report.focusTone} 调 ${escapeHtml(TONE_TEMPLATES[report.focusTone].name)}` : "完成端侧跟读后生成"}</p></div>
+        <div class="tone-mastery-grid">${toneCards}</div>
+        ${focusPractice ? `<p class="settings-note">以下错词最近也卡在 ${report.focusTone} 调，先练最弱的一处：</p>${focusPractice}` : ""}
+      </section>
       <div class="section-label"><h2>错词本</h2><p>${report.mistakes.length} 句 · ${report.dueCount} 句到期</p></div>
       <div class="inventory-list">
         ${mistakes.length ? mistakes.join("") : `<div class="notice-strip">错词本是空的——综合分低于 65 的短句会自动钉进来。</div>`}
