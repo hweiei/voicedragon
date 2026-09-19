@@ -13,9 +13,9 @@ import {
 import { ALL_SKILLS, lookupSkill } from "../../src/core/content";
 
 describe("P8-A 构筑纯函数", () => {
-  test("37张卡皆有实际能力标签；十三升级不会污染全局定义（P9 反击卡入升级表）", () => {
+  test("40张卡皆有实际能力标签；十六升级不会污染全局定义（P10 签名技入升级表）", () => {
     for (const skill of ALL_SKILLS) expect(capabilities(skill).length).toBeGreaterThan(0);
-    expect(Object.keys(UPGRADE_POWER)).toHaveLength(13);
+    expect(Object.keys(UPGRADE_POWER)).toHaveLength(16);
     for (const [id, power] of Object.entries(UPGRADE_POWER)) {
       const original = lookupSkill(id)!;
       const before = JSON.stringify(original);

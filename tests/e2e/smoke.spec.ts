@@ -22,6 +22,10 @@ async function presetSeen(page: Page): Promise<void> {
 async function enterFirstBattle(page: Page): Promise<void> {
   await page.goto("/");
   await page.getByRole("button", { name: /战役 · 第一幕/ }).click();
+  await page
+    .locator(".roster-card", { hasText: "文武生" })
+    .getByRole("button", { name: /开台/ })
+    .click();
   await expect(page.locator(".map-screen")).toBeVisible();
   await page.locator('[data-action="choose-floor"]').first().click();
   await expect(page.locator(".battle-screen")).toBeVisible();
@@ -32,6 +36,10 @@ test("campaign flow reaches battle and the tutorial walks through three steps", 
 }) => {
   await page.goto("/");
   await page.getByRole("button", { name: /战役 · 第一幕/ }).click();
+  await page
+    .locator(".roster-card", { hasText: "文武生" })
+    .getByRole("button", { name: /开台/ })
+    .click();
   await expect(page.locator(".map-screen")).toBeVisible();
 
   await page.locator('[data-action="choose-floor"]').first().click();

@@ -53,12 +53,14 @@ import {
   relicsUpToAct,
   skillsFor
 } from "./content";
+import { type CharacterId, lookupCharacter } from "./content/roster";
 import { type CounterStance, counterEnabled, resolveCounterDamage } from "./counter";
 import { FLOOR_NAMES, MAX_FLOOR, QUIZ_QUESTIONS, clone } from "./data";
 import type { EnemyBlueprint, EnemyIntent, GameEventContent, QuizQuestion, Skill } from "./data";
 import { availableNodeIds, evaluateCombatStars, generateActMap, nodeById } from "./levelgen";
 import type { ActMap, MapNodeType } from "./levelgen";
 import { type ChallengeState, mutationEffects, mutationStage, selectMutators } from "./mutators";
+import { applyCastPassive, resetTurnPassives, rosterEnabled } from "./roster";
 
 export type Phase =
   | "title"
@@ -136,6 +138,8 @@ export interface VoiceResultMeta {
   confidence?: number | null;
   similarity?: number | null;
   source?: string;
+  /** P10：调准分（花旦「绕梁」消费）；适配器已产出、UI 整体透传，无基频通道恒 null。 */
+  toneScore?: number | null;
 }
 
 export interface ResolvedSkillResult {
@@ -177,6 +181,8 @@ export interface CombatState {
   lemonTriggered?: boolean;
   /** P9 反击姿态：敌方下次攻击被挡下时按比率还击，触发后消耗；随存档序列化。 */
   counter?: CounterStance;
+  /** P10 名伶一次性被动标记（亮相=每场；jest-turn=每回合）；旧档缺省不启用。 */
+  passives?: Record<string, boolean>;
 }
 
 export interface EventState extends GameEventContent {
@@ -269,6 +275,9 @@ export interface GameState {
   encounterVersion?: 1;
   /** P9 反击姿态版本；与 build/encounter 版本分离，缺省保留旧行为。 */
   counterVersion?: 1;
+  /** P10 名伶版本；缺省 = 旧局，起始牌组与被动逐位不变。 */
+  rosterVersion?: 1;
+  characterId?: CharacterId;
   challenge?: ChallengeState;
 }
 
@@ -292,6 +301,22 @@ export interface HitResult {
   actual: number;
   blocked: number;
 }
+
+/** P10 战役配置对象：新开战役首选 API；旧位置签名保留为等价转发（理由见 docs/ROSTER-PLAN.md §2）。 */
+export interface CampaignConfig {
+  act?: number;
+  seed?: number;
+  ruleset?: ContentRuleset;
+  buildVersion?: 1;
+  encounterVersion?: 1;
+  counterVersion?: 1;
+  rosterVersion?: 1;
+  /** 仅 rosterVersion=1 生效；缺省文武生（确定性缺省） */
+  character?: CharacterId;
+}
+
+/** startCampaign 兼容两种形态：位置参数（旧）或 CampaignConfig（新）。 */
+export type StartCampaignArgs = [number?, number?, ContentRuleset?, 1?, 1?, 1?] | [CampaignConfig];
 
 export interface RunSummary {
   floor: number;
@@ -443,13 +468,31 @@ export class GameEngine {
    * P5 起：内容（敌/精英/Boss/事件/楼层名）随幕切换，act 越界钳到 [1, ACT_COUNT]。
    */
   startCampaign(
-    act = 1,
-    seed: number = makeSeed(),
-    ruleset: ContentRuleset = "legacy",
-    buildVersion?: 1,
-    encounterVersion?: 1,
-    counterVersion?: 1
+    actOrConfig: number | CampaignConfig = 1,
+    seedArg?: number,
+    rulesetArg?: ContentRuleset,
+    buildVersionArg?: 1,
+    encounterVersionArg?: 1,
+    counterVersionArg?: 1
   ): void {
+    // P10 参数对象归一化：新形态 CampaignConfig 与旧位置签名等价（旧契约零改动）
+    const config: CampaignConfig =
+      typeof actOrConfig === "object" && actOrConfig !== null
+        ? actOrConfig
+        : {
+            act: actOrConfig,
+            seed: seedArg,
+            ruleset: rulesetArg,
+            buildVersion: buildVersionArg,
+            encounterVersion: encounterVersionArg,
+            counterVersion: counterVersionArg
+          };
+    const act = config.act ?? 1;
+    const seed = config.seed ?? makeSeed();
+    const ruleset = config.ruleset ?? "legacy";
+    const buildVersion = config.buildVersion;
+    const encounterVersion = config.encounterVersion;
+    const counterVersion = config.counterVersion;
     const pack = actContent(act);
     const actNo = pack.act;
     // P5 修复：种子同时驱动地图与战斗 LCG——同 (act, seed) 必得同局（可复现/回放的基石）
@@ -462,6 +505,13 @@ export class GameEngine {
     }
     if (ruleset === "p7" && encounterVersion === 1) this.state.encounterVersion = 1;
     if (ruleset === "p7" && counterVersion === 1) this.state.counterVersion = 1;
+    // P10 名伶：独立版本门控；角色缺省文武生（确定性缺省）；起始牌组覆写不耗 RNG
+    if (ruleset === "p7" && config.rosterVersion === 1) {
+      this.state.rosterVersion = 1;
+      const character = lookupCharacter(config.character) ?? lookupCharacter("man-mou-saang")!;
+      this.state.characterId = character.id;
+      this.state.player!.deck = [...character.startingDeck];
+    }
     const map = generateActMap(seed, actNo);
     this.state.campaign = {
       act: actNo,
@@ -990,12 +1040,14 @@ export class GameEngine {
 
     const scaledPower = Math.max(1, Math.round(skill.power * tier.multiplier));
     const messages = [`你说出「${skill.phrase}」：${tier.label} ${score} 分。`];
+    const passiveMessages: string[] = []; // P10 名伶被动消息：结算后置顶，确保 HUD 可见
     let damageDone = 0;
     let armorGained = 0;
     let healing = 0;
 
+    let passiveDamageBonus = 0; // P10 亮相：当次施法一次性伤害加成
     const dealDamage = (base: number, options: { bypassArmor?: boolean } = {}): number => {
-      let damage = Math.max(0, base + player.strength);
+      let damage = Math.max(0, base + player.strength + passiveDamageBonus);
       if (combat.firstAttack && this.hasRelic("lion-ribbon")) {
         damage += 5;
         messages.push("醒狮红绸令首次攻击 +5。");
@@ -1017,8 +1069,37 @@ export class GameEngine {
       armorGained += amount;
     };
 
+    // P10 名伶被动：纯规则（roster.ts），旧局 rosterEnabled=false 零开销
+    if (rosterEnabled(this.state)) {
+      const passive = applyCastPassive({
+        characterId: this.state.characterId!,
+        score,
+        toneScore: voiceMeta.toneScore ?? null,
+        source: voiceMeta.source || "",
+        passives: combat.passives ?? {}
+      });
+      if (passive) {
+        combat.passives = passive.passives;
+        if (passive.strengthDelta) {
+          player.strength += passive.strengthDelta;
+          passiveMessages.push(`声势 +${passive.strengthDelta}。`);
+        }
+        if (passive.armorDelta) gainArmor(passive.armorDelta);
+        if (passive.energyDelta) {
+          combat.energy += passive.energyDelta;
+          passiveMessages.push(`「打诨」声气 +${passive.energyDelta}。`);
+        }
+        if (passive.castDamageBonus) {
+          passiveDamageBonus = passive.castDamageBonus;
+          passiveMessages.push(`「亮相」本次伤害 +${passive.castDamageBonus}。`);
+        }
+      }
+    }
+
     if (skill.type === "attack") {
-      const bypass = skill.id === "dim-gwo-luk-ze" && score >= 65;
+      const bypass =
+        (skill.id === "dim-gwo-luk-ze" && score >= 65) ||
+        (skill.id === "p10-jat-fu-dong-gwaan" && score >= 85);
       dealDamage(scaledPower, { bypassArmor: bypass });
       if (skill.id === "ding-ngang-soeng" && score >= 85) gainArmor(3);
     } else if (skill.type === "multi") {
@@ -1055,10 +1136,23 @@ export class GameEngine {
     } else if (skill.type === "heal") {
       healing += this.healPlayer(scaledPower);
       gainArmor(5);
+      // P10 顾盼生辉：良好发音清除发音干扰
+      if (skill.id === "p10-gu-paan-saang-fai" && score >= 65) {
+        const before = player.buffs.length;
+        player.buffs = player.buffs.filter((buff) => buff.id !== "voice-interference");
+        if (player.buffs.length < before) messages.push("顾盼生辉，发音干扰已清除。");
+      }
     } else if (skill.type === "weaken") {
       dealDamage(scaledPower);
       combat.enemy.weakness = Math.max(combat.enemy.weakness, 2);
       messages.push("敌人进入虚弱状态 2 回合。");
+      // P10 搞掂晒：夺取敌方半数护甲
+      if (skill.id === "p10-gaau-ding-saai" && combat.enemy.armor > 0) {
+        const stolen = Math.floor(combat.enemy.armor / 2);
+        combat.enemy.armor -= stolen;
+        gainArmor(stolen);
+        if (stolen > 0) messages.push(`搞掂晒！夺其 ${stolen} 点护甲归为己用。`);
+      }
     }
 
     // P5 泊港铜铃：每回合第一次施法获得 2 点护甲
@@ -1106,6 +1200,11 @@ export class GameEngine {
     };
     combat.log.unshift(...messages.reverse());
     combat.log = combat.log.slice(0, 10);
+    if (passiveMessages.length) {
+      // P10 名伶被动消息置顶（HUD 只显示最新一条）
+      combat.log.unshift(...passiveMessages);
+      combat.log = combat.log.slice(0, 10);
+    }
 
     if (combat.enemy.hp <= 0) {
       if (combat.bossPhase) combat.bossPhase.pending = false;
@@ -1308,6 +1407,7 @@ export class GameEngine {
     combat.teaTriggered = false;
     combat.bellTriggered = false;
     combat.lemonTriggered = false;
+    if (combat.passives) combat.passives = resetTurnPassives(combat.passives);
     combat.hand = this.drawHand(combat.handSize ?? 3);
     combat.locked = false;
     this.emit({ save: true, effect: "enemy" });
@@ -1427,7 +1527,12 @@ export class GameEngine {
       if (player.gold >= choice.value) {
         player.gold -= choice.value;
         const learned = this.pick(
-          skillsFor(this.state.campaign?.act ?? 1, this.state.ruleset, this.state.counterVersion)
+          skillsFor(
+            this.state.campaign?.act ?? 1,
+            this.state.ruleset,
+            this.state.counterVersion,
+            this.state.characterId
+          )
         );
         player.deck.push(learned.id);
         this.state.stats!.skillsLearned += 1;
@@ -1570,7 +1675,12 @@ export class GameEngine {
     const discount = this.hasRelic("night-market-vip") ? 0.85 : 1;
     const priceOf = (base: number) => Math.round(base * discount);
     const skillOffers = this.pickDistinct(
-      skillsFor(this.state.campaign?.act ?? 1, this.state.ruleset, this.state.counterVersion),
+      skillsFor(
+        this.state.campaign?.act ?? 1,
+        this.state.ruleset,
+        this.state.counterVersion,
+        this.state.characterId
+      ),
       2
     ).map((skill, index) => ({
       key: `skill-${index}`,

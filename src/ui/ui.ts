@@ -1,7 +1,9 @@
 import { buildEnabled, removalPrice, removalReason, upgradeReason } from "../core/buildcraft";
 import { BOSS_EVOLUTIONS } from "../core/content/encounters";
+import { CHARACTERS } from "../core/content/roster";
 import { counterEnabled } from "../core/counter";
 import { evolutionEnabled } from "../core/encounters";
+import { characterUnlocked, rosterEnabled } from "../core/roster";
 import {
   type BuildOperation,
   type BuildView,
@@ -632,7 +634,7 @@ function battleTemplate(state: GameState, engine: GameEngine): string {
       ${challengeBanner(state)}
       <div class="battle-status">
         <div class="combatant-mini">
-          <div class="label-line"><strong>你</strong><small>${player.hp}/${player.maxHp}</small></div>
+          <div class="label-line"><strong>${rosterEnabled(state) && state.characterId ? `你 · ${CHARACTERS.find((c) => c.id === state.characterId)?.name ?? "你"}` : "你"}</strong><small>${player.hp}/${player.maxHp}</small></div>
           <div class="hp-meter"><span style="transform:scaleX(${ratio(player.hp, player.maxHp)})"></span></div>
         </div>
         <div class="turn-badge">第<br />${combat.turn} 回</div>
@@ -948,7 +950,7 @@ export class GameUI {
     if (action === "new-run") this.confirmNewRun();
     if (action === "new-campaign") {
       const act = Number(button.dataset.act ?? 1);
-      this.engine.startCampaign(Number.isFinite(act) ? act : 1, undefined, "p7", 1, 1, 1);
+      this.openRosterPicker(Number.isFinite(act) ? act : 1);
     }
     if (action === "campaign-next-act") this.engine.continueNextAct();
     if (action === "continue-run") {
@@ -1033,6 +1035,7 @@ export class GameUI {
     if (!button || (button as HTMLButtonElement).disabled) return;
     const action = button.dataset.action!;
     if (action === "close-modal") this.closeModal();
+    if (action === "pick-character") this.pickCharacter(button.dataset.character!);
     if (action === "confirm-learning-import") this.confirmLearningImport();
     if (action === "open-build") this.openBuild(button.dataset.buildMode as BuildView);
     if (action === "build-select")
@@ -1253,6 +1256,72 @@ export class GameUI {
     ) {
       this.openTutorial();
     }
+  }
+
+  // ─── P10 名伶选择 ─────────────────────────────────────────────────────────
+
+  /** 解锁上下文：战役元存档（Boss 通关）+ 成就数，全部本地只读。 */
+  private rosterUnlockContext(): { bossClearedActs: number[]; achievementCount: number } {
+    const meta = loadCampaignMeta();
+    const bossClearedActs = meta
+      ? Object.entries(meta.acts)
+          .filter(([, act]) => act.bossCleared)
+          .map(([key]) => Number(key))
+          .filter((act) => Number.isFinite(act))
+      : [];
+    return { bossClearedActs, achievementCount: loadProfile().unlocked.length };
+  }
+
+  private rosterAct = 1;
+
+  openRosterPicker(act: number): void {
+    this.rosterAct = act;
+    const context = this.rosterUnlockContext();
+    const cards = CHARACTERS.map((character) => {
+      const unlocked = characterUnlocked(character, context);
+      const lockedHint =
+        character.unlock?.kind === "act-boss"
+          ? `通关第${["一", "二", "三"][character.unlock.act - 1]}幕 Boss 后登台`
+          : character.unlock?.kind === "achievements"
+            ? `点亮 ${character.unlock.count} 枚成就后登台`
+            : "";
+      return `<article class="roster-card${unlocked ? "" : " locked"}" aria-label="${escapeHtml(character.name)}">
+        <div class="roster-glyph">${escapeHtml(character.glyph)}</div>
+        <div class="roster-body">
+          <strong>${escapeHtml(character.name)} <small>${escapeHtml(character.jyutping)}</small></strong>
+          <p class="roster-role">${escapeHtml(character.role)}</p>
+          <p class="roster-passive">「${escapeHtml(character.passive)}」${escapeHtml(character.passiveDescription)}</p>
+          ${
+            unlocked
+              ? `<button class="primary-button full-button" type="button" data-action="pick-character" data-character="${character.id}">以${escapeHtml(character.name)}开台</button>`
+              : `<button class="secondary-button full-button" type="button" disabled>${escapeHtml(lockedHint)}</button>`
+          }
+        </div>
+      </article>`;
+    }).join("");
+    this.modalRoot.innerHTML = `
+      <div class="modal-sheet roster-sheet" role="dialog" aria-modal="true" aria-label="选择名伶">
+        <div class="modal-head">
+          <div><h2>名伶登台</h2><p>第${["一", "二", "三"][act - 1]}幕开局 · 各有招牌与牌路，解锁条件只在本地存档。</p></div>
+          <button class="close-button" type="button" data-action="close-modal" aria-label="关闭">×</button>
+        </div>
+        <div class="roster-grid">${cards}</div>
+      </div>`;
+  }
+
+  private pickCharacter(characterId: string): void {
+    const character = CHARACTERS.find((entry) => entry.id === characterId);
+    if (!character || !characterUnlocked(character, this.rosterUnlockContext())) return;
+    this.closeModal();
+    this.engine.startCampaign({
+      act: this.rosterAct,
+      ruleset: "p7",
+      buildVersion: 1,
+      encounterVersion: 1,
+      counterVersion: 1,
+      rosterVersion: 1,
+      character: character.id
+    });
   }
 
   private confirmNewRun(): void {

@@ -34,7 +34,8 @@ npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 
 - `src/ui/` 渲染与演出：模板字符串直渲 + `src/ui/fx/` 演出编排（FxDirector）。
 - 设计决策的单一事实源：`docs/REDESIGN-PLAN.md`（P0–P5 历史）与
   `docs/FX-UPGRADE-PLAN.md`（P6 三期完成）及 `docs/CONTENT-EXPANSION-PLAN.md`（P7 三幕深耕）与 `docs/BUILDCRAFT-PLAN.md`（P8-A 构筑成型）、`docs/ENCOUNTER-EVOLUTION-PLAN.md`（P8-B 对手进化）、`docs/VOICE-MASTERY-PLAN.md`（P8-C 语音深化）、`docs/LEARNING-LOOP-PLAN.md`（P8-D 学习闭环）、`docs/RELEASE-READINESS-PLAN.md`（P8-E 发布与设备验收）与
-  `docs/COUNTER-ATTACK-PLAN.md`（P9 守势反击）、`docs/GROWTH-PLAN.md`（P10–P15 丰富度总路线：名伶/声动九霄/切磋码/词林/声之细织/铸剑炉）。
+  `docs/COUNTER-ATTACK-PLAN.md`（P9 守势反击）、`docs/GROWTH-PLAN.md`（P10–P15 丰富度总路线）与
+  `docs/ROSTER-PLAN.md`（P10 名伶登场）。
 - 内容兼容：缺失 `ruleset` 的旧局按 legacy；P7 新内容只经 `skillsFor/eventsFor/itemsFor` 进入对应新局。
   不直接修改基础内容表或用扩展池替换基础池。新增参数须审查组合根包装器是否完整转发。
 - 构筑独立版本 `buildVersion:1` 仅用于新战役；缺失时保留旧玩法。升级按 `upgradedSlots` 记录具体牌组槽位，
@@ -54,10 +55,16 @@ npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 
   还击纯规则在 `src/core/counter.ts`，预测与实际结算共用；穿甲不触发不消耗、无伤害回合保留姿态、guardAttack 先得甲再吃还击。
   还击结算次序：敌方行动完全结算后、层甲词缀与状态递减前；可击杀、可跨 Boss 半血（同回合提交二阶段）。
   新平衡只调 P9 自有参数（技能威力/ratio/Bot 估值），不改 P8-B 曲线；`npm run sim:p9` 独立分报。
+- P10 名伶独立版本 `rosterVersion:1` 仅用于新战役；与 build/encounter/counter 版本分离。startCampaign 新首选
+  `CampaignConfig` 参数对象（旧位置签名等价转发，加参数一律走 config 不再加位置参数）；组合根归一化两种形态。
+  角色被动纯规则在 `src/core/roster.ts`，一次性标记存 `combat.passives`（回合标记 endTurn 重置）；
+  签名技只经 `skillsFor(act,"p7",counter,character)` 进对应角色池。花旦被动依赖 toneScore（无声通道诚实不触发）；
+  丑生被动仅 QTE 通道。新战役 UI 入口先弹名伶选择（E2E 走 UI 入口需补选角步骤）。
+  新平衡只调角色自有参数（牌组/被动阈值/签名技），`npm run sim:p10` 独立分报（花旦=牌组下限、丑生=qte 乐观界，报告如实标注）。
 
 ## 2. 黄金契约与确定性
 
-- 引擎行为由 `tests/contract/` 十一个黄金契约测试文件锁定：**改行为先改契约并获得确认**。
+- 引擎行为由 `tests/contract/` 十二个黄金契约测试文件锁定：**改行为先改契约并获得确认**。
 - 同一规则版本下 (act, seed) 必须同一局；特效随机走独立种子流，禁止消费游戏 `rngState`。
 
 ## 3. 质量门（每次提交前全绿）
@@ -65,18 +72,19 @@ npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 
 ```bash
 npx biome check .          # 风格（或 npm run check:fix）
 npx tsc --noEmit           # 严格类型
-npx vitest run             # 单测+契约+仿真（现 375 条）
+npx vitest run             # 单测+契约+仿真（现 396 条）
 npx vite build && npx vite-node scripts/perf-budget.ts   # 首包 ≤350KB gzip（现 84.5）
 npx vite-node scripts/release-readiness.ts               # dist PWA/路径/安全头 44 项契约
 npm run sim:p8b           # 对手进化参考门45–65%、零超时；随机Bot异常须如实记录
 npm run sim:p9            # 守势反击门45–65%、零超时、每幕 counterHits>0
+npm run sim:p10           # 名伶门：每角色三幕45–65%、零超时
 npm run sim:p8            # 构筑版独立仿真（含真实升级/删牌计数）
 npm run sim:p7            # 扩展版独立平衡报表（基础版仍用 npm run sim）
 npx playwright install --with-deps chromium firefox webkit  # 新环境一次性安装
-npx playwright test        # Chromium 业务 E2E（现 35 条）
+npx playwright test        # Chromium 业务 E2E（现 38 条）
 npm run test:release      # Chromium/Firefox/WebKit 发布矩阵（现 19 通过、1 明确跳过）
 npm run test:lighthouse   # 移动端+桌面四类分数及 LCP/TBT/CLS 硬预算
-npm run release:check      # 提交发布前串行执行全部门（需先安装三种 Playwright 浏览器）；P9 后另跑 npm run sim:p9
+npm run release:check      # 提交发布前串行执行全部门（需先安装三种 Playwright 浏览器）；P9/P10 后另跑 npm run sim:p9、npm run sim:p10
 ```
 
 ## 4. 不可触碰的红线

@@ -16,6 +16,7 @@ import { evolutionEnabled, intentAt, resolveEnemyAction } from "./encounters";
  */
 
 import { type ContentRuleset, lookupSkill } from "./content";
+import type { CharacterId } from "./content/roster";
 import { counterEnabled } from "./counter";
 import type { Skill } from "./data";
 import { GameEngine } from "./engine";
@@ -68,6 +69,8 @@ export interface SimRunResult {
   newElites?: number;
   /** P9：实际打出伤害 ≥1 的还击次数（仅 counterVersion 统计）。 */
   counterHits?: number;
+  /** P10：名伶一次性被动实际触发次数（亮相/打诨；花旦为逐次判定不计数）。 */
+  passiveHits?: number;
 }
 
 export interface SimOptions {
@@ -80,6 +83,11 @@ export interface SimOptions {
   buildVersion?: 1;
   encounterVersion?: 1;
   counterVersion?: 1;
+  rosterVersion?: 1;
+  /** P10：角色；仅 rosterVersion=1 生效 */
+  character?: CharacterId;
+  /** P10：以破阵拍通道施法（丑生「打诨」被动可触发；= 全程无声玩法的乐观界） */
+  qteSource?: boolean;
 }
 
 const MAX_TURNS_PER_BATTLE = 60;
@@ -303,14 +311,16 @@ function pickEventChoice(state: GameState, rng: () => number, bot: BotId): strin
 export function simulateCampaign(options: SimOptions): SimRunResult {
   const profile = { ...BOTS[options.bot], ...options.profile };
   const engine = new GameEngine();
-  engine.startCampaign(
-    options.act,
-    options.seed,
-    options.ruleset,
-    options.buildVersion,
-    options.encounterVersion,
-    options.counterVersion
-  );
+  engine.startCampaign({
+    act: options.act,
+    seed: options.seed,
+    ruleset: options.ruleset,
+    buildVersion: options.buildVersion,
+    encounterVersion: options.encounterVersion,
+    counterVersion: options.counterVersion,
+    rosterVersion: options.rosterVersion,
+    character: options.character
+  });
   // Bot 决策流独立于引擎 LCG：同种子下游戏随机与决策随机都可复现
   const rng = mulberry32((options.seed ^ 0x5eed_b07 ^ (options.act * 0x85eb_ca6b)) >>> 0);
 
@@ -325,11 +335,13 @@ export function simulateCampaign(options: SimOptions): SimRunResult {
   let bossPhases = 0;
   let newElites = 0;
   let counterHits = 0;
+  let passiveHits = 0;
   const finish = (result: SimRunResult): SimRunResult => ({
     ...result,
     ...(options.buildVersion === 1 ? { upgrades, removals } : {}),
     ...(options.encounterVersion === 1 ? { bossPhases, newElites } : {}),
-    ...(options.counterVersion === 1 ? { counterHits } : {})
+    ...(options.counterVersion === 1 ? { counterHits } : {}),
+    ...(options.rosterVersion === 1 ? { passiveHits } : {})
   });
 
   while (steps < MAX_STEPS_PER_RUN) {
@@ -419,14 +431,17 @@ export function simulateCampaign(options: SimOptions): SimRunResult {
         for (const card of hand) {
           const skill = engine.getDeckSkill(card.index)!;
           if (!engine.canUseSkill(skill.id, card.index)) continue;
+          // P10 统计：一次性被动标记新增 = 本次施法触发亮相/打诨（只看公开状态）
+          const flagsBefore = Object.keys(state.combat?.passives ?? {}).length;
           engine.resolveSkill(
             skill.id,
             sampleScore(rng, profile.voiceMean, profile.voiceSd),
             {
-              source: "sim"
+              source: options.qteSource ? "qte" : "sim"
             },
             card.index
           );
+          if (Object.keys(state.combat?.passives ?? {}).length > flagsBefore) passiveHits += 1;
           cast = true;
           break; // 每次循环最多出一张，重估场面
         }
@@ -615,6 +630,7 @@ export interface SimSummary {
   bossPhases?: number;
   newElites?: number;
   counterHits?: number;
+  passiveHits?: number;
 }
 
 /** 幕级蒙特卡洛：种子流 = hash(baseSeed, act, runIndex)，全确定性可复现。 */
@@ -628,6 +644,9 @@ export function simulateAct(options: {
   buildVersion?: 1;
   encounterVersion?: 1;
   counterVersion?: 1;
+  rosterVersion?: 1;
+  character?: CharacterId;
+  qteSource?: boolean;
 }): SimSummary {
   const { act, bot, runs } = options;
   const baseSeed = options.baseSeed ?? 0x2026_0919;
@@ -642,6 +661,7 @@ export function simulateAct(options: {
   let bossPhases = 0;
   let newElites = 0;
   let counterHits = 0;
+  let passiveHits = 0;
   for (let index = 0; index < runs; index += 1) {
     const seed = (baseSeed + act * 0x1b873593 + index * 0x9e3779b9) >>> 0;
     const result = simulateCampaign({
@@ -652,7 +672,10 @@ export function simulateAct(options: {
       ruleset: options.ruleset,
       buildVersion: options.buildVersion,
       encounterVersion: options.encounterVersion,
-      counterVersion: options.counterVersion
+      counterVersion: options.counterVersion,
+      rosterVersion: options.rosterVersion,
+      character: options.character,
+      qteSource: options.qteSource
     });
     if (result.win) wins += 1;
     floorSum += result.floor;
@@ -664,6 +687,7 @@ export function simulateAct(options: {
     bossPhases += result.bossPhases ?? 0;
     newElites += result.newElites ?? 0;
     counterHits += result.counterHits ?? 0;
+    passiveHits += result.passiveHits ?? 0;
   }
   return {
     act,
@@ -678,6 +702,7 @@ export function simulateAct(options: {
     timeouts,
     ...(options.buildVersion === 1 ? { upgrades, removals } : {}),
     ...(options.encounterVersion === 1 ? { bossPhases, newElites } : {}),
-    ...(options.counterVersion === 1 ? { counterHits } : {})
+    ...(options.counterVersion === 1 ? { counterHits } : {}),
+    ...(options.rosterVersion === 1 ? { passiveHits } : {})
   };
 }

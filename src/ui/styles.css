@@ -3504,3 +3504,63 @@ body {
   color: var(--gold-bright);
   font-size: 12px;
 }
+
+/* ─── P10 名伶选择 ─────────────────────────────────────────────── */
+.roster-sheet {
+  max-width: 640px;
+}
+.roster-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.roster-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 12px;
+  border: 1px solid var(--ink-soft, rgba(255, 255, 255, 0.14));
+  border-radius: 14px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.18));
+  text-align: left;
+}
+.roster-card.locked {
+  opacity: 0.55;
+}
+.roster-glyph {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 22px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+.roster-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+.roster-body strong small {
+  opacity: 0.6;
+  font-weight: 400;
+}
+.roster-role {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.75;
+}
+.roster-passive {
+  margin: 0 0 6px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+@media (max-width: 480px) {
+  .roster-grid {
+    grid-template-columns: 1fr;
+  }
+}

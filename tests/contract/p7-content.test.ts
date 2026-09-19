@@ -22,13 +22,22 @@ function battle(act = 1, seed = 123): GameEngine {
 }
 
 describe("P7 版本化内容契约", () => {
-  test("37 技能 / 26 事件 / 8 道具；基础池与旧默认不变（P9 反击卡仅进 counterVersion 池）", () => {
-    // P9：ALL_SKILLS 收录还返俾你（图鉴/查找可见），但 skillsFor 未开 counterVersion 时池不变
-    expect(ALL_SKILLS).toHaveLength(37);
+  test("40 技能 / 26 事件 / 8 道具；基础池与旧默认不变（P9 反击卡/P10 签名技仅进对应版本池）", () => {
+    // P9：ALL_SKILLS 收录还返俾你；P10：收录三张签名技（图鉴可见），未开版本时池不变
+    expect(ALL_SKILLS).toHaveLength(40);
     expect(ALL_EVENTS).toHaveLength(26);
     expect(ALL_ITEMS).toHaveLength(8);
     expect([1, 2, 3].map((act) => skillsFor(act, "p7").length)).toEqual([16, 26, 36]);
     expect([1, 2, 3].map((act) => skillsFor(act, "p7", 1).length)).toEqual([17, 27, 37]);
+    // P10：签名技只进对应角色池（各 +1），其他角色与无角色调用不可获取
+    expect([1, 2, 3].map((act) => skillsFor(act, "p7", 1, "faa-daan").length)).toEqual([
+      18, 28, 38
+    ]);
+    expect(skillsFor(1, "p7", 1, "faa-daan").map((x) => x.id)).toContain("p10-gu-paan-saang-fai");
+    expect(skillsFor(1, "p7", 1, "faa-daan").map((x) => x.id)).not.toContain(
+      "p10-jat-fu-dong-gwaan"
+    );
+    expect(skillsFor(1, "p7", 1).map((x) => x.id)).not.toContain("p10-gu-paan-saang-fai");
     expect([1, 2, 3].map((act) => eventsFor(act, "p7").length)).toEqual([10, 8, 8]);
     expect(skillsFor(1)).toEqual(SKILLS);
     expect(itemsFor()).toBe(ITEMS);

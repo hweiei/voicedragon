@@ -35,6 +35,10 @@ async function cast(page: Page, slot: number): Promise<void> {
 test("新战役带构筑版本；行囊可查看独立卡、费用、流派", async ({ page }) => {
   await preset(page);
   await page.getByRole("button", { name: /战役 · 第一幕/ }).click();
+  await page
+    .locator(".roster-card", { hasText: "文武生" })
+    .getByRole("button", { name: /开台/ })
+    .click();
   expect((await readState(page)).buildVersion).toBe(1);
   await page.getByRole("button", { name: "查看行囊" }).click();
   await page.getByRole("button", { name: /查看构筑/ }).click();
@@ -42,8 +46,10 @@ test("新战役带构筑版本；行囊可查看独立卡、费用、流派", as
   await expect(page.locator(".build-card")).toHaveCount(5);
   await expect(page.getByLabel("声气费用分布")).toBeVisible();
   await expect(page.locator(".build-flows")).toContainText("连击增势");
+  // P10：新战役入口经名伶选择，默认文武生起始牌组（旧 STARTER_DECK 见契约测试）
   await expect(page.locator('.build-card[data-slot="0"]')).toContainText("顶硬上");
-  await expect(page.locator('.build-card[data-slot="1"]')).toContainText("顶硬上");
+  await expect(page.locator('.build-card[data-slot="1"]')).toContainText("唔使惊");
+  await expect(page.locator('.build-card[data-slot="3"]')).toContainText("加油");
 });
 
 test("夜市删牌二次确认：取消不消费，确定只扣一次，升级槽平移", async ({ page }) => {

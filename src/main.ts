@@ -29,7 +29,7 @@ import {
 import type { DownloadProgress } from "./adapters/voice/sensevoice/model-store";
 import { SCORING_WEIGHTS_V2 } from "./core/config/balance";
 import { GameEngine } from "./core/engine";
-import type { EmitOptions, GameState } from "./core/engine";
+import type { CampaignConfig, EmitOptions, GameState, StartCampaignArgs } from "./core/engine";
 import { adaptiveBoostFor } from "./core/profile";
 import { registerBurstSink } from "./ui/fx";
 import { FpsGovernor } from "./ui/fx/governor";
@@ -108,11 +108,22 @@ export function campaignActMeta(act: number): CampaignActMeta | null {
 
 /** 开新战役时，把本地同种子同幕的历史★注入新局（重打刷新只升不降；同幕地图种子复用）。 */
 const startCampaignBase = engine.startCampaign.bind(engine);
-engine.startCampaign = (...args: Parameters<typeof startCampaignBase>) => {
-  const [act = 1, seed, ruleset, buildVersion, encounterVersion, counterVersion] = args;
+engine.startCampaign = (...args: StartCampaignArgs) => {
+  // P10：参数对象与旧位置形态归一化后注入同幕种子（两种入口行为等价）
+  const config: CampaignConfig =
+    typeof args[0] === "object" && args[0] !== null
+      ? args[0]
+      : {
+          act: args[0],
+          seed: args[1],
+          ruleset: args[2],
+          buildVersion: args[3],
+          encounterVersion: args[4],
+          counterVersion: args[5]
+        };
+  const act = config.act ?? 1;
   const actMeta = campaignActMeta(act);
-  const resolvedSeed = seed ?? actMeta?.mapSeed;
-  startCampaignBase(act, resolvedSeed, ruleset, buildVersion, encounterVersion, counterVersion);
+  startCampaignBase({ ...config, seed: config.seed ?? actMeta?.mapSeed });
   const campaign = engine.state.campaign;
   if (campaign && actMeta && actMeta.mapSeed === campaign.map.seed) {
     Object.assign(campaign.stars, actMeta.stars);

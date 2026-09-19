@@ -24,9 +24,13 @@ test("新战役启用扩展池；标题内容数量由注册表生成", async ({
   await preset(page);
   await page.goto("/");
   await expect(page.locator(".title-screen .content-version")).toContainText(
-    "37 招式 · 26 奇遇 · 8 道具"
+    "40 招式 · 26 奇遇 · 8 道具"
   );
   await page.getByRole("button", { name: /战役 · 第一幕/ }).click();
+  await page
+    .locator(".roster-card", { hasText: "文武生" })
+    .getByRole("button", { name: /开台/ })
+    .click();
   await expect(page.locator(".map-screen")).toBeVisible();
   expect((await readState(page)).ruleset).toBe("p7");
   await page.locator('[data-action="choose-floor"]').first().click();

@@ -72,7 +72,10 @@ export const UPGRADE_POWER: Readonly<Record<string, number>> = {
   "p7-waan-gwo-gok-dou": 10,
   "p7-m-hou-fong-hei": 16,
   "p7-jau-gung-jau-sau": 13,
-  "p9-waan-faan-bei-nei": 10
+  "p9-waan-faan-bei-nei": 10,
+  "p10-jat-fu-dong-gwaan": 19,
+  "p10-gu-paan-saang-fai": 12,
+  "p10-gaau-ding-saai": 10
 };
 export const MIN_DECK_SIZE = 5;
 export function buildEnabled(state: {

@@ -53,6 +53,10 @@ async function castFirstCard(page: Page): Promise<void> {
 test("新战役完整转发四个版本号", async ({ page }) => {
   await preset(page);
   await page.getByRole("button", { name: /战役 · 第一幕/ }).click();
+  await page
+    .locator(".roster-card", { hasText: "文武生" })
+    .getByRole("button", { name: /开台/ })
+    .click();
   const state = await readState(page);
   expect(state.ruleset).toBe("p7");
   expect(state.buildVersion).toBe(1);
