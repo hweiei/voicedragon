@@ -8,9 +8,13 @@ import { compareDailyRecords, dailySeedForKey, dateKeyFor } from "../../src/core
 import {
   SRS_LEECH_THRESHOLD,
   buildLearningReport,
+  buildLearningTrend,
   dailyPicks,
+  dailyPracticeProgress,
   dueEntries,
   emptySrsStore,
+  learningStreak,
+  normalizeLearningHistory,
   normalizeToneMastery,
   qualityFromScore,
   recordAttempt
@@ -155,6 +159,76 @@ describe("srs deck", () => {
     expect(Object.keys(normalized)).toEqual(["1", "2", "3", "4", "5", "6"]);
     expect(normalized[2]).toEqual({ attempts: 3, sumScore: 210, bestScore: 100, lastScore: 0 });
     expect(normalized[4].attempts).toBe(0);
+  });
+});
+
+describe("P8-D local learning history", () => {
+  test("same-day attempts aggregate while daily goal counts distinct phrases", () => {
+    const store = emptySrsStore();
+    recordAttempt(store, "s1", { score: 70, wordScore: 80, toneScore: 60 }, NOW);
+    recordAttempt(store, "s1", { score: 90, wordScore: 92, toneScore: 88 }, NOW);
+    recordAttempt(store, "s2", { score: 50, wordScore: 55, toneScore: null }, NOW);
+    expect(store.history).toHaveLength(1);
+    expect(store.history[0]).toMatchObject({
+      dateKey: "2026-09-18",
+      attempts: 3,
+      sumScore: 210,
+      sumWord: 227,
+      toneCount: 2,
+      sumTone: 148,
+      practicedIds: ["s1", "s2"]
+    });
+    expect(dailyPracticeProgress(store, NOW)).toMatchObject({
+      completed: 2,
+      goal: 3,
+      remaining: 1,
+      attempts: 3
+    });
+  });
+
+  test("history normalization merges duplicate dates and keeps only the latest 90 active days", () => {
+    const raw = Array.from({ length: 95 }, (_, index) => {
+      const date = new Date(2026, 0, index + 1, 12);
+      return {
+        dateKey: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`,
+        attempts: 1,
+        sumScore: 70,
+        sumWord: 72,
+        toneCount: 0,
+        sumTone: 0,
+        practicedIds: [`s${index}`]
+      };
+    });
+    raw.push({ ...raw[94], sumScore: 80, practicedIds: ["duplicate"] });
+    const history = normalizeLearningHistory(raw);
+    expect(history).toHaveLength(90);
+    expect(history.at(-1)).toMatchObject({ attempts: 2, sumScore: 150 });
+    expect(history.at(-1)?.practicedIds).toEqual(["s94", "duplicate"]);
+  });
+
+  test("streak starts from yesterday when today has not been practiced", () => {
+    const store = emptySrsStore();
+    recordAttempt(store, "s1", { score: 70 }, new Date(2026, 8, 16, 10));
+    recordAttempt(store, "s2", { score: 70 }, new Date(2026, 8, 17, 10));
+    expect(learningStreak(store.history, NOW)).toBe(2);
+    recordAttempt(store, "s3", { score: 70 }, NOW);
+    expect(learningStreak(store.history, NOW)).toBe(3);
+  });
+
+  test("14-day trend preserves empty days and only reports delta with enough data", () => {
+    const store = emptySrsStore();
+    recordAttempt(store, "early-1", { score: 60 }, new Date(2026, 8, 6, 10));
+    recordAttempt(store, "early-2", { score: 64 }, new Date(2026, 8, 7, 10));
+    recordAttempt(store, "late-1", { score: 78 }, new Date(2026, 8, 17, 10));
+    recordAttempt(store, "late-2", { score: 82 }, NOW);
+    const trend = buildLearningTrend(store.history, NOW);
+    expect(trend.days).toHaveLength(14);
+    expect(trend.practicedDays).toBe(4);
+    expect(trend.days.filter((day) => day.scoreAvg == null)).toHaveLength(10);
+    expect(trend.scoreDelta).toBe(18); // (78+82)/2 - (60+64)/2
+
+    const sparse = buildLearningTrend(store.history.slice(-1), NOW);
+    expect(sparse.scoreDelta).toBeNull();
   });
 });
 

@@ -62,13 +62,20 @@ import { dailySeedForKey, dateKeyFor } from "../core/daily";
 import type { Skill } from "../core/data";
 import { NODE_META } from "../core/engine";
 import type { EmitOptions, GameEngine, GameState, RunSummary } from "../core/engine";
+import {
+  LEARNING_ARCHIVE_MAX_BYTES,
+  type LearningArchive,
+  learningArchiveSummary,
+  parseLearningArchive,
+  serializeLearningArchive
+} from "../core/learning-archive";
 import { generateActMap } from "../core/levelgen";
 import type { ActNode } from "../core/levelgen";
 import { mutationList } from "../core/mutators";
 import { countSrsGraduated, markCodexSeen, recordRunEnd, recordVoiceCast } from "../core/profile";
 import type { ProfileStore } from "../core/profile";
 import { scoreLabel, scorePronunciation } from "../core/scoring";
-import { buildLearningReport, dailyPicks, recordAttempt } from "../core/srs";
+import { buildLearningReport, dailyPicks, dailyPracticeProgress, recordAttempt } from "../core/srs";
 import {
   type PitchFrame,
   TONE_TEMPLATES,
@@ -337,10 +344,12 @@ function dailyStatusLabel(): string {
   return `今日已到第 ${record.floor} 层 · 综合 ${record.averageScore}`;
 }
 
-/** 标题屏的「每日三句」错词复习卡（无错词时不渲染）。 */
+/** P8-D 标题学习目标：每日三个不同短句，错词仍按记忆曲线推送。 */
 function titleReviewStrip(): string {
-  const picks = dailyPicks(loadSrsStore(), new Date(), 3);
-  if (!picks.length) return "";
+  const store = loadSrsStore();
+  const now = new Date();
+  const picks = dailyPicks(store, now, 3);
+  const progress = dailyPracticeProgress(store, now);
   const chips = picks
     .map((entry) => {
       const skill = lookupSkill(entry.id);
@@ -352,10 +361,18 @@ function titleReviewStrip(): string {
       </button>`;
     })
     .join("");
+  const dots = Array.from(
+    { length: progress.goal },
+    (_, index) =>
+      `<span class="practice-goal-dot${index < progress.completed ? " done" : ""}">${index < progress.completed ? "✓" : index + 1}</span>`
+  ).join("");
   return `
-    <div class="panel review-strip">
-      <div class="review-strip-head"><strong>每日三句</strong><small>错词本按记忆曲线推送，点一句直接练</small></div>
-      <div class="review-chips">${chips}</div>
+    <div class="panel review-strip" aria-label="今日开口目标">
+      <div class="review-strip-head">
+        <div><strong>今日开口 ${progress.completed}/${progress.goal}</strong><small>连续练习 ${progress.streak} 天 · ${progress.remaining ? `还差 ${progress.remaining} 个不同短句` : "今日目标已完成"}</small></div>
+        <div class="practice-goal-dots" aria-label="已完成 ${progress.completed} 句，共 ${progress.goal} 句">${dots}</div>
+      </div>
+      ${chips ? `<div class="review-strip-sub"><strong>每日三句</strong><small>错词本按记忆曲线推送</small></div><div class="review-chips">${chips}</div>` : '<button class="ghost-button full-button" type="button" data-action="open-practice">错词本为空 · 去练习场选一句</button>'}
     </div>`;
 }
 
@@ -842,6 +859,7 @@ export class GameUI {
   private lastNotice: string | null = null;
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingVoice: PendingVoice | null = null;
+  private pendingLearningArchive: LearningArchive | null = null;
   private pendingBuild: {
     operation: BuildOperation;
     index: number;
@@ -912,6 +930,7 @@ export class GameUI {
 
   private bindEvents(): void {
     this.root.addEventListener("click", (event) => this.handleAction(event));
+    this.root.addEventListener("change", (event) => this.handleRootChange(event));
     this.modalRoot.addEventListener("click", (event) => this.handleModalAction(event));
     this.inventoryButton.addEventListener("click", () => this.openInventory());
     document.querySelector("#help-button")?.addEventListener("click", () => this.openHelp());
@@ -948,6 +967,9 @@ export class GameUI {
     if (action === "practice-record") this.practiceRecord();
     if (action === "practice-stop") this.adapter?.stop();
     if (action === "open-report") this.openReport();
+    if (action === "export-learning") this.exportLearningArchive();
+    if (action === "pick-learning-import")
+      this.root.querySelector<HTMLInputElement>("#learning-import-input")?.click();
     // ─── P4 标题层动作 ───
     if (action === "endless-run") {
       clearSave();
@@ -994,11 +1016,22 @@ export class GameUI {
     }
   }
 
+  private handleRootChange(event: Event): void {
+    const input = (event.target as HTMLElement).closest<HTMLInputElement>(
+      '[data-action="learning-import-file"]'
+    );
+    if (!input?.files?.[0]) return;
+    const file = input.files[0];
+    input.value = "";
+    void this.previewLearningImport(file);
+  }
+
   private handleModalAction(event: Event): void {
     const button = (event.target as HTMLElement).closest<HTMLElement>("[data-action]");
     if (!button || (button as HTMLButtonElement).disabled) return;
     const action = button.dataset.action!;
     if (action === "close-modal") this.closeModal();
+    if (action === "confirm-learning-import") this.confirmLearningImport();
     if (action === "open-build") this.openBuild(button.dataset.buildMode as BuildView);
     if (action === "build-select")
       this.selectBuild(
@@ -1866,7 +1899,7 @@ export class GameUI {
           <div class="help-step"><b>2</b><div><strong>开声出招 / 破阵拍</strong><small>说出卡牌上的粤语短句即可施法；无声环境改用「破阵拍」节奏判定，随时可在设置页切换引擎。</small></div></div>
           <div class="help-step"><b>3</b><div><strong>发音影响威力</strong><small>未稳 0.52 倍、入门 0.78 倍、清晰 1 倍、正音 1.32 倍。端侧引擎额外按粤语六调评「调准」；标题屏「练习场」可看基频曲线逐句校准。</small></div></div>
           <div class="help-step"><b>4</b><div><strong>构筑与存档</strong><small>战役新局启用 36 招式 / 26 奇遇 / 8 道具扩展池（逐幕解锁）。经典塔与旧存档保留原规则。每日固定两条词缀，无尽每五层重抽；每次行动自动保存。</small></div></div>
-          <div class="help-step"><b>5</b><div><strong>开口有回响</strong><small>低分短句自动进「错词本」，标题屏每日推三句复习；「学习报告」看字准/调准/信心/词汇四维。</small></div></div>
+          <div class="help-step"><b>5</b><div><strong>开口有回响</strong><small>低分短句自动进「错词本」，每日练三个不同短句；「学习报告」看六调画像、14 日趋势，并可导出纯本地备份。</small></div></div>
         </div>
         <div class="notice-strip">端侧模型（约 230MB，可断点续传）下载一次即可完全离线游玩：设置 → 端侧模型。</div>
         <button class="ghost-button full-button" type="button" data-action="replay-tutorial" style="margin-top:10px">重看新手教学（识招 · 听示范 · 开声校准）</button>
@@ -1900,6 +1933,63 @@ export class GameUI {
   private openReport(): void {
     this.view = "report";
     this.render(this.engine.state);
+  }
+
+  private exportLearningArchive(): void {
+    const now = new Date();
+    const text = serializeLearningArchive(loadSrsStore(), now);
+    const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `voice-tower-learning-${dateKeyFor(now)}.json`;
+    anchor.hidden = true;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    this.showToast("学习档案已导出：只含本地分数聚合，不含录音或识别文本。");
+  }
+
+  private async previewLearningImport(file: File): Promise<void> {
+    if (file.size > LEARNING_ARCHIVE_MAX_BYTES) {
+      this.showToast("文件超过 1 MiB，未读取也未修改本机档案。");
+      return;
+    }
+    try {
+      const archive = parseLearningArchive(await file.text());
+      this.pendingLearningArchive = archive;
+      const summary = learningArchiveSummary(archive);
+      const exported = new Date(summary.exportedAt).toLocaleString("zh-CN", { hour12: false });
+      this.modalRoot.innerHTML = `
+        <div class="modal-sheet learning-import-sheet">
+          <div class="modal-head"><div><h2>恢复学习档案</h2><p>先核对备份摘要，再决定是否覆盖</p></div><button class="close-button" type="button" data-action="close-modal">×</button></div>
+          <div class="archive-summary" aria-label="导入档案摘要">
+            <div><strong>${summary.voiceAttempts}</strong><small>开口次数</small></div>
+            <div><strong>${summary.vocab}</strong><small>练过短句</small></div>
+            <div><strong>${summary.mistakes}</strong><small>错词条目</small></div>
+            <div><strong>${summary.activeDays}</strong><small>记录天数</small></div>
+          </div>
+          <p class="settings-note">导出时间：${escapeHtml(exported)}</p>
+          <div class="notice-strip">确认后会覆盖本机学习档案；游戏进度和设置不受影响。由于旧统计没有逐次唯一编号，本期不提供可能重复计数的“自动合并”。</div>
+          <div class="voice-result-actions">
+            <button class="primary-button full-button" type="button" data-action="confirm-learning-import">确认覆盖并恢复</button>
+            <button class="ghost-button full-button" type="button" data-action="close-modal">取消 · 保留本机档案</button>
+          </div>
+        </div>`;
+    } catch (error) {
+      this.pendingLearningArchive = null;
+      this.showToast(error instanceof Error ? error.message : "学习档案读取失败。");
+    }
+  }
+
+  private confirmLearningImport(): void {
+    const archive = this.pendingLearningArchive;
+    if (!archive) return;
+    saveSrsStore(archive.store);
+    this.pendingLearningArchive = null;
+    this.closeModal(false);
+    this.render(this.engine.state);
+    this.showToast("学习档案已恢复；游戏存档和设置没有改变。");
   }
 
   /** P4 标题层二级页（成就 / 图鉴） */
@@ -2218,6 +2308,28 @@ export class GameUI {
           )
           .join("")}</div>`
       : "";
+    const trendBars = report.trend.days
+      .map((day) => {
+        const details =
+          day.scoreAvg == null
+            ? `${day.dateKey} · 未练习`
+            : `${day.dateKey} · 综合 ${day.scoreAvg} 分 · 字准 ${day.wordAvg} 分 · 调准 ${day.toneAvg ?? "无数据"} · ${day.attempts} 次`;
+        return `<div class="learning-trend-day${day.scoreAvg == null ? " empty" : ""}" aria-label="${escapeHtml(details)}" title="${escapeHtml(details)}">
+          <div class="learning-trend-track"><span style="height:${day.scoreAvg ?? 0}%"></span></div>
+          <small>${escapeHtml(day.label)}</small>
+          <b>${day.scoreAvg ?? "—"}</b>
+        </div>`;
+      })
+      .join("");
+    const delta = report.trend.scoreDelta;
+    const deltaLabel =
+      delta == null
+        ? "前后半段各练满 2 天后显示变化"
+        : delta > 0
+          ? `较前半段 +${delta} 分`
+          : delta < 0
+            ? `较前半段 ${delta} 分`
+            : "与前半段持平";
     const mistakes = report.mistakes.slice(0, 8).map((entry) => {
       const skill = lookupSkill(entry.id);
       if (!skill) return "";
@@ -2252,6 +2364,16 @@ export class GameUI {
           <p class="settings-note">今日挑战：${escapeHtml(todayRecord ? (todayRecord.victory ? `已通关 · 综合 ${todayRecord.averageScore}` : `到第 ${todayRecord.floor} 层 · 综合 ${todayRecord.averageScore}`) : "未挑战")}</p>
         </div>
       </div>
+      <section class="panel learning-trend-panel" aria-labelledby="learning-trend-title">
+        <div class="section-label"><h2 id="learning-trend-title">近 14 天进步</h2><p>${escapeHtml(deltaLabel)}</p></div>
+        <div class="learning-summary-grid">
+          <div><strong>${report.practice.completed}/${report.practice.goal}</strong><small>今日不同短句</small></div>
+          <div><strong>${report.practice.streak}</strong><small>连续练习天数</small></div>
+          <div><strong>${report.trend.practicedDays}</strong><small>近 14 天有练习</small></div>
+        </div>
+        <div class="learning-trend-chart" role="group" aria-label="最近十四天每日综合、字准与调准均分；横线空位表示当天未练习">${trendBars}</div>
+        <p class="settings-note">只记录每日分数聚合和练过的技能 ID；不保存录音、识别文本或 F0 曲线。</p>
+      </section>
       <section class="panel tone-mastery-panel" aria-labelledby="tone-mastery-title">
         <div class="section-label"><h2 id="tone-mastery-title">六调画像</h2><p>${report.focusTone ? `今日重点 · ${report.focusTone} 调 ${escapeHtml(TONE_TEMPLATES[report.focusTone].name)}` : "完成端侧跟读后生成"}</p></div>
         <div class="tone-mastery-grid">${toneCards}</div>
@@ -2261,6 +2383,15 @@ export class GameUI {
       <div class="inventory-list">
         ${mistakes.length ? mistakes.join("") : `<div class="notice-strip">错词本是空的——综合分低于 65 的短句会自动钉进来。</div>`}
       </div>
+      <section class="panel learning-archive-panel" aria-labelledby="learning-archive-title">
+        <div class="section-label"><h2 id="learning-archive-title">学习档案备份</h2><p>纯本地 JSON · 不含录音</p></div>
+        <p class="settings-note">导出可在换浏览器前留底；导入采用二次确认覆盖，只修改学习报告，不修改游戏进度或设置。</p>
+        <div class="learning-archive-actions">
+          <button class="secondary-button" type="button" data-action="export-learning">导出学习档案</button>
+          <button class="ghost-button" type="button" data-action="pick-learning-import">从 JSON 恢复</button>
+        </div>
+        <input id="learning-import-input" data-action="learning-import-file" type="file" accept="application/json,.json" hidden />
+      </section>
     </section>`;
   }
 
@@ -2277,6 +2408,7 @@ export class GameUI {
     this.voiceAura = null;
     this.pendingVoice = cancelVoice ? null : this.pendingVoice;
     this.pendingBuild = null;
+    this.pendingLearningArchive = null;
     this.modalRoot.innerHTML = "";
   }
 

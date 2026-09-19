@@ -2416,6 +2416,48 @@ body.reduce-motion *::after {
   font-size: 11px;
 }
 
+.review-strip-head > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.practice-goal-dots {
+  display: flex;
+  gap: 5px;
+  flex: 0 0 auto;
+}
+
+.practice-goal-dot {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.practice-goal-dot.done {
+  border-color: var(--jade);
+  background: rgba(85, 190, 142, 0.16);
+  color: var(--jade);
+}
+
+.review-strip-sub {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--paper-soft);
+  font-size: 12px;
+}
+
+.review-strip-sub small {
+  color: var(--muted);
+}
+
 .review-chips {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -2704,12 +2746,114 @@ body.reduce-motion *::after {
   font-size: 13px;
 }
 
-.tone-mastery-panel {
+.learning-trend-panel,
+.tone-mastery-panel,
+.learning-archive-panel {
   margin-bottom: 18px;
 }
 
-.tone-mastery-panel .section-label {
+.learning-trend-panel .section-label,
+.tone-mastery-panel .section-label,
+.learning-archive-panel .section-label {
   margin-top: 0;
+}
+
+.learning-summary-grid,
+.archive-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.learning-summary-grid > div,
+.archive-summary > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--ink-3);
+  text-align: center;
+}
+
+.learning-summary-grid strong,
+.archive-summary strong {
+  color: var(--gold-bright);
+  font-size: 18px;
+}
+
+.learning-summary-grid small,
+.archive-summary small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.archive-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.learning-trend-chart {
+  display: grid;
+  grid-template-columns: repeat(14, minmax(0, 1fr));
+  gap: 3px;
+  align-items: end;
+  min-height: 116px;
+  padding: 8px 2px 2px;
+  border-bottom: 1px solid var(--line);
+}
+
+.learning-trend-day {
+  display: grid;
+  grid-template-rows: 76px auto auto;
+  gap: 2px;
+  min-width: 0;
+  text-align: center;
+}
+
+.learning-trend-track {
+  display: flex;
+  align-items: end;
+  height: 76px;
+  border-radius: 4px 4px 0 0;
+  background: rgba(232, 209, 167, 0.05);
+  overflow: hidden;
+}
+
+.learning-trend-track span {
+  display: block;
+  width: 100%;
+  min-height: 2px;
+  border-radius: 4px 4px 0 0;
+  background: linear-gradient(180deg, var(--gold-bright), var(--red));
+}
+
+.learning-trend-day.empty .learning-trend-track span {
+  min-height: 0;
+}
+
+.learning-trend-day small,
+.learning-trend-day b {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 8px;
+  white-space: nowrap;
+}
+
+.learning-trend-day b {
+  color: var(--paper-soft);
+  font-size: 9px;
+}
+
+.learning-archive-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.learning-import-sheet .archive-summary {
+  margin-top: 10px;
 }
 
 .tone-mastery-grid {
@@ -2772,8 +2916,13 @@ body.reduce-motion *::after {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .focus-practice-list {
+  .focus-practice-list,
+  .learning-archive-actions {
     grid-template-columns: 1fr;
+  }
+
+  .archive-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

@@ -1,8 +1,10 @@
 /**
- * P3 学习闭环核心（纯函数）：错词本 + 简化 SM-2 调度 + 学习报告聚合。
+ * P3/P8 学习闭环核心（纯函数）：错词本 + 简化 SM-2 调度 + 六调画像 + 本地趋势。
  * 规则：战斗/练习中单句综合分 <65 自动进错词本；复习表现改写间隔与难度系数；
  * 「每日三句」= 到期优先 → 最弱优先。所有函数确定性、可单测。
  */
+
+import { dateKeyFor } from "./daily";
 
 export type TrackedTone = 1 | 2 | 3 | 4 | 5 | 6;
 
@@ -50,9 +52,23 @@ export interface SrsStats {
   toneMastery: ToneMasteryMap;
 }
 
+export interface LearningDay {
+  /** 用户本地日历 YYYY-MM-DD。 */
+  dateKey: string;
+  attempts: number;
+  sumScore: number;
+  sumWord: number;
+  toneCount: number;
+  sumTone: number;
+  /** 当天练过的不同技能；不保存识别文本或逐次记录。 */
+  practicedIds: string[];
+}
+
 export interface SrsStore {
   entries: Record<string, SrsEntry>;
   stats: SrsStats;
+  /** P8-D 最多 90 个有练习的本地自然日；旧档加载时补空数组。 */
+  history: LearningDay[];
 }
 
 /** 进入错词本的综合分门槛（低于即钉子户）。 */
@@ -60,6 +76,13 @@ export const SRS_LEECH_THRESHOLD = 65;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TRACKED_TONES: TrackedTone[] = [1, 2, 3, 4, 5, 6];
+export const LEARNING_HISTORY_DAYS = 90;
+export const DAILY_PRACTICE_GOAL = 3;
+export const LEARNING_TREND_DAYS = 14;
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
 
 export function emptyToneMastery(): ToneMasteryMap {
   return Object.fromEntries(
@@ -70,24 +93,100 @@ export function emptyToneMastery(): ToneMasteryMap {
 /** 旧档/异常局部字段归一；不修改传入对象。 */
 export function normalizeToneMastery(input: unknown): ToneMasteryMap {
   const base = emptyToneMastery();
-  const finite = (value: unknown): value is number =>
-    typeof value === "number" && Number.isFinite(value);
   if (!input || typeof input !== "object") return base;
   const source = input as Partial<Record<TrackedTone, Partial<ToneMasteryStat>>>;
   for (const tone of TRACKED_TONES) {
     const value = source[tone];
     if (!value || typeof value !== "object") continue;
-    const attempts = finite(value.attempts) ? Math.max(0, Math.floor(value.attempts)) : 0;
-    const sumScore = finite(value.sumScore) ? Math.max(0, Math.round(value.sumScore)) : 0;
-    const bestScore = finite(value.bestScore)
+    const attempts = isFiniteNumber(value.attempts) ? Math.max(0, Math.floor(value.attempts)) : 0;
+    const sumScore = isFiniteNumber(value.sumScore) ? Math.max(0, Math.round(value.sumScore)) : 0;
+    const bestScore = isFiniteNumber(value.bestScore)
       ? Math.max(0, Math.min(100, Math.round(value.bestScore)))
       : 0;
-    const lastScore = finite(value.lastScore)
+    const lastScore = isFiniteNumber(value.lastScore)
       ? Math.max(0, Math.min(100, Math.round(value.lastScore)))
       : 0;
     base[tone] = { attempts, sumScore, bestScore, lastScore };
   }
   return base;
+}
+
+function dateFromKey(key: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(year, month - 1, day, 12);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+    return null;
+  }
+  return date;
+}
+
+function shiftedDateKey(now: Date, dayOffset: number): string {
+  return dateKeyFor(new Date(now.getFullYear(), now.getMonth(), now.getDate() + dayOffset, 12));
+}
+
+/** 归一并合并重复日期；只保留最近 90 个有练习的自然日。 */
+export function normalizeLearningHistory(input: unknown): LearningDay[] {
+  if (!Array.isArray(input)) return [];
+  const byDate = new Map<string, LearningDay>();
+  for (const raw of input.slice(0, 500)) {
+    if (!raw || typeof raw !== "object") continue;
+    const source = raw as Partial<LearningDay>;
+    if (typeof source.dateKey !== "string" || !dateFromKey(source.dateKey)) continue;
+    const attempts = isFiniteNumber(source.attempts)
+      ? Math.max(0, Math.min(100000, Math.floor(source.attempts)))
+      : 0;
+    if (!attempts) continue;
+    const sumScore = isFiniteNumber(source.sumScore)
+      ? Math.max(0, Math.min(attempts * 100, Math.round(source.sumScore)))
+      : 0;
+    const sumWord = isFiniteNumber(source.sumWord)
+      ? Math.max(0, Math.min(attempts * 100, Math.round(source.sumWord)))
+      : 0;
+    const toneCount = isFiniteNumber(source.toneCount)
+      ? Math.max(0, Math.min(attempts, Math.floor(source.toneCount)))
+      : 0;
+    const sumTone = isFiniteNumber(source.sumTone)
+      ? Math.max(0, Math.min(toneCount * 100, Math.round(source.sumTone)))
+      : 0;
+    const practicedIds = Array.isArray(source.practicedIds)
+      ? [
+          ...new Set(
+            source.practicedIds.filter(
+              (id): id is string => typeof id === "string" && /^[a-z0-9-]{1,128}$/.test(id)
+            )
+          )
+        ].slice(0, 256)
+      : [];
+    const existing = byDate.get(source.dateKey);
+    if (existing) {
+      existing.attempts += attempts;
+      existing.sumScore += sumScore;
+      existing.sumWord += sumWord;
+      existing.toneCount += toneCount;
+      existing.sumTone += sumTone;
+      existing.practicedIds = [...new Set([...existing.practicedIds, ...practicedIds])].slice(
+        0,
+        256
+      );
+    } else {
+      byDate.set(source.dateKey, {
+        dateKey: source.dateKey,
+        attempts,
+        sumScore,
+        sumWord,
+        toneCount,
+        sumTone,
+        practicedIds
+      });
+    }
+  }
+  return [...byDate.values()]
+    .sort((a, b) => a.dateKey.localeCompare(b.dateKey))
+    .slice(-LEARNING_HISTORY_DAYS);
 }
 
 export function emptySrsStore(): SrsStore {
@@ -101,7 +200,8 @@ export function emptySrsStore(): SrsStore {
       sumConfidence: 0,
       skillsUsed: [],
       toneMastery: emptyToneMastery()
-    }
+    },
+    history: []
   };
 }
 
@@ -188,6 +288,38 @@ function applyAttemptDetail(
   }
 }
 
+function recordLearningDay(
+  store: SrsStore,
+  skillId: string,
+  attempt: AttemptInput,
+  now: Date
+): void {
+  const dateKey = dateKeyFor(now);
+  store.history = normalizeLearningHistory(store.history);
+  let day = store.history.find((entry) => entry.dateKey === dateKey);
+  if (!day) {
+    day = {
+      dateKey,
+      attempts: 0,
+      sumScore: 0,
+      sumWord: 0,
+      toneCount: 0,
+      sumTone: 0,
+      practicedIds: []
+    };
+    store.history.push(day);
+  }
+  day.attempts += 1;
+  day.sumScore += Math.max(0, Math.min(100, Math.round(attempt.score)));
+  day.sumWord += Math.max(0, Math.min(100, Math.round(attempt.wordScore ?? attempt.score)));
+  if (attempt.toneScore != null && Number.isFinite(attempt.toneScore)) {
+    day.toneCount += 1;
+    day.sumTone += Math.max(0, Math.min(100, Math.round(attempt.toneScore)));
+  }
+  if (!day.practicedIds.includes(skillId)) day.practicedIds.push(skillId.slice(0, 128));
+  store.history = normalizeLearningHistory(store.history);
+}
+
 /**
  * 记录一次发声练习：更新聚合统计；综合分低于门槛则进入/更新错词本调度；
  * 已在错词本中的条目无论分数都按 SM-2 推进复习。
@@ -208,6 +340,7 @@ export function recordAttempt(
   stats.sumConfidence += Math.round(attempt.confidence ?? 0);
   if (!stats.skillsUsed.includes(skillId)) stats.skillsUsed.push(skillId);
   const focus = accumulateToneMastery(stats, attempt);
+  recordLearningDay(store, skillId, attempt, now);
 
   const existing = store.entries[skillId];
   if (existing) {
@@ -263,6 +396,108 @@ export function dailyPicks(store: SrsStore, now = new Date(), count = 3): SrsEnt
   return [...due, ...rest].slice(0, count);
 }
 
+export interface DailyPracticeProgress {
+  dateKey: string;
+  completed: number;
+  goal: number;
+  remaining: number;
+  attempts: number;
+  practicedIds: string[];
+  streak: number;
+}
+
+/** 连续练习天数：今天尚未练习时从昨天开始，避免白天打开即断签。 */
+export function learningStreak(history: LearningDay[], now = new Date()): number {
+  const days = new Set(
+    normalizeLearningHistory(history)
+      .filter((day) => day.attempts > 0)
+      .map((day) => day.dateKey)
+  );
+  let offset = days.has(dateKeyFor(now)) ? 0 : -1;
+  let streak = 0;
+  while (streak < LEARNING_HISTORY_DAYS && days.has(shiftedDateKey(now, offset))) {
+    streak += 1;
+    offset -= 1;
+  }
+  return streak;
+}
+
+export function dailyPracticeProgress(
+  store: SrsStore,
+  now = new Date(),
+  goal = DAILY_PRACTICE_GOAL
+): DailyPracticeProgress {
+  const safeGoal = Math.max(1, Math.floor(goal));
+  const dateKey = dateKeyFor(now);
+  const history = normalizeLearningHistory(store.history);
+  const day = history.find((entry) => entry.dateKey === dateKey);
+  const practicedIds = day ? [...day.practicedIds] : [];
+  const completed = Math.min(safeGoal, practicedIds.length);
+  return {
+    dateKey,
+    completed,
+    goal: safeGoal,
+    remaining: Math.max(0, safeGoal - completed),
+    attempts: day?.attempts ?? 0,
+    practicedIds,
+    streak: learningStreak(history, now)
+  };
+}
+
+export interface LearningTrendDay {
+  dateKey: string;
+  label: string;
+  attempts: number;
+  scoreAvg: number | null;
+  wordAvg: number | null;
+  toneAvg: number | null;
+}
+
+export interface LearningTrend {
+  days: LearningTrendDay[];
+  /** 后 7 天练习日均分 - 前 7 天练习日均分；两侧各少于 2 天时为空。 */
+  scoreDelta: number | null;
+  practicedDays: number;
+}
+
+export function buildLearningTrend(
+  history: LearningDay[],
+  now = new Date(),
+  dayCount = LEARNING_TREND_DAYS
+): LearningTrend {
+  const count = Math.max(2, Math.min(LEARNING_HISTORY_DAYS, Math.floor(dayCount)));
+  const byDate = new Map(normalizeLearningHistory(history).map((day) => [day.dateKey, day]));
+  const days: LearningTrendDay[] = [];
+  for (let offset = -(count - 1); offset <= 0; offset += 1) {
+    const dateKey = shiftedDateKey(now, offset);
+    const day = byDate.get(dateKey);
+    const date = dateFromKey(dateKey)!;
+    days.push({
+      dateKey,
+      label: `${date.getMonth() + 1}/${date.getDate()}`,
+      attempts: day?.attempts ?? 0,
+      scoreAvg: day ? Math.round(day.sumScore / day.attempts) : null,
+      wordAvg: day ? Math.round(day.sumWord / day.attempts) : null,
+      toneAvg: day?.toneCount ? Math.round(day.sumTone / day.toneCount) : null
+    });
+  }
+  const midpoint = Math.floor(days.length / 2);
+  const averageSide = (side: LearningTrendDay[]): number | null => {
+    const values = side
+      .map((day) => day.scoreAvg)
+      .filter((value): value is number => value != null);
+    if (values.length < 2) return null;
+    return values.reduce((sum, value) => sum + value, 0) / values.length;
+  };
+  const earlier = averageSide(days.slice(0, midpoint));
+  const later = averageSide(days.slice(midpoint));
+  return {
+    days,
+    scoreDelta: earlier == null || later == null ? null : Math.round(later - earlier),
+    practicedDays: days.filter((day) => day.attempts > 0).length
+  };
+}
+
 export interface ToneMasteryReport extends ToneMasteryStat {
   tone: TrackedTone;
   average: number | null;
@@ -285,6 +520,8 @@ export interface LearningReport {
   focusTone: TrackedTone | null;
   /** 与 focusTone 对应的错词练习入口（最多三句）。 */
   focusPracticeIds: string[];
+  practice: DailyPracticeProgress;
+  trend: LearningTrend;
 }
 
 export function buildLearningReport(store: SrsStore, now = new Date()): LearningReport {
@@ -323,6 +560,8 @@ export function buildLearningReport(store: SrsStore, now = new Date()): Learning
     dueCount: dueEntries(store, now).length,
     toneMastery,
     focusTone,
-    focusPracticeIds
+    focusPracticeIds,
+    practice: dailyPracticeProgress(store, now),
+    trend: buildLearningTrend(store.history, now)
   };
 }

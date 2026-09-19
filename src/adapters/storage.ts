@@ -10,7 +10,7 @@ import { compareDailyRecords } from "../core/daily";
 import type { GameState } from "../core/engine";
 import { emptyProfile } from "../core/profile";
 import type { ProfileStore } from "../core/profile";
-import { emptySrsStore, normalizeToneMastery } from "../core/srs";
+import { emptySrsStore, normalizeLearningHistory, normalizeToneMastery } from "../core/srs";
 import type { SrsStore } from "../core/srs";
 import type { VoiceMode } from "./voice";
 
@@ -213,7 +213,8 @@ export function loadSrsStore(): SrsStore {
     stats.toneMastery = normalizeToneMastery(parsed.stats?.toneMastery);
     return {
       entries: parsed.entries && typeof parsed.entries === "object" ? parsed.entries : {},
-      stats
+      stats,
+      history: normalizeLearningHistory(parsed.history)
     };
   } catch {
     return emptySrsStore();

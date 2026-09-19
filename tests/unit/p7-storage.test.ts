@@ -57,6 +57,7 @@ test("P8-C 加载旧 SRS 档案时补齐六调画像且保留原统计", () => {
   expect(store.stats.skillsUsed).toEqual(["ding-ngang-soeng"]);
   expect(Object.keys(store.stats.toneMastery)).toEqual(["1", "2", "3", "4", "5", "6"]);
   expect(store.stats.toneMastery[6].attempts).toBe(0);
+  expect(store.history).toEqual([]);
 });
 
 test("存档适配器往返保留P7规则、词缀和新道具", () => {
