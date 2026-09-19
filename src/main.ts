@@ -31,7 +31,9 @@ import { SCORING_WEIGHTS_V2 } from "./core/config/balance";
 import { GameEngine } from "./core/engine";
 import type { EmitOptions, GameState } from "./core/engine";
 import { adaptiveBoostFor } from "./core/profile";
-import { AmbientField } from "./ui/ambient";
+import { registerBurstSink } from "./ui/fx";
+import { burstSpecFor } from "./ui/fx/particles/emitter";
+import { ParticleField, actThemeFor } from "./ui/fx/particles/field";
 import { startScreenTransition } from "./ui/fx/transitions";
 import { GameUI } from "./ui/ui";
 import type { VoiceServices } from "./ui/ui";
@@ -48,8 +50,25 @@ const tts = new SpeechTts();
 
 const audio = new GameAudio();
 audio.attachSettings({ sound: settings.sound, music: settings.music ?? true });
+// P6-F2：粒子场（三幕主题 + 爆发 + 音频响应，替代 P5 AmbientField）
 const ambientCanvas = document.querySelector<HTMLCanvasElement>("#ambient-canvas");
-const ambient = ambientCanvas ? new AmbientField(ambientCanvas, settings.reduceMotion) : null;
+const ambient = ambientCanvas
+  ? new ParticleField(ambientCanvas, { reducedMotion: settings.reduceMotion })
+  : null;
+if (ambient) {
+  ambient.setAudioLevel(() => audio.level());
+  // P6-F1/F2 联动：战斗演出按语义点火粒子爆发（敌人舞台约在画面上 1/3）
+  registerBurstSink((kind) => {
+    const x = 0.35 + Math.random() * 0.3;
+    const y = 0.3 + Math.random() * 0.12;
+    ambient.burst(burstSpecFor(kind, x, y));
+    if (kind === "firework") {
+      // 胜利三连：左右补两发，位置与色相错开
+      window.setTimeout(() => ambient.burst(burstSpecFor("firework", 0.25, 0.34, 40)), 180);
+      window.setTimeout(() => ambient.burst(burstSpecFor("firework", 0.75, 0.3, -20)), 360);
+    }
+  });
+}
 
 // 自动播放合规：首次手势解锁 AudioContext；顺手给所有动作按钮配轻点击音
 document.addEventListener(
@@ -190,6 +209,14 @@ engine.subscribe((state: GameState, options: EmitOptions) => {
     ui.render(state, options);
   }
   lastBroadcastPhase = state.phase;
+  // P6-F2：氛围主题随幕切换（战役第二/三幕换粒子动力学与色板）
+  if (ambient) {
+    const theme = actThemeFor(state);
+    if (ambient.currentTheme.id !== theme.id) {
+      ambient.clearBursts();
+      ambient.setTheme(theme);
+    }
+  }
   // P5 演出与声音：按 emit 效果播放（未解锁/关闭时适配器内部 no-op）
   const sfx = sfxForEffect(options.effect);
   if (sfx) audio.playSfx(sfx);

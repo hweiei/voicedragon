@@ -32,6 +32,8 @@ export interface VoiceStartOptions {
   onState?: (state: VoiceAdapterState) => void;
   /** P3 练习场：实时 F0 帧回调（仅支持 F0 通道的适配器会触发）。 */
   onPitchFrame?: (frame: PitchFrame) => void;
+  /** P6-F2 语音光环：实时音量 RMS 回调（麦克风通道适配器触发）。 */
+  onVolume?: (rms: number) => void;
 }
 
 export interface VoiceAdapter {

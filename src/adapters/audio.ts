@@ -104,6 +104,10 @@ export class GameAudio {
   private unlocked = false;
   private noiseBuffer: AudioBuffer | null = null;
 
+  // P6-F2 频谱分析（音频驱动氛围）：masterGain 旁路挂 AnalyserNode
+  private analyser: AnalyserNode | null = null;
+  private freqData: Uint8Array | null = null;
+
   // BGM 调度状态
   private mood: BgmMood = "none";
   private nextStepAt = 0;
@@ -133,6 +137,23 @@ export class GameAudio {
 
   isUnlocked(): boolean {
     return this.unlocked;
+  }
+
+  /**
+   * P6-F2：当前输出频谱能量（供粒子场做音频响应氛围）。
+   * 未解锁 / 声音音乐全关 / 无 Web Audio 时返回 null——氛围层保持静态呼吸。
+   * 数值归一化到 0..1（低/中/高三带）。
+   */
+  level(): { bass: number; mid: number; treble: number } | null {
+    if (!this.analyser || !this.freqData || !this.unlocked) return null;
+    if (!this.settings.sound && !this.settings.music) return null;
+    this.analyser.getByteFrequencyData(this.freqData);
+    const band = (from: number, to: number): number => {
+      let sum = 0;
+      for (let i = from; i < to; i += 1) sum += this.freqData?.[i] ?? 0;
+      return sum / ((to - from) * 255);
+    };
+    return { bass: band(1, 8), mid: band(8, 40), treble: band(40, 100) };
   }
 
   /** 播放一次性音效（未解锁/关音效时 no-op）。 */
@@ -217,6 +238,12 @@ export class GameAudio {
     this.musicGain = this.ctx.createGain();
     this.musicGain.gain.value = this.settings.music ? 1 : 0;
     this.musicGain.connect(this.masterGain);
+    // P6-F2：主增益旁路频谱分析（AnalyserNode 作为汇聚端，无需接 destination）
+    this.analyser = this.ctx.createAnalyser();
+    this.analyser.fftSize = 256;
+    this.analyser.smoothingTimeConstant = 0.85;
+    this.masterGain.connect(this.analyser);
+    this.freqData = new Uint8Array(this.analyser.frequencyBinCount);
     // 预生成 1s 白噪声缓冲（打击音色共用）
     const buffer = this.ctx.createBuffer(1, this.ctx.sampleRate, this.ctx.sampleRate);
     const data = buffer.getChannelData(0);

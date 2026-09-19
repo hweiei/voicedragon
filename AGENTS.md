@@ -1,0 +1,65 @@
+# AGENTS.md · AI 协作工作流（本仓库）
+
+> 面向 AI 编码代理的项目守则。人类开发者同样可读。
+> 本仓库是《声震龙楼》——粤语语音驱动的爬塔 Roguelike（Vite + TS strict + PWA，零后端）。
+
+## 0. 代码理解：先用 codegraph，别上来就全仓 grep
+
+仓库已接入 [@colbymchenry/codegraph](https://github.com/colbymchenry/codegraph)（本地代码知识图谱，100% 离线，无遥测）。
+任何"这个符号在哪 / 谁调用了它 / 改它会影响谁 / 这个任务涉及哪些模块"的问题，
+**先查图再读码**，把读文件留给真正需要逐行细节的时刻：
+
+```bash
+npm i                      # node_modules 不在快照内，新会话先装依赖（含 codegraph）
+npm run codegraph          # 首次/索引缺失时重建（71 文件 <1s）
+npm run codegraph:sync     # 代码改动后增量同步
+
+npx codegraph query <符号名>          # 定位符号
+npx codegraph node <符号名>           # 单符号源码 + 调用/被调用链
+npx codegraph callers <符号名>        # 谁调用了它
+npx codegraph impact <符号名>         # 改动影响面分析（重构前必查）
+npx codegraph context <任务描述…>     # 任务级上下文聚合（开工前跑一次）
+npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 调用路径
+```
+
+索引存于 `.codegraph/`（已被其自带 .gitignore 排除，勿提交）。
+大改一批文件后记得 `npm run codegraph:sync` 保持图新鲜。
+
+## 1. 架构纪律（六边形 / 端口-适配器）
+
+- `src/core/` 是**纯领域内核**：零 DOM、零 IO、零随机（mulberry32 种子显式传递）。
+  任何 PR 若触碰内核签名，必须先说明理由；特效/演出层（`src/ui/`）**只消费**
+  `engine.emit` 事件，不反向写入。
+- `src/adapters/` 是端口实现（audio/tts/voice/storage/platform）。
+- `src/ui/` 渲染与演出：模板字符串直渲 + `src/ui/fx/` 演出编排（FxDirector）。
+- 设计决策的单一事实源：`docs/REDESIGN-PLAN.md`（P0–P5 历史）与
+  `docs/FX-UPGRADE-PLAN.md`（P6 动画升级，F1 已完成 / F2 声之形 / F3 治理）。
+
+## 2. 黄金契约与确定性
+
+- 引擎行为由 `tests/contract/` 九个黄金契约测试锁定：**改行为先改契约并获得确认**。
+- 同一 (act, seed) 必须同一局；特效随机走独立种子流，禁止消费游戏 `rngState`。
+
+## 3. 质量门（每次提交前全绿）
+
+```bash
+npx biome check .          # 风格（或 npm run check:fix）
+npx tsc --noEmit           # 严格类型
+npx vitest run             # 单测+契约+仿真（现 174 条）
+npx vite build && npx vite-node scripts/perf-budget.ts   # 首包 ≤350KB gzip（现 ~61）
+npx playwright test        # E2E（现 6 条；需 npx playwright install chromium）
+```
+
+## 4. 不可触碰的红线
+
+- **性能预算**：首包游戏本体 JS ≤ 350 KB gzip，perf-budget 一票否决；新依赖先报体积。
+- **零资产哲学**：不引入图片/音频/动画素材文件，全部程序化生成（Lottie/Rive 免谈）。
+- **隐私**：语音与存档不出设备；不引遥测；codegraph 已关 telemetry。
+- **无障碍**：所有动效必须尊重 `body.reduce-motion`（降级而非消失：信息保留、动效归零）。
+- **自动播放合规**：AudioContext 只能在首次用户手势后创建/恢复。
+
+## 5. 提交规范
+
+- 中文 conventional 风格：`P6-F2 xxx：要点`（期号-里程碑 + 冒号 + 摘要），正文列模块与测试数字。
+- 提交信息里带上测试与预算结果（如 `174 单测全绿，预算 61.0/350 KB`）。
+- 凭据永不入库、不进提交信息；CI 密钥走 GitHub Secrets。

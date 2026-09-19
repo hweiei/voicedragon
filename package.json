@@ -15,10 +15,14 @@
     "ci": "biome ci . && tsc --noEmit && vitest run && vite build && vite-node scripts/perf-budget.ts",
     "sim": "vite-node scripts/balance-sim.ts",
     "perf": "vite build && vite-node scripts/perf-budget.ts",
-    "test:e2e": "vite build && playwright test"
+    "test:e2e": "vite build && playwright test",
+    "codegraph": "codegraph init --yes . || codegraph sync .",
+    "codegraph:sync": "codegraph sync .",
+    "codegraph:status": "codegraph status ."
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
+    "@colbymchenry/codegraph": "^1.6.0",
     "@playwright/test": "^1.63.0",
     "lighthouse": "^12.8.2",
     "typescript": "~5.6.2",

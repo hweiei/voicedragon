@@ -172,6 +172,7 @@ export class SenseVoiceAdapter implements VoiceAdapter {
       },
       onVolume: (rms) => {
         tracker.noteVolume(rms);
+        options.onVolume?.(rms);
       },
       onError: (error) => {
         this.finishWithError(error);

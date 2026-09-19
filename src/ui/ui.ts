@@ -66,6 +66,7 @@ import {
   resamplePoints
 } from "../core/tone";
 import { playBattleFx } from "./fx";
+import { VoiceAura } from "./fx/voice-aura";
 import { drawRunPoster, sharePoster } from "./poster";
 import { VocalQte } from "./qte";
 
@@ -141,6 +142,12 @@ function escapeHtml(value = ""): string {
 function percent(value: number, max: number): number {
   if (!max) return 0;
   return Math.max(0, Math.min(100, Math.round((value / max) * 100)));
+}
+
+/** P6-F2：血条 scaleX 比例（合成器-only 排空，替代 width 触发 layout）。 */
+function ratio(value: number, max: number): string {
+  if (!max) return "0";
+  return Math.max(0, Math.min(1, value / max)).toFixed(4);
 }
 
 function skillDescription(skill: Skill): string {
@@ -258,7 +265,7 @@ function hud(state: GameState): string {
       <div class="hud-card">
         <small>生命</small>
         <strong>${player.hp} / ${player.maxHp}</strong>
-        <div class="hp-meter"><span style="width:${percent(player.hp, player.maxHp)}%"></span></div>
+        <div class="hp-meter"><span style="transform:scaleX(${ratio(player.hp, player.maxHp)})"></span></div>
       </div>
       <div class="hud-card"><small>楼层</small><strong>${state.endless ? `第 ${state.floor} 层 · ∞` : `${state.floor} / ${state.maxFloor}`}</strong></div>
       <div class="hud-card"><small>银两</small><strong>${player.gold} 两</strong></div>
@@ -544,12 +551,12 @@ function battleTemplate(state: GameState, engine: GameEngine): string {
       <div class="battle-status">
         <div class="combatant-mini">
           <div class="label-line"><strong>你</strong><small>${player.hp}/${player.maxHp}</small></div>
-          <div class="hp-meter"><span style="width:${percent(player.hp, player.maxHp)}%"></span></div>
+          <div class="hp-meter"><span style="transform:scaleX(${ratio(player.hp, player.maxHp)})"></span></div>
         </div>
         <div class="turn-badge">第<br />${combat.turn} 回</div>
         <div class="combatant-mini enemy">
           <div class="label-line"><strong>${escapeHtml(enemy.name)}</strong><small>${enemy.hp}/${enemy.maxHp}</small></div>
-          <div class="enemy-hp-meter"><span style="width:${percent(enemy.hp, enemy.maxHp)}%"></span></div>
+          <div class="enemy-hp-meter"><span style="transform:scaleX(${ratio(enemy.hp, enemy.maxHp)})"></span></div>
         </div>
       </div>
 
@@ -750,6 +757,8 @@ export class GameUI {
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingVoice: PendingVoice | null = null;
   private activeQte: VocalQte | null = null;
+  /** P6-F2 语音光环：收音期间的龙吟环（说话可见）。 */
+  private voiceAura: VoiceAura | null = null;
   /** P5 新手教学：当前步骤（null=未在教学中）；本会话只自动弹一次 */
   private tutorialStep: number | null = null;
   private tutorialShownThisSession = false;
@@ -1125,6 +1134,7 @@ export class GameUI {
           <button class="mini-button sample-button" type="button" data-action="listen-sample" aria-label="收听示范发音">🔊 听一听</button>
         </div>
         <div class="voice-orb-wrap">
+          <canvas id="voice-aura-canvas" class="voice-aura-canvas" aria-hidden="true"></canvas>
           <div class="voice-orb" id="voice-orb">待开声</div>
         </div>
         <p class="voice-live-text" id="voice-live-text">${escapeHtml(hint)}（当前引擎：${escapeHtml(engineLabel)}）</p>
@@ -1196,9 +1206,16 @@ export class GameUI {
       '[data-action="start-listening"]'
     );
     if (startButton) startButton.disabled = true;
+    // P6-F2：升起龙吟环——音量驱动涨落，基频漂移六调域色相
+    const auraCanvas = this.modalRoot.querySelector<HTMLCanvasElement>("#voice-aura-canvas");
+    this.voiceAura?.stop();
+    this.voiceAura = auraCanvas ? new VoiceAura(auraCanvas) : null;
+    this.voiceAura?.start();
     adapter.start({
       targets: skill.alternatives || [skill.phrase],
       jyutping: skill.jyutping,
+      onPitchFrame: (frame) => this.voiceAura?.pushPitchFrame(frame),
+      onVolume: (rms) => this.voiceAura?.pushVolume(rms),
       onState: (state: VoiceAdapterState) => {
         if (!orb) return;
         if (state === "listening") {
@@ -1212,8 +1229,12 @@ export class GameUI {
       onInterim: (transcript: string) => {
         if (text) text.textContent = `听到：${transcript}`;
       },
-      onResult: (result) => this.showVoiceResult(result),
+      onResult: (result) => {
+        this.voiceAura?.stop();
+        this.showVoiceResult(result);
+      },
       onError: (error: Error) => {
+        this.voiceAura?.stop();
         if (orb) {
           orb.classList.remove("listening");
           orb.textContent = "未识别";
@@ -2000,6 +2021,8 @@ export class GameUI {
       this.modelUnsubscribe?.();
       this.modelUnsubscribe = null;
     }
+    this.voiceAura?.stop();
+    this.voiceAura = null;
     this.pendingVoice = cancelVoice ? null : this.pendingVoice;
     this.modalRoot.innerHTML = "";
   }
