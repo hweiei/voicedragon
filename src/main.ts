@@ -32,6 +32,7 @@ import { GameEngine } from "./core/engine";
 import type { EmitOptions, GameState } from "./core/engine";
 import { adaptiveBoostFor } from "./core/profile";
 import { registerBurstSink } from "./ui/fx";
+import { FpsGovernor } from "./ui/fx/governor";
 import { burstSpecFor } from "./ui/fx/particles/emitter";
 import { ParticleField, actThemeFor } from "./ui/fx/particles/field";
 import { startScreenTransition } from "./ui/fx/transitions";
@@ -51,21 +52,31 @@ const tts = new SpeechTts();
 const audio = new GameAudio();
 audio.attachSettings({ sound: settings.sound, music: settings.music ?? true });
 // P6-F2：粒子场（三幕主题 + 爆发 + 音频响应，替代 P5 AmbientField）
+// P6-F3：帧率治理器注入，自动降载 + 设置页「特效强度」手动覆盖
+const governor = new FpsGovernor();
+governor.setManualIntensity(settings.fxIntensity ?? "auto");
+
 const ambientCanvas = document.querySelector<HTMLCanvasElement>("#ambient-canvas");
 const ambient = ambientCanvas
   ? new ParticleField(ambientCanvas, { reducedMotion: settings.reduceMotion })
   : null;
 if (ambient) {
   ambient.setAudioLevel(() => audio.level());
+  ambient.setGovernor(governor);
   // P6-F1/F2 联动：战斗演出按语义点火粒子爆发（敌人舞台约在画面上 1/3）
   registerBurstSink((kind) => {
     const x = 0.35 + Math.random() * 0.3;
     const y = 0.3 + Math.random() * 0.12;
     ambient.burst(burstSpecFor(kind, x, y));
+    if (kind === "crit") {
+      // P6-F3 签名演出：暴击瞬间「声」字汇聚成形
+      ambient.kanjiBurst("声", x, y - 0.05, 46);
+    }
     if (kind === "firework") {
-      // 胜利三连：左右补两发，位置与色相错开
+      // 胜利三连：左右补两发，位置与色相错开；中央浮出「震」字
       window.setTimeout(() => ambient.burst(burstSpecFor("firework", 0.25, 0.34, 40)), 180);
       window.setTimeout(() => ambient.burst(burstSpecFor("firework", 0.75, 0.3, -20)), 360);
+      window.setTimeout(() => ambient.kanjiBurst("震", 0.5, 0.42, 44), 420);
     }
   });
 }
@@ -158,6 +169,8 @@ const voiceServices: VoiceServices = {
       // P5：音效/音乐/氛围即时生效
       audio.attachSettings({ sound: settings.sound, music: settings.music ?? true });
       ambient?.setReducedMotion(settings.reduceMotion);
+      // P6-F3：特效强度即时生效
+      governor.setManualIntensity(settings.fxIntensity ?? "auto");
     }
   },
   model: {

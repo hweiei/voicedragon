@@ -1,6 +1,6 @@
 # 《声震龙楼》P6 · 动画 / 动效 / 特效全面升级方案（FX Upgrade Plan）
 
-> 版本：v1.1（2026-09-19）· 状态：**执行中——✅ F1 完成 ✅ F2 完成 ⬜ F3 待办**
+> 版本：v1.2（2026-09-19）· 状态：**✅ 三期全部完成（F1 打击感与转场 / F2 声之形 / F3 治理收尾）**
 > 范围：`src/ui/fx.ts`、`src/ui/ambient.ts`、`src/ui/styles.css`、`src/adapters/audio.ts`、`src/ui/ui.ts` 及新增 `src/ui/fx/` 模块族
 > 原则：**不改动游戏内核（`src/core/` 零侵入）**、不破性能预算、不破无障碍承诺、不引入资产文件
 
@@ -299,7 +299,7 @@ export function renderWithTransition(apply: () => void, opts: { kind: ScreenKind
 |---|---|---|---|---|
 | **F1 打击感与转场** ✅ 完成（2026-09-19） | M1 导演 + M2 三件套 + M3 转场 + M8 缓动令牌（第一批） | 新增 `src/ui/fx/` 6 文件；`main.ts` 转场接线；`fx.ts` 转接壳 | **+1.8 KB gzip**（59.2→61.0） | 174 单测全绿（+24 新）；E2E 6/6（+2 特效冒烟）；biome/tsc/build 全绿 |
 | **F2 声之形** ✅ 完成（2026-09-19） | M4 粒子 v2 + M5 语音光环 + M6 三幕主题 + M7 音频驱动 + M8 血条改造 | 新增 `fx/particles/`（pool/emitter/field）+ `voice-aura.ts`；`audio.ts` +30 行（AnalyserNode tap + level()）；`recorder` 音量经 `onVolume` 选项转发；`ambient.ts` 转兼容壳 | **+2.6 KB gzip**（61.0→63.6） | 191 单测全绿（+17 新）；E2E 6/6；预算 63.6/350 KB；真机待验：一句话→光环调域色相漂移 |
-| **F3 治理与收尾**（约 1 天） | M9 调速器 + 胜利烟花/汉字粒子 + 设置页"特效强度" + 文档 | 新增 2 文件 + 设置页字段（存档 v2 可选字段，旧档无缝） | ~+2 KB gzip | `npm run ci` 全绿 + E2E×5；Lighthouse 复测不低于 P5 基线 |
+| **F3 治理与收尾** ✅ 完成（2026-09-19） | M9 调速器 + 汉字粒子 + 设置页"特效强度" + 文档 | 新增 `fx/governor.ts`、`fx/kanji.ts` + 设置页字段（可选字段，旧档无缝） | **+1.5 KB gzip**（63.6→65.1） | 200 单测全绿（+9 新）；E2E 6/6；预算 65.1/350 KB；`docs/FX-TUNING.md` 调参手册就位 |
 
 里程碑纪律（沿用项目既有做法）：
 - 每期收尾跑 `npm run ci`（biome + tsc + vitest + build + perf-budget）；

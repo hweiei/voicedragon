@@ -38,6 +38,8 @@ export interface GameSettings {
   theme?: string;
   /** P4 自适应难度（默认开；连胜微加难、连败微减压） */
   adaptiveEnabled?: boolean;
+  /** P6-F3 特效强度：auto=按帧率自动降载（默认）；手动档固定覆盖 */
+  fxIntensity?: "auto" | "full" | "balanced" | "eco";
 }
 
 interface KVStore {
@@ -105,7 +107,8 @@ export function loadSettings(): GameSettings {
     voiceMode: "auto",
     toneWeight: SCORING_WEIGHTS_V2.tone,
     theme: "ink",
-    adaptiveEnabled: true
+    adaptiveEnabled: true,
+    fxIntensity: "auto"
   };
   try {
     const raw = platformStorage().get(SETTINGS_KEY);

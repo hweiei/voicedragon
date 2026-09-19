@@ -611,6 +611,14 @@ button:disabled {
   margin: 20px 1px 10px;
 }
 
+/* P6-F3 设置页小标题（特效强度分组） */
+.settings-sublabel {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
 .section-label h2,
 .section-label p {
   margin: 0;

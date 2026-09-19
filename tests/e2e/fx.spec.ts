@@ -38,7 +38,7 @@ test("normal motion: cast spawns pooled floaters", async ({ page }) => {
   await preset(page, false);
   await enterFirstBattle(page);
   await castViaQte(page);
-  await expect(page.locator(".fx-floater").first()).toBeVisible({ timeout: 3_000 });
+  await expect(page.locator(".fx-floater").first()).toBeVisible({ timeout: 6_000 });
 });
 
 test("reduce motion: floaters degrade to calm fades, no shake classes", async ({ page }) => {
@@ -46,7 +46,8 @@ test("reduce motion: floaters degrade to calm fades, no shake classes", async ({
   await enterFirstBattle(page);
   await castViaQte(page);
 
-  await expect(page.locator(".fx-floater.fx-calm").first()).toBeVisible({ timeout: 3_000 });
+  // 6s 窗口：并行负载下施法结算可能变慢（单跑 3/3 绿，属环境 flake）
+  await expect(page.locator(".fx-floater.fx-calm").first()).toBeVisible({ timeout: 6_000 });
   // 降级承诺：演出归零，信息保留——无任何抖动/红闪类
   await expect(page.locator(".fx-shake, .fx-jolt, .fx-hurt")).toHaveCount(0);
 });

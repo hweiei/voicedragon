@@ -1486,6 +1486,20 @@ export class GameUI {
           <label class="radio-line"><input type="checkbox" id="set-music" ${(settings.music ?? true) ? "checked" : ""} /><span>背景音乐（生成式粤韵环境乐）</span></label>
           <label class="radio-line"><input type="checkbox" id="set-reduce-motion" ${settings.reduceMotion ? "checked" : ""} /><span>减弱动效</span></label>
           <label class="radio-line"><input type="checkbox" id="set-adaptive" ${settings.adaptiveEnabled !== false ? "checked" : ""} /><span>自适应难度（连胜略加难、连败略减压，可在开局前随时关闭）</span></label>
+          <div class="settings-sublabel">特效强度（P6：手动档优先于帧率自动降载）</div>
+          ${(["auto", "full", "balanced", "eco"] as const)
+            .map(
+              (level) => `
+              <label class="radio-line"><input type="radio" name="fx-intensity" value="${level}" ${(settings.fxIntensity ?? "auto") === level ? "checked" : ""} /><span>${
+                {
+                  auto: "自动（按帧率降载）",
+                  full: "满（粒子全开）",
+                  balanced: "均衡（粒子减半）",
+                  eco: "省电（仅保留战斗演出）"
+                }[level]
+              }</span></label>`
+            )
+            .join("")}
         </div>
         <div class="notice-strip">隐私承诺：端侧模式下语音全部留在本机；在线模式只上传你施法的几秒收音，绝不收集其它数据。</div>
       </div>`;
@@ -1527,6 +1541,14 @@ export class GameUI {
       ?.addEventListener("change", (e) => {
         this.services.settings.save({ reduceMotion: (e.target as HTMLInputElement).checked });
       });
+    // P6-F3 特效强度
+    for (const input of this.modalRoot.querySelectorAll<HTMLInputElement>(
+      'input[name="fx-intensity"]'
+    )) {
+      input.addEventListener("change", () => {
+        this.services.settings.save({ fxIntensity: input.value as GameSettings["fxIntensity"] });
+      });
+    }
     // 主题皮肤（P4）
     for (const input of this.modalRoot.querySelectorAll<HTMLInputElement>('input[name="theme"]')) {
       input.addEventListener("change", () => {

@@ -7,8 +7,10 @@
  * - 预算纪律：≤512 粒对象池、DPR≤2、visibilitychange 停帧、reduce-motion 全停。
  */
 
+import type { FpsGovernor } from "../governor";
+import { kanjiPoints } from "../kanji";
 import { type BurstSpec, createBurstRng, emitBurst } from "./emitter";
-import { PARTICLE_STRIDE, type ParticlePool, clearPool, createPool, step } from "./pool";
+import { PARTICLE_STRIDE, type ParticlePool, clearPool, createPool, spawn, step } from "./pool";
 
 interface Mote {
   x: number;
@@ -111,6 +113,9 @@ export class ParticleField {
   private burstRng = createBurstRng();
   private audioLevel: (() => AudioLevel | null) | null = null;
   private smoothBass = 0;
+  /** P6-F3 帧率治理：每帧采样，档位变化时按预算重撒微尘 */
+  private governor: FpsGovernor | null = null;
+  private appliedTier = -1;
 
   constructor(canvas: HTMLCanvasElement, options: ParticleFieldOptions = {}) {
     this.canvas = canvas;
@@ -149,7 +154,7 @@ export class ParticleField {
   setTheme(theme: FieldTheme): void {
     if (theme.id === this.theme.id) return;
     this.theme = theme;
-    this.spawnMotes();
+    this.spawnMotes(this.governor?.budget.moteRatio ?? 1);
   }
 
   /** 注入频谱提供者（GameAudio.level）；无 BGM 时返回 null，场保持静态呼吸。 */
@@ -157,11 +162,100 @@ export class ParticleField {
     this.audioLevel = provider;
   }
 
+  /** 注入帧率治理器（P6-F3：自动降载 + 手动特效强度）。 */
+  setGovernor(governor: FpsGovernor): void {
+    this.governor = governor;
+  }
+
   /** 一次爆发（命中/胜利/败北…由 F1 的 burst sink 驱动）。 */
   burst(spec: BurstSpec): void {
     if (!this.running || this.reducedMotion) return;
-    emitBurst(this.pool, spec, this.burstRng);
+    // P6-F3：吃力/告警档按预算削减粒子数（至少 1 粒，保留反馈存在感）
+    const ratio = this.governor?.budget.burstRatio ?? 1;
+    const count = Math.max(1, Math.round(spec.count * ratio));
+    emitBurst(this.pool, { ...spec, count }, this.burstRng);
     this.start();
+  }
+
+  /**
+   * P6-F3 汉字粒子演出：光点自四周汇聚成字、驻留一拍后散开。
+   * 汇聚用"定向速度 + 池阻尼"近似刹车，末段微过冲形成笔锋势能。
+   */
+  kanjiBurst(char: string, cx: number, cy: number, hue = 46): void {
+    if (!this.running || this.reducedMotion) return;
+    if (!(this.governor?.budget.kanjiEnabled ?? true)) {
+      // 告警档：退化为一次普通环爆，反馈不缺席
+      this.burst({
+        kind: "crit",
+        x: cx,
+        y: cy,
+        count: 18,
+        speedMin: 0.1,
+        speedMax: 0.3,
+        lifeMin: 0.4,
+        lifeMax: 0.8,
+        sizeMin: 1.2,
+        sizeMax: 2.6,
+        hueA: hue,
+        hueB: hue + 12,
+        gravity: 0.1,
+        spread: Math.PI * 2,
+        angle: 0
+      });
+      return;
+    }
+    const points = kanjiPoints(char);
+    if (points.length === 0) return;
+    const rng = this.burstRng;
+    const scale = 0.24; // 字形占画布 24%
+    const maxParticles = Math.round(220 * (this.governor?.budget.burstRatio ?? 1));
+    const stride = Math.max(1, Math.ceil(points.length / maxParticles));
+
+    // ① 汇聚：自字形外围环形起笔，飞向各自点位
+    for (let i = 0; i < points.length; i += stride) {
+      const p = points[i];
+      const tx = cx + (p.x - 0.5) * scale;
+      const ty = cy + (p.y - 0.5) * scale;
+      const angle = rng() * Math.PI * 2;
+      const dist = 0.14 + rng() * 0.1;
+      const sx = tx + Math.cos(angle) * dist;
+      const sy = ty + Math.sin(angle) * dist;
+      const travel = 0.3 + rng() * 0.12;
+      // 速度按"带阻尼行程"放大，尽量刹停在点位附近
+      const boost = 2.4;
+      spawn(
+        this.pool,
+        sx,
+        sy,
+        ((tx - sx) / travel) * boost,
+        ((ty - sy) / travel) * boost,
+        0,
+        travel + 0.42,
+        1.3 + rng() * 0.8,
+        hue + rng() * 14
+      );
+    }
+
+    // ② 散开：驻留一拍后自字形点位向外缓散（墨点化烟）
+    window.setTimeout(() => {
+      if (!this.running) return;
+      for (let i = 0; i < points.length; i += stride * 2) {
+        const p = points[i];
+        const angle = rng() * Math.PI * 2;
+        const speed = 0.03 + rng() * 0.05;
+        spawn(
+          this.pool,
+          cx + (p.x - 0.5) * scale,
+          cy + (p.y - 0.5) * scale,
+          Math.cos(angle) * speed,
+          Math.sin(angle) * speed - 0.02,
+          -0.01,
+          0.7 + rng() * 0.6,
+          1 + rng() * 0.8,
+          hue + rng() * 14
+        );
+      }
+    }, 620);
   }
 
   /** 兼容 P5 AmbientField.pulse：施法命中涟漪。 */
@@ -191,9 +285,11 @@ export class ParticleField {
 
   /* ── 内部 ─────────────────────────────────────────────────────────── */
 
-  protected spawnMotes(): void {
+  protected spawnMotes(ratio = 1): void {
     const { moteCount, moteHueA, moteHueB, rise, drift } = this.theme;
-    this.motes = Array.from({ length: moteCount }, () => ({
+    // P6-F3：降载档按比例削减微尘（至少 6 粒，氛围不断档）
+    const count = Math.max(6, Math.round(moteCount * ratio));
+    this.motes = Array.from({ length: count }, () => ({
       x: Math.random(),
       y: Math.random(),
       r: 0.6 + Math.random() * 1.8,
@@ -235,6 +331,16 @@ export class ParticleField {
     const t = performance.now();
     const dt = Math.min(0.05, Math.max(0.001, (t - this.lastFrame) / 1000));
     this.lastFrame = t;
+
+    // P6-F3 帧率治理：每帧采样；档位变化时按预算重撒微尘
+    if (this.governor) {
+      this.governor.sample();
+      const tier = this.governor.tier;
+      if (tier !== this.appliedTier) {
+        this.appliedTier = tier;
+        this.spawnMotes(this.governor.budget.moteRatio);
+      }
+    }
 
     // 音频响应：低音能量平滑后驱动微尘增亮 + 轻微外扩
     const level = this.audioLevel?.() ?? null;
