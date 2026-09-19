@@ -34,7 +34,7 @@ npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 
 - `src/ui/` 渲染与演出：模板字符串直渲 + `src/ui/fx/` 演出编排（FxDirector）。
 - 设计决策的单一事实源：`docs/REDESIGN-PLAN.md`（P0–P5 历史）与
   `docs/FX-UPGRADE-PLAN.md`（P6 三期完成）及 `docs/CONTENT-EXPANSION-PLAN.md`（P7 三幕深耕）与 `docs/BUILDCRAFT-PLAN.md`（P8-A 构筑成型）、`docs/ENCOUNTER-EVOLUTION-PLAN.md`（P8-B 对手进化）、`docs/VOICE-MASTERY-PLAN.md`（P8-C 语音深化）、`docs/LEARNING-LOOP-PLAN.md`（P8-D 学习闭环）、`docs/RELEASE-READINESS-PLAN.md`（P8-E 发布与设备验收）与
-  `docs/COUNTER-ATTACK-PLAN.md`（P9 守势反击）。
+  `docs/COUNTER-ATTACK-PLAN.md`（P9 守势反击）、`docs/GROWTH-PLAN.md`（P10–P15 丰富度总路线：名伶/声动九霄/切磋码/词林/声之细织/铸剑炉）。
 - 内容兼容：缺失 `ruleset` 的旧局按 legacy；P7 新内容只经 `skillsFor/eventsFor/itemsFor` 进入对应新局。
   不直接修改基础内容表或用扩展池替换基础池。新增参数须审查组合根包装器是否完整转发。
 - 构筑独立版本 `buildVersion:1` 仅用于新战役；缺失时保留旧玩法。升级按 `upgradedSlots` 记录具体牌组槽位，
