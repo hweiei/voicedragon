@@ -31,6 +31,7 @@ import {
   upgradeReason,
   upgradesAfterRemoval
 } from "./buildcraft";
+import type { ChallengeRun } from "./challenge";
 import {
   ACT_DIFFICULTY_TARGET,
   CAMPAIGN_SUSTAIN,
@@ -253,6 +254,22 @@ export interface QuizState {
   selected: number | null;
 }
 
+/**
+ * P12 切磋身份：本局由他人（或自己的历史战绩）的切磋码开局时挂上，
+ * 只记录码与码内身份，不含任何玩家数据；旧局无此字段。
+ */
+export interface DuelState {
+  /** 原始切磋码（分享与战绩簿展示用） */
+  code: string;
+  /** 码哈希（战绩簿键；同一码只有一条最佳记录） */
+  hash: string;
+  mode: "campaign" | "endless" | "daily" | "classic";
+  act: number;
+  seed: number;
+  dateKey?: string;
+  character?: CharacterId;
+}
+
 export interface GameState {
   version: 2;
   phase: Phase;
@@ -286,6 +303,10 @@ export interface GameState {
   characterId?: CharacterId;
   /** P11 满堂彩版本；缺省 = 旧局，无彩槽与绝技。 */
   ultimateVersion?: 1;
+  /** P12 切磋码版本；缺省 = 非切磋局（既有开局路径零接触）。 */
+  challengeVersion?: 1;
+  /** P12 切磋局身份；缺省 = 自开一局。 */
+  duel?: DuelState;
   challenge?: ChallengeState;
 }
 
@@ -564,6 +585,9 @@ export class GameEngine {
     this.state.reward = null;
     this.state.quiz = null;
     this.state.phase = "tower";
+    // P12：切磋码只约定它写明的那一幕；续行之后的塔是玩家自己的局，
+    // 摘掉码身份，避免不同幕的战绩挂在同一个码哈希下（战绩簿串幕）。
+    this.state.duel = undefined;
     this.state.notice = `${pack.notice}（塔间小憩：回复 ${rested} 点生命。）`;
     this.prepareFloorOptions();
     this.emit({ save: true });
@@ -602,6 +626,50 @@ export class GameEngine {
     };
     this.state.notice = "每日挑战：同一本地日期使用同一种子与词缀；本局不启用自适应难度。";
     this.prepareFloorOptions();
+    this.emit({ save: true });
+  }
+
+  /**
+   * P12 切磋码开局：按码内身份与版本束**原样**开一局（同码同局）。
+   * 校验与还原已在 core/challenge.ts 完成（拒绝路径不会走到这里）；本方法只负责：
+   * 1) 透传既有开局路径（战役版本束 / 无尽词缀 / 每日日期键 / 经典十层种子）；
+   * 2) 盖上切磋身份（duel + challengeVersion），战绩簿与结算屏据此认码；
+   * 3) 难度跟随码（码内自适应加成，缺省 0）——切磋局**不采样本机自适应节律**，
+   *    否则连胜玩家的码在连败玩家手里就不是同一局（GROWTH §6.2 同码同难）。
+   */
+  startChallenge(run: ChallengeRun): void {
+    if (run.mode === "daily") {
+      this.startDaily(run.seed, run.dateKey ?? "");
+    } else if (run.mode === "endless") {
+      this.startEndless(run.seed, run.ruleset);
+    } else if (run.mode === "campaign") {
+      this.startCampaign({
+        act: run.act,
+        seed: run.seed,
+        ruleset: run.ruleset,
+        buildVersion: run.build,
+        encounterVersion: run.encounter,
+        counterVersion: run.counter,
+        rosterVersion: run.roster,
+        character: run.character,
+        ultimateVersion: run.ultimate
+      });
+    } else {
+      this.startNew(run.seed);
+    }
+    this.state.challengeVersion = 1;
+    this.state.duel = {
+      code: run.code,
+      hash: run.hash,
+      mode: run.mode,
+      act: run.act,
+      seed: run.seed,
+      dateKey: run.dateKey,
+      character: run.character
+    };
+    // 码内以百分点整数携带（5 / -8），引擎内是比值（0.05 / -0.08）
+    this.state.adaptiveBoost = (run.adaptiveBoost ?? 0) / 100;
+    this.state.notice = `切磋局 #${run.hash.slice(0, 8)}：同码同局，本局不启用本机自适应难度。`;
     this.emit({ save: true });
   }
 

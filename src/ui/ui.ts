@@ -27,10 +27,12 @@ import {
   clearSave,
   hasSave,
   loadCampaignMeta,
+  loadChallengeRecords,
   loadDailyRecords,
   loadGame,
   loadProfile,
   loadSrsStore,
+  saveChallengeRecord,
   saveDailyRecord,
   saveProfile,
   saveSrsStore
@@ -51,6 +53,19 @@ import {
   newlyUnlocked
 } from "../core/achievements";
 import type { AchievementContext } from "../core/achievements";
+import {
+  type ChallengeRecord,
+  type ChallengeRejection,
+  type ChallengeRun,
+  challengeDifficultyLabel,
+  challengeFromRun,
+  challengeModeLabel,
+  challengeRecordFor,
+  challengeShareLine,
+  challengeVersionLabel,
+  decodeChallenge,
+  encodeChallenge
+} from "../core/challenge";
 import {
   ACT_COUNT,
   ACT_NUMERALS,
@@ -308,13 +323,98 @@ function skillCard(
     </button>`;
 }
 
+// ─── P12 切磋码：横幅 / 拒绝文案 / 结算面板（零后端，凭码自证） ────────────────
+
+/** 切磋链接：URL 片段承载码（PWA 与子路径部署下同样安全，服务端看不到片段）。 */
+function challengeLink(code: string): string {
+  return `${location.origin}${location.pathname}#c=${code}`;
+}
+
+/** 拒绝文案：三种理由分别说清楚「为什么不开局」，绝不静默降级。 */
+function challengeRejectionCopy(rejection: ChallengeRejection): { title: string; hint: string } {
+  if (rejection.reason === "unsupported") {
+    return {
+      title: "这枚码来自更新的版本",
+      hint: "本机引擎不支持该版本束。为守住「同码同局」，这里不会用近似配置代替；请更新游戏后再应战。"
+    };
+  }
+  if (rejection.reason === "mismatch") {
+    return {
+      title: "内容版本不匹配",
+      hint: "这枚码与本机内容世代重算不符（词缀或每日种子对不上），开局结果不会与对方一致。"
+    };
+  }
+  return {
+    title: "切磋码无法识别",
+    hint: "码可能被截断、抄错或改动过；请让对方重新复制一次完整码。"
+  };
+}
+
+function recordModeLabel(record: ChallengeRecord): string {
+  const decoded = decodeChallenge(record.code);
+  const base = decoded.ok
+    ? challengeModeLabel(decoded.challenge)
+    : record.mode === "campaign"
+      ? `第${ACT_NUMERALS[record.act - 1]}幕战役`
+      : record.mode === "daily"
+        ? "每日挑战"
+        : record.mode === "endless"
+          ? "无尽塔"
+          : "经典十层";
+  const character = record.character
+    ? CHARACTERS.find((entry) => entry.id === record.character)?.name
+    : undefined;
+  return character ? `${base} · ${character}` : base;
+}
+
+/** 切磋局横幅：战斗中常驻，提醒这是他人码的对局（难度由码决定）。 */
+function duelBanner(state: GameState): string {
+  const duel = state.duel;
+  if (!duel) return "";
+  const label =
+    duel.mode === "campaign"
+      ? `第${ACT_NUMERALS[duel.act - 1]}幕战役`
+      : duel.mode === "daily"
+        ? `每日挑战 ${duel.dateKey ?? ""}`.trim()
+        : duel.mode === "endless"
+          ? "无尽塔"
+          : "经典十层";
+  return `<aside class="challenge-banner duel-banner" aria-label="切磋局">
+    <strong>切磋局 · #${escapeHtml(duel.hash.slice(0, 8))}</strong>
+    <div class="mutation-rule duel-rule" data-kind="boon"><b>${escapeHtml(label)} · 同码同局</b><span>地图、敌人与手牌由码内种子决定；本局不采样本机自适应难度。</span></div>
+  </aside>`;
+}
+
+/** 结算屏身份块：码 + 本机同码最佳 + 分享三件套（复制失败时诚实提示手动复制）。 */
+function duelEndPanel(state: GameState, victory: boolean): string {
+  const duel = state.duel;
+  if (!duel) return "";
+  const best = loadChallengeRecords().find((entry) => entry.hash === duel.hash);
+  const bestLine = best
+    ? `本机同码最佳：${best.victory ? "通关" : `第 ${best.floor} 层`} · 综合声韵 ${best.averageScore}（${best.finishedAt.slice(0, 10)}）`
+    : "本机暂无同码战绩——把战绩行发给对方即可凭码自证（无排行榜、无云端）。";
+  return `<div class="duel-panel" aria-label="切磋局结算">
+    <div class="duel-head"><strong>切磋局 · #${escapeHtml(duel.hash.slice(0, 8))}</strong><small>${victory ? "同码已破，把码发回去" : "同码未破，再来一次或把码传给下一位"}</small></div>
+    <code class="duel-code">${escapeHtml(duel.code)}</code>
+    <div class="button-row">
+      <button class="ghost-button" type="button" data-action="duel-copy" data-kind="code">复制切磋码</button>
+      <button class="ghost-button" type="button" data-action="duel-copy" data-kind="link">复制链接</button>
+      <button class="ghost-button" type="button" data-action="duel-copy" data-kind="line">复制战绩行</button>
+    </div>
+    <p class="duel-note">${escapeHtml(bestLine)}</p>
+  </div>`;
+}
+
 function challengeBanner(state: GameState): string {
+  const duel = duelBanner(state);
   const challenge = state.challenge;
   if (!challenge)
-    return state.ruleset === "p7"
-      ? `<div class="content-version">三幕深耕 · 扩展内容池${buildEnabled(state) ? " · 构筑已开启" : ""}${evolutionEnabled(state) ? " · 对手进化" : ""}</div>`
-      : "";
-  return `<aside class="challenge-banner" aria-label="本局变异词缀">
+    return `${duel}${
+      state.ruleset === "p7"
+        ? `<div class="content-version">三幕深耕 · 扩展内容池${buildEnabled(state) ? " · 构筑已开启" : ""}${evolutionEnabled(state) ? " · 对手进化" : ""}</div>`
+        : ""
+    }`;
+  return `${duel}<aside class="challenge-banner" aria-label="本局变异词缀">
     <strong>${challenge.mode === "daily" ? `每日挑战 · ${escapeHtml(challenge.dateKey ?? "")}` : `无尽变异 · 第 ${challenge.stage * 5 + 1}–${challenge.stage * 5 + 5} 层`}</strong>
     ${mutationList(challenge.mutatorIds)
       .map(
@@ -410,6 +510,7 @@ function titleTemplate(): string {
         <button class="${resume ? "ghost-button" : "secondary-button"} full-button" type="button" data-action="new-campaign">战役 · 第一幕 · 骑楼长街</button>
         ${titleCampaignActButtons()}
         <button class="ghost-button full-button" type="button" data-action="daily-challenge">每日挑战 · ${escapeHtml(dailyStatusLabel())}</button>
+        <button class="ghost-button full-button" type="button" data-action="open-duel">切磋码 · 应战同局</button>
         <button class="ghost-button full-button" type="button" data-action="endless-run">无尽塔 · 深塔回廊（最佳 ${profileCache.stats.endlessBest} 层）</button>
         <div class="title-quick">
           <button class="ghost-button" type="button" data-action="open-practice">练习场 · 调准曲线</button>
@@ -846,6 +947,8 @@ function endTemplate(state: GameState, engine: GameEngine, victory: boolean): st
         <div class="summary-card"><strong>${summary.bestScore}</strong><small>最高声韵</small></div>
         <div class="summary-card"><strong>${summary.skills}</strong><small>技能总数</small></div>
       </div>
+      ${duelEndPanel(state, victory)}
+      <button class="ghost-button full-button" type="button" data-action="challenge-create">发起切磋 · 把这局变成码</button>
       <div class="button-row">
         <button class="ghost-button" type="button" data-action="back-title">返回标题</button>
         <button class="ghost-button" type="button" data-action="share-poster">生成战绩海报</button>
@@ -914,6 +1017,17 @@ export class GameUI {
   private recordedRunKey: string | null = null;
   /** P4：复用的海报画布（结算屏分享按钮生成） */
   private posterCanvas: HTMLCanvasElement | null = null;
+  /** P12：待应战的切磋码（URL 片段或手输解析后的产物） */
+  private pendingDuel: ChallengeRun | null = null;
+  /** P12：最近一次解析失败的原因（面板据此给出明确警告，不放行） */
+  private duelInputError: ChallengeRejection | null = null;
+  private duelInputText = "";
+  /** P12：URL 片段只自动弹一次（手动入口随时可用） */
+  private duelPrompted = false;
+  /** P12：本局战绩簿去重键（同码同局只写一次结算） */
+  private recordedChallengeKey: string | null = null;
+  /** P12：结算屏生成的码与战绩行（复制按钮据此取文本） */
+  private challengeShare: { code: string; line: string } | null = null;
 
   constructor({
     engine,
@@ -981,6 +1095,10 @@ export class GameUI {
     if (action === "quiz-next") this.engine.advanceQuiz();
     // ─── P3 标题层动作 ───
     if (action === "daily-challenge") this.startDailyChallenge();
+    if (action === "open-duel") this.openDuel();
+    if (action === "challenge-create") this.createChallenge();
+    if (action === "duel-copy")
+      void this.copyDuelText(button.dataset.kind as "code" | "link" | "line");
     if (action === "open-practice") this.openPractice();
     if (action === "practice-select") this.openPractice(button.dataset.skillId);
     if (action === "practice-tts") {
@@ -1026,12 +1144,20 @@ export class GameUI {
     if (action === "reward-skill") this.engine.chooseReward(button.dataset.skillId!);
     if (action === "reward-skip") this.engine.chooseReward();
     if (action === "restart-run") {
+      const previous = this.engine.state;
       clearSave();
+      // P12：切磋局「再闯一局」= 重开同一枚码（同码同局，可反复冲榜自己的战绩簿）
+      const duel = previous.duel;
+      const decoded = duel ? decodeChallenge(duel.code) : null;
+      if (decoded?.ok) {
+        this.recordedChallengeKey = null;
+        this.engine.startChallenge(decoded.challenge);
+      }
       // P4：无尽局结算后「再闯一局」仍回无尽塔，其余按经典开局
-      if (this.engine.state.endless) this.engine.startEndless(undefined, "p7");
-      else if (this.engine.state.challenge?.mode === "daily") this.startDailyChallenge();
-      else if (this.engine.state.campaign)
-        this.engine.startCampaign(this.engine.state.campaign.act, undefined, "p7", 1, 1, 1);
+      else if (previous.endless) this.engine.startEndless(undefined, "p7");
+      else if (previous.challenge?.mode === "daily") this.startDailyChallenge();
+      else if (previous.campaign)
+        this.engine.startCampaign(previous.campaign.act, undefined, "p7", 1, 1, 1);
       else this.engine.startNew();
     }
     if (action === "back-title") {
@@ -1056,6 +1182,12 @@ export class GameUI {
     const action = button.dataset.action!;
     if (action === "close-modal") this.closeModal();
     if (action === "pick-character") this.pickCharacter(button.dataset.character!);
+    if (action === "duel-parse") this.parseDuelInput();
+    if (action === "duel-paste") void this.pasteDuelCode();
+    if (action === "duel-accept") this.acceptDuel();
+    if (action === "duel-pick-record") this.openDuel(button.dataset.code ?? "");
+    if (action === "duel-copy")
+      void this.copyDuelText(button.dataset.kind as "code" | "link" | "line");
     if (action === "confirm-learning-import") this.confirmLearningImport();
     if (action === "open-build") this.openBuild(button.dataset.buildMode as BuildView);
     if (action === "build-select")
@@ -1198,6 +1330,29 @@ export class GameUI {
       this.recordedDailyKey = dailyKey;
     }
 
+    // P12 切磋战绩簿：挂码的局在胜负瞬间写入本机（同码只留更优者，无云端）
+    const duelState = state.duel;
+    if (duelState && (state.phase === "victory" || state.phase === "defeat")) {
+      const duelKey = `${duelState.hash}:${state.floor}:${state.phase}`;
+      if (this.recordedChallengeKey !== duelKey) {
+        this.recordedChallengeKey = duelKey;
+        const decoded = decodeChallenge(duelState.code);
+        if (decoded.ok) {
+          saveChallengeRecord(
+            challengeRecordFor(
+              decoded.challenge,
+              {
+                floor: state.floor,
+                victory: state.phase === "victory",
+                averageScore: this.engine.getRunSummary().averageScore
+              },
+              new Date().toISOString()
+            )
+          );
+        }
+      }
+    }
+
     // P4 档案结算：同一局结束只写一次（种+层+相 去重）
     if (state.phase === "victory" || state.phase === "defeat") {
       const runKey = `${state.seed}:${state.floor}:${state.phase}`;
@@ -1238,8 +1393,11 @@ export class GameUI {
       if (badge) badge.textContent = String(count);
     }
 
-    if (state.phase === "title") this.root.innerHTML = titleTemplate();
-    else if (state.phase === "tower")
+    if (state.phase === "title") {
+      this.root.innerHTML = titleTemplate();
+      // P12：片段里的切磋码只自动弹一次；解析失败也弹（明确警告，不放行）
+      this.checkDuelFragment();
+    } else if (state.phase === "tower")
       this.root.innerHTML = state.campaign
         ? campaignMapTemplate(state)
         : towerTemplate(state, this.engine);
@@ -1343,6 +1501,235 @@ export class GameUI {
       ultimateVersion: 1,
       character: character.id
     });
+  }
+
+  // ─── P12 切磋码：应战入口 / 战绩簿 / 分享三件套（零后端） ───────────────────
+
+  /** 打开应战面板；code 非空时先解析它（粘贴/战绩簿/片段三条入口共用）。 */
+  private openDuel(code = ""): void {
+    if (code) this.loadDuelText(code);
+    this.renderDuelSheet();
+  }
+
+  /** 解析一段文本（裸码或整条链接）并更新面板状态。 */
+  private loadDuelText(raw: string): void {
+    const decoded = decodeChallenge(raw);
+    this.challengeShare = null;
+    if (decoded.ok) {
+      this.pendingDuel = decoded.challenge;
+      this.duelInputError = null;
+      this.duelInputText = decoded.code;
+    } else {
+      this.pendingDuel = null;
+      this.duelInputError = decoded;
+      this.duelInputText = raw.trim();
+    }
+  }
+
+  private renderDuelSheet(): void {
+    const pending = this.pendingDuel;
+    const error = this.duelInputError;
+    const records = loadChallengeRecords().slice(0, 5);
+    const contract = pending
+      ? `<div class="duel-contract">
+          <div class="duel-row"><small>模式</small><strong>${escapeHtml(challengeModeLabel(pending))}</strong></div>
+          <div class="duel-row"><small>种子</small><strong>${pending.seed}</strong></div>
+          <div class="duel-row"><small>版本束</small><strong>${escapeHtml(challengeVersionLabel(pending))}</strong></div>
+          <div class="duel-row"><small>难度</small><strong>${escapeHtml(challengeDifficultyLabel(pending))}</strong></div>
+          <div class="duel-row"><small>码哈希</small><strong>#${escapeHtml(pending.hash.slice(0, 8))}</strong></div>
+        </div>
+        <button class="primary-button full-button" type="button" data-action="duel-accept">以这个码开局 · 同码同局</button>`
+      : "";
+    const warning = error
+      ? (() => {
+          const copy = challengeRejectionCopy(error);
+          return `<div class="notice-strip duel-warning"><div><strong>${escapeHtml(copy.title)}</strong><br />${escapeHtml(copy.hint)}<br /><small>${escapeHtml(error.detail)}</small></div></div>`;
+        })()
+      : "";
+    const rows =
+      records
+        .map(
+          (
+            record
+          ) => `<button class="duel-record" type="button" data-action="duel-pick-record" data-code="${escapeHtml(record.code)}">
+          <strong>#${escapeHtml(record.hash.slice(0, 8))}</strong>
+          <small>${escapeHtml(recordModeLabel(record))} · ${record.victory ? "通关" : `第 ${record.floor} 层`} · 综合声韵 ${record.averageScore} · ${record.finishedAt.slice(0, 10)}</small>
+        </button>`
+        )
+        .join("") ||
+      `<p class="settings-note">还没有同码战绩。打完一局后在结算屏点「发起切磋」，就能把码传给朋友。</p>`;
+    this.modalRoot.innerHTML = `
+      <div class="modal-sheet duel-sheet" role="dialog" aria-modal="true" aria-label="切磋码">
+        <div class="modal-head">
+          <div><h2>切磋码 · 应战同局</h2><p>零后端异步对战：同码 + 同内容版本 = 同地图、同敌人、同手牌。</p></div>
+          <button class="close-button" type="button" data-action="close-modal" aria-label="关闭">×</button>
+        </div>
+        ${warning}
+        <div class="settings-group">
+          <h3>粘贴切磋码</h3>
+          <textarea id="duel-code-input" class="duel-input" rows="2" spellcheck="false" placeholder="VT1.…（也可整条链接粘贴）">${escapeHtml(this.duelInputText)}</textarea>
+          <div class="button-row">
+            <button class="secondary-button full-button" type="button" data-action="duel-parse">解析切磋码</button>
+            <button class="ghost-button full-button" type="button" data-action="duel-paste">从剪贴板粘贴</button>
+          </div>
+        </div>
+        ${contract}
+        <div class="settings-group">
+          <h3>本机战绩簿</h3>
+          ${rows}
+        </div>
+        <div class="notice-strip">战绩只存在本机：没有排行榜、没有云端存档，胜负凭码自证。</div>
+      </div>`;
+  }
+
+  private parseDuelInput(): void {
+    const input = this.modalRoot.querySelector<HTMLTextAreaElement>("#duel-code-input");
+    this.loadDuelText(input?.value ?? this.duelInputText);
+    this.renderDuelSheet();
+    if (this.pendingDuel) this.showToast("码已解析：看清契约再应战");
+    else if (this.duelInputError) this.showToast(challengeRejectionCopy(this.duelInputError).title);
+  }
+
+  private async pasteDuelCode(): Promise<void> {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text.trim()) {
+        this.showToast("剪贴板是空的");
+        return;
+      }
+      this.loadDuelText(text.trim());
+      this.renderDuelSheet();
+    } catch {
+      this.showToast("本机不允许读取剪贴板——请手动粘贴到输入框");
+    }
+  }
+
+  /** 应战：把码交给引擎开局（码内版本束与难度原样生效）。 */
+  private acceptDuel(): void {
+    const pending = this.pendingDuel;
+    if (!pending) return;
+    this.closeModal();
+    clearSave();
+    this.recordedChallengeKey = null;
+    this.engine.startChallenge(pending);
+    this.clearDuelFragment();
+    this.showToast(`切磋局开局：#${pending.hash.slice(0, 8)} · 同码同局`);
+  }
+
+  /** 结算屏「发起切磋」：把刚打完的局变成码（含码/链接/战绩行三件套）。 */
+  private createChallenge(): void {
+    const state = this.engine.state;
+    const bundle = challengeFromRun(state);
+    if (!bundle) {
+      this.showToast("本局没有可分享的切磋身份");
+      return;
+    }
+    const encoded = encodeChallenge(bundle);
+    if (!encoded.ok) {
+      const copy = challengeRejectionCopy(encoded);
+      this.modalRoot.innerHTML = `
+        <div class="modal-sheet" role="dialog" aria-modal="true" aria-label="无法生成切磋码">
+          <div class="modal-head"><div><h2>${escapeHtml(copy.title)}</h2><p>${escapeHtml(copy.hint)}</p></div><button class="close-button" type="button" data-action="close-modal" aria-label="关闭">×</button></div>
+          <div class="notice-strip duel-warning"><div><small>${escapeHtml(encoded.detail)}</small></div></div>
+        </div>`;
+      return;
+    }
+    const summary = this.engine.getRunSummary();
+    const stars = state.campaign
+      ? Object.values(state.campaign.stars).reduce((sum, value) => sum + value, 0)
+      : 0;
+    const line = challengeShareLine({
+      mode: bundle.mode,
+      act: bundle.act,
+      floor: state.floor,
+      stars,
+      averageScore: summary.averageScore,
+      victory: state.phase === "victory",
+      character: bundle.character
+    });
+    this.challengeShare = { code: encoded.code, line };
+    this.modalRoot.innerHTML = `
+      <div class="modal-sheet duel-sheet" role="dialog" aria-modal="true" aria-label="发起切磋">
+        <div class="modal-head">
+          <div><h2>发起切磋</h2><p>${escapeHtml(challengeModeLabel(bundle, state.floor))} · 同码同局；码内不含昵称、时间与设备信息。</p></div>
+          <button class="close-button" type="button" data-action="close-modal" aria-label="关闭">×</button>
+        </div>
+        <div class="duel-contract">
+          <div class="duel-row"><small>版本束</small><strong>${escapeHtml(challengeVersionLabel(bundle))}</strong></div>
+          <div class="duel-row"><small>难度</small><strong>${escapeHtml(challengeDifficultyLabel(bundle))}</strong></div>
+        </div>
+        <code class="duel-code">${escapeHtml(encoded.code)}</code>
+        <p class="duel-note">链接：<small>${escapeHtml(challengeLink(encoded.code))}</small></p>
+        <p class="duel-note">战绩行：<small>${escapeHtml(line)}</small></p>
+        <div class="button-row">
+          <button class="secondary-button full-button" type="button" data-action="duel-copy" data-kind="code">复制切磋码</button>
+          <button class="ghost-button full-button" type="button" data-action="duel-copy" data-kind="link">复制链接</button>
+          <button class="ghost-button full-button" type="button" data-action="duel-copy" data-kind="line">复制战绩行</button>
+        </div>
+        <div class="notice-strip">对方打开链接（或粘贴码）即可跑同一局；对方战绩也只在对方本机，互不联网。</div>
+      </div>`;
+  }
+
+  /** 复制文本：剪贴板不可用时诚实提示手动复制，不伪造成功。 */
+  private duelTextFor(kind: "code" | "link" | "line"): string | null {
+    const state = this.engine.state;
+    const code = state.duel?.code ?? this.challengeShare?.code;
+    if (kind === "line") {
+      if (this.challengeShare) return this.challengeShare.line;
+      const bundle = challengeFromRun(state);
+      if (!bundle) return null;
+      const summary = this.engine.getRunSummary();
+      const stars = state.campaign
+        ? Object.values(state.campaign.stars).reduce((sum, value) => sum + value, 0)
+        : 0;
+      return challengeShareLine({
+        mode: bundle.mode,
+        act: bundle.act,
+        floor: state.floor,
+        stars,
+        averageScore: summary.averageScore,
+        victory: state.phase === "victory",
+        character: bundle.character
+      });
+    }
+    if (!code) return null;
+    return kind === "code" ? code : challengeLink(code);
+  }
+
+  private async copyDuelText(kind: "code" | "link" | "line"): Promise<void> {
+    const text = this.duelTextFor(kind);
+    if (!text) {
+      this.showToast("暂无可复制的切磋内容");
+      return;
+    }
+    const label = kind === "code" ? "切磋码" : kind === "link" ? "链接" : "战绩行";
+    try {
+      await navigator.clipboard.writeText(text);
+      this.showToast(`已复制${label}`);
+    } catch {
+      this.showToast(`复制${label}失败：请长按选中文本手动复制`);
+    }
+  }
+
+  /** 应战后清掉 URL 片段：刷新不再重弹（码已进入本局存档）。 */
+  private clearDuelFragment(): void {
+    if (location.hash.includes("c=")) {
+      history.replaceState(null, "", `${location.pathname}${location.search}`);
+    }
+    this.pendingDuel = null;
+    this.duelInputError = null;
+    this.duelPrompted = true;
+  }
+
+  /** 标题屏检测 URL 片段里的切磋码：解析成功自动弹应战面板，失败则明确警告。 */
+  private checkDuelFragment(): void {
+    if (this.duelPrompted) return;
+    this.duelPrompted = true;
+    const marker = location.hash.indexOf("c=");
+    if (marker < 0) return;
+    const raw = location.hash.slice(marker + 2);
+    this.loadDuelText(raw);
+    this.renderDuelSheet();
   }
 
   private confirmNewRun(): void {

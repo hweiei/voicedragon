@@ -36,11 +36,21 @@ export function dailyChallengeSeed(now = new Date()): number {
 }
 
 /**
- * 战绩比较：通关 > 未通关；其次到达楼层；再次平均声韵。
- * 返回正数表示 a 更好。
+ * 通用战绩比较（每日挑战与 P12 切磋码战绩簿共用同一比较器）：
+ * 通关 > 未通关；其次到达楼层；再次平均声韵。返回正数表示 a 更好。
  */
-export function compareDailyRecords(a: DailyRecord, b: DailyRecord): number {
+export interface RunRecordLike {
+  victory: boolean;
+  floor: number;
+  averageScore: number;
+}
+
+export function compareRunRecords(a: RunRecordLike, b: RunRecordLike): number {
   if (a.victory !== b.victory) return a.victory ? 1 : -1;
   if (a.floor !== b.floor) return a.floor - b.floor;
   return a.averageScore - b.averageScore;
+}
+
+export function compareDailyRecords(a: DailyRecord, b: DailyRecord): number {
+  return compareRunRecords(a, b);
 }

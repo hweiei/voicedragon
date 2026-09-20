@@ -27,6 +27,7 @@ import {
   isModelReady
 } from "./adapters/voice/sensevoice/model-store";
 import type { DownloadProgress } from "./adapters/voice/sensevoice/model-store";
+import { type ChallengeBundle, decodeChallenge, encodeChallenge } from "./core/challenge";
 import { SCORING_WEIGHTS_V2 } from "./core/config/balance";
 import { GameEngine } from "./core/engine";
 import type { CampaignConfig, EmitOptions, GameState, StartCampaignArgs } from "./core/engine";
@@ -270,6 +271,17 @@ void buildAdapter(settings.voiceMode).then((adapter) => {
   getState: () => engine.state,
   startCampaign: (...args: Parameters<GameEngine["startCampaign"]>) =>
     engine.startCampaign(...args),
+  /** P12 切磋码调试口：E2E 与仿真工具据此编解码/应战（UI 入口见标题屏「切磋码」）。 */
+  challenge: {
+    encode: (bundle: ChallengeBundle) => encodeChallenge(bundle),
+    decode: (code: string) => decodeChallenge(code),
+    start: (code: string) => {
+      const decoded = decodeChallenge(code);
+      if (!decoded.ok) return decoded;
+      engine.startChallenge(decoded.challenge);
+      return { ok: true as const, hash: decoded.hash, code: decoded.code };
+    }
+  },
   showVoiceResult: (result: VoiceScoreResult) => ui.debugShowVoiceResult(result),
   voiceServices
 };

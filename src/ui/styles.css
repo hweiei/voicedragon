@@ -3613,3 +3613,142 @@ body.reduce-motion .bravo-meter.full .bravo-pip.lit {
   opacity: 0.55;
   font-size: 12px;
 }
+
+/* ─── P12 切磋码：契约卡 / 码块 / 战绩簿 / 切磋横幅（纯静态，无新特效） ─── */
+.duel-sheet .settings-group:last-of-type {
+  border-bottom: none;
+}
+.duel-contract {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid rgba(240, 207, 131, 0.22);
+  border-radius: 14px;
+  background: rgba(240, 207, 131, 0.05);
+}
+.duel-row {
+  display: grid;
+  grid-template-columns: 5.5em 1fr;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.duel-row small {
+  color: var(--muted);
+}
+.duel-row strong {
+  color: var(--paper);
+  font-weight: 600;
+  word-break: break-word;
+}
+.duel-code {
+  display: block;
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px dashed rgba(240, 207, 131, 0.34);
+  border-radius: 12px;
+  background: rgba(20, 16, 15, 0.55);
+  color: var(--gold-bright);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  word-break: break-all;
+  user-select: all;
+}
+.duel-input {
+  width: 100%;
+  resize: vertical;
+  padding: 10px 12px;
+  border: 1px solid rgba(240, 207, 131, 0.24);
+  border-radius: 12px;
+  background: rgba(20, 16, 15, 0.6);
+  color: var(--paper);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.duel-input:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+.duel-record {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(33, 26, 24, 0.7);
+  color: var(--paper);
+  cursor: pointer;
+}
+.duel-record strong {
+  color: var(--gold-bright);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+.duel-record small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.duel-note {
+  margin: 8px 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+.duel-panel {
+  margin: 14px 0 10px;
+  padding: 12px;
+  border: 1px solid rgba(99, 170, 176, 0.34);
+  border-radius: 14px;
+  background: rgba(99, 170, 176, 0.06);
+}
+.end-screen .full-button[data-action="challenge-create"] {
+  margin-bottom: 10px;
+}
+.duel-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.duel-head strong {
+  color: var(--cyan);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+.duel-head small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.duel-warning {
+  border-color: rgba(230, 94, 85, 0.4);
+  background: rgba(230, 94, 85, 0.1);
+}
+.duel-warning::before {
+  content: "拒";
+  background: rgba(230, 94, 85, 0.22);
+  color: var(--danger);
+}
+.duel-banner {
+  border-color: rgba(99, 170, 176, 0.36);
+  background: rgba(99, 170, 176, 0.06);
+}
+.duel-banner > strong {
+  color: var(--cyan);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+/* 横幅是「说明」不是「词缀对照表」：标题独占一行，正文另起一行 */
+.duel-banner .duel-rule {
+  grid-template-columns: 1fr;
+  gap: 2px;
+}

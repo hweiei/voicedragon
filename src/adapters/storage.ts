@@ -4,6 +4,11 @@
  * 后续 P2 起在此文件追加 migrations（v2→v3 迁移链，见 REDESIGN-PLAN §9）。
  */
 
+import {
+  CHALLENGE_RECORD_LIMIT,
+  type ChallengeRecord,
+  compareChallengeRecords
+} from "../core/challenge";
 import { SCORING_WEIGHTS_V2 } from "../core/config/balance";
 import type { DailyRecord } from "../core/daily";
 import { compareDailyRecords } from "../core/daily";
@@ -253,6 +258,52 @@ export function saveDailyRecord(record: DailyRecord): void {
     }
   } catch (error) {
     console.warn("Unable to save daily record", error);
+  }
+}
+
+// ─── P12 切磋码战绩簿：本机同码最佳（无云端、无排行榜，凭码自证） ──────────────
+
+const CHALLENGE_KEY = "voice-tower-challenge-v1";
+
+/** 战绩簿读取：按完成时间倒序（新纪录在前），最多 CHALLENGE_RECORD_LIMIT 条。 */
+export function loadChallengeRecords(): ChallengeRecord[] {
+  try {
+    const raw = platformStorage().get(CHALLENGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as Record<string, ChallengeRecord>;
+    if (!parsed || typeof parsed !== "object") return [];
+    return Object.values(parsed)
+      .filter(
+        (record) => record && typeof record.hash === "string" && typeof record.code === "string"
+      )
+      .sort((a, b) => (a.finishedAt < b.finishedAt ? 1 : -1));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 战绩簿写入：同一码只保留更优者（比较器与每日挑战一致）；
+ * 超过上限按完成时间淘汰最旧的一条。返回是否发生写入。
+ */
+export function saveChallengeRecord(record: ChallengeRecord): boolean {
+  try {
+    const records = loadChallengeRecords();
+    const key = record.hash;
+    const existing = records.find((entry) => entry.hash === key);
+    if (existing && compareChallengeRecords(record, existing) <= 0) return false;
+    const next = records.filter((entry) => entry.hash !== key);
+    next.unshift(record);
+    const trimmed = next
+      .sort((a, b) => (a.finishedAt < b.finishedAt ? 1 : -1))
+      .slice(0, CHALLENGE_RECORD_LIMIT);
+    const payload: Record<string, ChallengeRecord> = {};
+    for (const entry of trimmed) payload[entry.hash] = entry;
+    platformStorage().set(CHALLENGE_KEY, JSON.stringify(payload));
+    return true;
+  } catch (error) {
+    console.warn("Unable to save challenge record", error);
+    return false;
   }
 }
 

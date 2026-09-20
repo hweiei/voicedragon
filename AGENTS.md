@@ -35,7 +35,8 @@ npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 
 - 设计决策的单一事实源：`docs/REDESIGN-PLAN.md`（P0–P5 历史）与
   `docs/FX-UPGRADE-PLAN.md`（P6 三期完成）及 `docs/CONTENT-EXPANSION-PLAN.md`（P7 三幕深耕）与 `docs/BUILDCRAFT-PLAN.md`（P8-A 构筑成型）、`docs/ENCOUNTER-EVOLUTION-PLAN.md`（P8-B 对手进化）、`docs/VOICE-MASTERY-PLAN.md`（P8-C 语音深化）、`docs/LEARNING-LOOP-PLAN.md`（P8-D 学习闭环）、`docs/RELEASE-READINESS-PLAN.md`（P8-E 发布与设备验收）与
   `docs/COUNTER-ATTACK-PLAN.md`（P9 守势反击）、`docs/GROWTH-PLAN.md`（P10–P15 丰富度总路线）与
-  `docs/ROSTER-PLAN.md`（P10 名伶登场）、`docs/ULTIMATE-PLAN.md`（P11 声动九霄）。
+  `docs/ROSTER-PLAN.md`（P10 名伶登场）、`docs/ULTIMATE-PLAN.md`（P11 声动九霄）、
+  `docs/P12-CHALLENGE-PLAN.md`（P12 切磋码）。
 - 内容兼容：缺失 `ruleset` 的旧局按 legacy；P7 新内容只经 `skillsFor/eventsFor/itemsFor` 进入对应新局。
   不直接修改基础内容表或用扩展池替换基础池。新增参数须审查组合根包装器是否完整转发。
 - 构筑独立版本 `buildVersion:1` 仅用于新战役；缺失时保留旧玩法。升级按 `upgradedSlots` 记录具体牌组槽位，
@@ -65,6 +66,13 @@ npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 
   彩规则看**裸分**（≥85 蓄/<65 断/其间保持，封顶 3，每场绝技一次）；纯规则 `src/core/bravo.ts` 预测与结算共用。
   绝技句在 `src/core/content/ultimates.ts`，只进 ALL_SKILLS（图鉴/练习场/SRS），**不进任何 skillsFor 卡池**。
   sim Bot 发动绝技被守卫拒绝时必须回落出牌（否则 once-per-battle 死循环）。`npm run sim:p11` 独立分报。
+- P12 切磋码独立版本 `challengeVersion:1` 只出现在经码开局的局；`GameState.duel` 记录码身份（码/哈希/模式/幕/种子），
+  旧局无此字段 = 零漂移。编解码与校验全部在 `src/core/challenge.ts` 纯函数：**拒绝路径不抛异常、不改状态**，
+  版本束不支持（`unsupported`）或内容世代重算不符（`mismatch`）一律 `ok:false`，UI 明确拒绝，**不静默降级**。
+  码内白名单只含 幕/种子/规则集/版本束/角色/日期键/词缀/自适应加成——不含昵称、时间与设备信息。
+  切磋局不读本机自适应节律：难度随码内 `adaptiveBoost`（百分点整数，缺省 0），保证同码同难；
+  幕间续行摘掉 `duel`（码只约定它写明的那一幕）。战绩簿 `voice-tower-challenge-v1` 只存本机同码最佳（上限 50），
+  无云端、无排行榜；起手路径（startCampaign/startEndless/startDaily/startNew）语义逐位不变。
 
 ## 2. 黄金契约与确定性
 
@@ -86,7 +94,7 @@ npm run sim:p11           # 绝技门：默认行=P10 基线逐位、高声韵�
 npm run sim:p8            # 构筑版独立仿真（含真实升级/删牌计数）
 npm run sim:p7            # 扩展版独立平衡报表（基础版仍用 npm run sim）
 npx playwright install --with-deps chromium firefox webkit  # 新环境一次性安装
-npx playwright test        # Chromium 业务 E2E（现 41 条）
+npx playwright test        # Chromium 业务 E2E（现 46 条）
 npm run test:release      # Chromium/Firefox/WebKit 发布矩阵（现 19 通过、1 明确跳过）
 npm run test:lighthouse   # 移动端+桌面四类分数及 LCP/TBT/CLS 硬预算
 npm run release:check      # 提交发布前串行执行全部门（需先安装三种 Playwright 浏览器）；P9/P10/P11 后另跑 npm run sim:p9、sim:p10、sim:p11
