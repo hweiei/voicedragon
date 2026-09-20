@@ -9,10 +9,12 @@ import { GameAudio, bgmLayersFor, bgmMoodForPhase, sfxForEffect } from "./adapte
 import { setKeepScreenOn } from "./adapters/platform";
 import {
   loadCampaignMeta,
+  loadDifficultyStore,
   loadProfile,
   loadSettings,
   loadSrsStore,
   saveCampaignMeta,
+  saveDifficultyStore,
   saveGame,
   saveSettings
 } from "./adapters/storage";
@@ -31,10 +33,16 @@ import type { DownloadProgress } from "./adapters/voice/sensevoice/model-store";
 import { type ChallengeBundle, decodeChallenge, encodeChallenge } from "./core/challenge";
 import { SCORING_WEIGHTS_V2 } from "./core/config/balance";
 import { lookupSkill } from "./core/content";
+import {
+  boostFor,
+  difficultyKeyFor,
+  difficultySummary,
+  recordDifficultyResult
+} from "./core/difficulty";
+import { EndpointPolicy } from "./core/endpoint";
 import { GameEngine } from "./core/engine";
 import type { CampaignConfig, EmitOptions, GameState, StartCampaignArgs } from "./core/engine";
 import { masteryFloorFor } from "./core/mastery";
-import { adaptiveBoostFor } from "./core/profile";
 import { parseJyutpingTones } from "./core/tone";
 import { registerBurstSink } from "./ui/fx";
 import { FpsGovernor } from "./ui/fx/governor";
@@ -100,9 +108,16 @@ document.addEventListener("visibilitychange", () => {
   audio.handleVisibility(document.hidden);
 });
 
-// P4 自适应难度注入：连胜略加难 / 连败略减压（设置页可关），随每局开局采样
-engine.adaptiveProvider = () =>
-  settings.adaptiveEnabled !== false ? adaptiveBoostFor(loadProfile().stats.adaptiveStreak) : 0;
+/**
+ * P14 自适应难度 2.0：按模式/按幕的**本地启发式评级**（不是 ML，文案不夸大）。
+ * - 引擎在建局时带上下文调用（经典 / 无尽 / 各幕分开记账）；
+ * - 关开关 = 恒 0，逐位回到基线；每日挑战与切磋局仍由引擎钉 0 / 取码内值，不走这里；
+ * - 数据只在本机（各模式评级与该模式胜负计数），不出设备、不进分享码。
+ */
+engine.adaptiveProvider = (context) =>
+  settings.adaptiveEnabled !== false
+    ? boostFor(loadDifficultyStore(), difficultyKeyFor(context))
+    : 0;
 
 // ─── P13 词林力量化 / 听音题可用性（组合根的注入点；内核保持零 IO） ─────────────
 
@@ -195,7 +210,9 @@ async function buildAdapter(mode: VoiceMode): Promise<VoiceAdapter> {
     mode,
     { modelCached },
     {
-      toneWeight: () => settings.toneWeight ?? SCORING_WEIGHTS_V2.tone
+      toneWeight: () => settings.toneWeight ?? SCORING_WEIGHTS_V2.tone,
+      // P14 自动收音：缺省开（旧设置档亦然），逐次施法实时读取
+      autoCapture: () => settings.autoCapture !== false
     }
   );
 }
@@ -317,5 +334,23 @@ void buildAdapter(settings.voiceMode).then((adapter) => {
     }
   },
   showVoiceResult: (result: VoiceScoreResult) => ui.debugShowVoiceResult(result),
+  /** P14 调试口：自动收音开关、端点策略与难度档摘要（E2E 核对接线用，不参与任何判定）。 */
+  voice: {
+    autoCapture: (): boolean => settings.autoCapture !== false,
+    endpointPolicy: (frames: { voice: boolean; nowMs: number }[]) => {
+      // 与 worker 同一份纯策略：无麦克风环境也能核对端点行为
+      const policy = new EndpointPolicy();
+      return frames.map((frame) => policy.push(frame.voice, frame.nowMs));
+    },
+    difficulty: () => difficultySummary(loadDifficultyStore()),
+    recordResult: (
+      context: { endless?: boolean; campaign?: boolean; act?: number },
+      won: boolean
+    ) => {
+      const next = recordDifficultyResult(loadDifficultyStore(), difficultyKeyFor(context), won);
+      saveDifficultyStore(next);
+      return difficultySummary(next);
+    }
+  },
   voiceServices
 };

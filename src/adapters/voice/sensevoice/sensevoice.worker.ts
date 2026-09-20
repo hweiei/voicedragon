@@ -6,6 +6,8 @@
  * 参考 k2-fsa 官方 vad-asr wasm 示例协议（init / audio / flush / dispose）。
  */
 
+import { EndpointPolicy } from "../../../core/endpoint";
+
 export type UpstreamMessage =
   | {
       type: "init";
@@ -14,6 +16,16 @@ export type UpstreamMessage =
       dataPackageMetadata: unknown;
     }
   | { type: "audio"; samples: Int16Array; sampleRate: number }
+  /**
+   * P14 端点配置：每次施法前由适配器下发（设置可随时改）。
+   * `autoCapture: false` = 完全不喂端点策略，行为与 P13 及以前逐位一致。
+   */
+  | {
+      type: "endpoint";
+      autoCapture: boolean;
+      minSpeechMs?: number;
+      minSilenceMs?: number;
+    }
   | { type: "flush" }
   | { type: "dispose" };
 
@@ -21,6 +33,8 @@ export type DownstreamMessage =
   | { type: "ready"; loadTimeMs: number }
   | { type: "status"; message: string }
   | { type: "speech_start" }
+  /** P14：端点策略判定「该收口了」（毫秒为最后一帧人声 → 判定）。 */
+  | { type: "endpoint_stop"; latencyMs: number | null }
   | {
       type: "result";
       text: string;
@@ -85,6 +99,8 @@ let buffer: CircularBufferLike | null = null;
 let recognizer: OfflineRecognizerLike | null = null;
 let isReady = false;
 let isSpeaking = false;
+/** P14：端点策略。null = 自动收音关闭（调用方不喂，行为等价旧版）。 */
+let endpoint: EndpointPolicy | null = null;
 
 function post(message: DownstreamMessage): void {
   self.postMessage(message);
@@ -191,12 +207,26 @@ function handleAudio(msg: Extract<UpstreamMessage, { type: "audio" }>): void {
       const segment = buffer.get(buffer.head(), windowSize);
       buffer.pop(windowSize);
       vad.acceptWaveform(segment);
-      if (!isSpeaking && vad.isDetected()) {
+      const voice = vad.isDetected();
+      if (!isSpeaking && voice) {
         isSpeaking = true;
         post({ type: "speech_start" });
       }
+      // P14：端点策略只负责「什么时候收口」；判定逻辑在核心层（可单测），这里只做搬运
+      if (endpoint) {
+        const event = endpoint.push(voice, Math.round(performance.now()));
+        if (event === "auto-stop") {
+          post({ type: "endpoint_stop", latencyMs: endpoint.lastLatencyMs });
+          // 与手动 flush 同一条路径：截断当前段 → 解码 → 回传结果
+          vad.flush();
+          drainVadAndDecode();
+          endpoint.reset();
+          isSpeaking = false;
+        }
+      }
     }
-    drainVadAndDecode();
+    // 自动收音关闭时：只有手动 flush（或 6s 兜底）才会 drain —— 与旧行为一致
+    if (!endpoint) drainVadAndDecode();
   } catch (error) {
     isSpeaking = false;
     post({ type: "error", error: `识别处理失败：${(error as Error).message || error}` });
@@ -208,11 +238,20 @@ function handleAudio(msg: Extract<UpstreamMessage, { type: "audio" }>): void {
   }
 }
 
+function handleEndpoint(msg: Extract<UpstreamMessage, { type: "endpoint" }>): void {
+  endpoint = msg.autoCapture
+    ? new EndpointPolicy({ minSpeechMs: msg.minSpeechMs, minSilenceMs: msg.minSilenceMs })
+    : null;
+  isSpeaking = false;
+}
+
 function handleFlush(): void {
   if (!isReady || !vad || !recognizer) return;
   try {
     vad.flush();
     drainVadAndDecode();
+    endpoint?.reset();
+    isSpeaking = false;
   } catch (error) {
     isSpeaking = false;
     post({ type: "error", error: `判定失败：${(error as Error).message || error}` });
@@ -231,6 +270,7 @@ function handleDispose(): void {
   recognizer = null;
   vad = null;
   buffer = null;
+  endpoint = null;
   isReady = false;
   post({ type: "disposed" });
 }
@@ -243,6 +283,9 @@ self.onmessage = (event: MessageEvent<UpstreamMessage>) => {
       break;
     case "audio":
       handleAudio(msg);
+      break;
+    case "endpoint":
+      handleEndpoint(msg);
       break;
     case "flush":
       handleFlush();

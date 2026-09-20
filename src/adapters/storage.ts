@@ -12,6 +12,11 @@ import {
 import { SCORING_WEIGHTS_V2 } from "../core/config/balance";
 import type { DailyRecord } from "../core/daily";
 import { compareDailyRecords } from "../core/daily";
+import {
+  type DifficultyStore,
+  emptyDifficultyStore,
+  normalizeDifficultyStore
+} from "../core/difficulty";
 import type { GameState } from "../core/engine";
 import { emptyProfile } from "../core/profile";
 import type { ProfileStore } from "../core/profile";
@@ -46,8 +51,10 @@ export interface GameSettings {
   toneWeight?: number;
   /** P4 主题皮肤（默认 ink 墨色；成就点解锁其余） */
   theme?: string;
-  /** P4 自适应难度（默认开；连胜微加难、连败微减压） */
+  /** P4 自适应难度（默认开；按幕本地评级微调敌人缩放 ±15%） */
   adaptiveEnabled?: boolean;
+  /** P14 自动收音（默认开；检测到停顿即自动判定。关闭 = 松手判定 / 6 秒上限） */
+  autoCapture?: boolean;
   /** P6-F3 特效强度：auto=按帧率自动降载（默认）；手动档固定覆盖 */
   fxIntensity?: "auto" | "full" | "balanced" | "eco";
 }
@@ -315,6 +322,30 @@ export function saveChallengeRecord(record: ChallengeRecord): boolean {
 }
 
 // ─── P4 玩家档案：跨局统计 / 成就 / 图鉴 / 无尽最佳 / 自适应节律 ───────────────
+
+const DIFFICULTY_KEY = "voice-tower-difficulty-v1";
+
+/**
+ * P14 自适应难度档：只放各模式评级与胜负计数（本地启发式，不含对局内容）。
+ * 旧档缺失 = 空档（评级回落到目标分 = 零缩放），行为与 P13 及以前一致。
+ */
+export function loadDifficultyStore(): DifficultyStore {
+  try {
+    const raw = platformStorage().get(DIFFICULTY_KEY);
+    if (!raw) return emptyDifficultyStore();
+    return normalizeDifficultyStore(JSON.parse(raw));
+  } catch {
+    return emptyDifficultyStore();
+  }
+}
+
+export function saveDifficultyStore(store: DifficultyStore): void {
+  try {
+    platformStorage().set(DIFFICULTY_KEY, JSON.stringify(store));
+  } catch (error) {
+    console.warn("Unable to save difficulty store", error);
+  }
+}
 
 const PROFILE_KEY = "voice-tower-profile-v1";
 

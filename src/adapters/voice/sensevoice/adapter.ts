@@ -59,10 +59,21 @@ export class SenseVoiceAdapter implements VoiceAdapter {
 
   /** P3 声调权重提供者（设置页滑杆，组合根注入，逐次施法实时读取）。 */
   private toneWeightProvider: () => number;
+  /**
+   * P14 自动收音：设置页开关（组合根注入，逐次施法实时读取）。
+   * 缺省 `false` = 保持旧行为（松手判定 / 6 秒上限），因为构造方必须显式选择开启。
+   */
+  private autoCaptureProvider: () => boolean;
   private pitchTracker: PitchTracker | null = null;
 
-  constructor(options: { toneWeight?: () => number } = {}) {
+  constructor(options: { toneWeight?: () => number; autoCapture?: () => boolean } = {}) {
     this.toneWeightProvider = options.toneWeight ?? (() => SCORING_WEIGHTS_V2.tone);
+    this.autoCaptureProvider = options.autoCapture ?? (() => false);
+  }
+
+  /** P14：当前是否开启自动收音（设置页与 E2E 调试口读取）。 */
+  get autoCapture(): boolean {
+    return this.autoCaptureProvider();
   }
 
   get ready(): boolean {
@@ -158,6 +169,11 @@ export class SenseVoiceAdapter implements VoiceAdapter {
   private beginCapture(options: VoiceStartOptions): void {
     const state: PeekWord = { kind: "idle" };
     void state;
+    // P14：端点配置逐次下发（设置可随时改；关闭时 worker 完全不跑端点策略）
+    if (this.worker && this.wasmReady) {
+      const endpointMsg: UpstreamMessage = { type: "endpoint", autoCapture: this.autoCapture };
+      this.worker.postMessage(endpointMsg);
+    }
     this.recorder = new MicRecorder();
     this.pitchTracker = new PitchTracker();
     const tracker = this.pitchTracker;

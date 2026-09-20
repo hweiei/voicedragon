@@ -29,11 +29,13 @@ import {
   loadCampaignMeta,
   loadChallengeRecords,
   loadDailyRecords,
+  loadDifficultyStore,
   loadGame,
   loadProfile,
   loadSrsStore,
   saveChallengeRecord,
   saveDailyRecord,
+  saveDifficultyStore,
   saveProfile,
   saveSrsStore
 } from "../adapters/storage";
@@ -80,6 +82,7 @@ import {
 } from "../core/content";
 import { dailySeedForKey, dateKeyFor } from "../core/daily";
 import type { Skill } from "../core/data";
+import { difficultyKeyFor, recordDifficultyResult } from "../core/difficulty";
 import { NODE_META } from "../core/engine";
 import type { EmitOptions, GameEngine, GameState, RunSummary } from "../core/engine";
 import {
@@ -2134,7 +2137,25 @@ export class GameUI {
         summary
       })
     );
+    this.recordDifficultyResult(state);
     this.checkNewAchievements();
+  }
+
+  /**
+   * P14：一局结算 → 更新该模式/该幕的本地评级（纯函数存盘；开关在组合根）。
+   * 每日挑战与切磋局不记账：前者难度钉 0，后者难度来自码内——记进去会污染玩家自己的评级。
+   */
+  private recordDifficultyResult(state: GameState): void {
+    if (state.challenge || state.duel) return;
+    const context = state.campaign
+      ? { campaign: true, act: state.campaign.act }
+      : { endless: Boolean(state.endless) };
+    const next = recordDifficultyResult(
+      loadDifficultyStore(),
+      difficultyKeyFor(context),
+      state.phase === "victory"
+    );
+    saveDifficultyStore(next);
   }
 
   /** 成就判定上下文：档案统计 + 各幕战役星辉（由种子重算节点类型）+ 每日战绩 + SRS 驯服数。 */
@@ -2297,7 +2318,8 @@ export class GameUI {
           <label class="radio-line"><input type="checkbox" id="set-sound" ${settings.sound ? "checked" : ""} /><span>音效（施法 / 受击 / 结算）</span></label>
           <label class="radio-line"><input type="checkbox" id="set-music" ${(settings.music ?? true) ? "checked" : ""} /><span>背景音乐（生成式粤韵环境乐）</span></label>
           <label class="radio-line"><input type="checkbox" id="set-reduce-motion" ${settings.reduceMotion ? "checked" : ""} /><span>减弱动效</span></label>
-          <label class="radio-line"><input type="checkbox" id="set-adaptive" ${settings.adaptiveEnabled !== false ? "checked" : ""} /><span>自适应难度（连胜略加难、连败略减压，可在开局前随时关闭）</span></label>
+          <label class="radio-line"><input type="checkbox" id="set-adaptive" ${settings.adaptiveEnabled !== false ? "checked" : ""} /><span>自适应难度（本地启发式评级：按经典/无尽/各幕分开记账，敌人强度 ±15% 内微调；不是机器学习）</span></label>
+          <label class="radio-line"><input type="checkbox" id="set-auto-capture" ${settings.autoCapture !== false ? "checked" : ""} /><span>自动收音（端侧引擎：说到停顿即自动判定，不必等满 8 秒兜底；关闭则回到松手判定 / 8 秒上限）</span></label>
           <div class="settings-sublabel">特效强度（P6：手动档优先于帧率自动降载）</div>
           ${(["auto", "full", "balanced", "eco"] as const)
             .map(
@@ -2370,11 +2392,23 @@ export class GameUI {
         this.showToast(`主题已切换：${picked?.name ?? input.value}`);
       });
     }
-    // 自适应难度开关（P4）
+    // 自适应难度开关（P4/P14：本地启发式评级）
     this.modalRoot
       .querySelector<HTMLInputElement>("#set-adaptive")
       ?.addEventListener("change", (e) => {
         this.services.settings.save({ adaptiveEnabled: (e.target as HTMLInputElement).checked });
+      });
+    // P14 自动收音开关（端侧引擎生效；关闭即回到旧行为）
+    this.modalRoot
+      .querySelector<HTMLInputElement>("#set-auto-capture")
+      ?.addEventListener("change", (e) => {
+        const enabled = (e.target as HTMLInputElement).checked;
+        this.services.settings.save({ autoCapture: enabled });
+        this.showToast(
+          enabled
+            ? "自动收音已开：说到停顿约 0.3 秒即自动判定。"
+            : "自动收音已关：改回松手判定（最长 8 秒）。"
+        );
       });
 
     this.refreshModelPanel();

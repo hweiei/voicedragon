@@ -320,7 +320,17 @@ export interface GameState {
 }
 
 /** P4 自适应难度注入点（组合根接 profile / 设置；默认 0，行为与原版一致）。 */
-export type AdaptiveProvider = () => number;
+/**
+ * P14 自适应难度注入点。带上下文是因为难度 2.0 改成**按模式/按幕记账**：
+ * 组合根据 `{ endless, campaign, act }` 选对应的本地评级换算缩放；零参实现依旧合法（等价 classic）。
+ */
+export interface AdaptiveContext {
+  endless?: boolean;
+  campaign?: boolean;
+  act?: number;
+}
+
+export type AdaptiveProvider = (context?: AdaptiveContext) => number;
 
 export interface IntentPreview {
   forecast?: string;
@@ -460,7 +470,7 @@ export class GameEngine {
     };
   }
 
-  createRunState(seed: number = makeSeed()): GameState {
+  createRunState(seed: number = makeSeed(), context?: AdaptiveContext): GameState {
     return {
       version: 2,
       phase: "tower",
@@ -500,7 +510,7 @@ export class GameEngine {
       campaign: null,
       quiz: null,
       endless: false,
-      adaptiveBoost: this.adaptiveProvider()
+      adaptiveBoost: this.adaptiveProvider(context)
     };
   }
 
@@ -558,7 +568,8 @@ export class GameEngine {
     const pack = actContent(act);
     const actNo = pack.act;
     // P5 修复：种子同时驱动地图与战斗 LCG——同 (act, seed) 必得同局（可复现/回放的基石）
-    this.state = this.createRunState(seed);
+    // P14：难度按**幕**在建局时一次采样（三幕曲线不同，共用一个数会互相污染）
+    this.state = this.createRunState(seed, { campaign: true, act: actNo });
     if (ruleset === "p7") this.state.ruleset = ruleset;
     if (ruleset === "p7" && buildVersion === 1) {
       this.state.buildVersion = 1;
@@ -606,7 +617,11 @@ export class GameEngine {
     const map = generateActMap(mapSeed, nextAct);
     const rested = this.healPlayer(Math.ceil(this.state.player!.maxHp * 0.2));
     this.state.seed = mapSeed;
+    // P14：续行换了幕 → 难度按新幕重采样（同一局内跟随幕变化，而非开局钉死）
     campaign.act = nextAct;
+    if (!this.state.duel) {
+      this.state.adaptiveBoost = this.adaptiveProvider({ campaign: true, act: nextAct });
+    }
     campaign.map = map;
     campaign.clearedIds = [];
     campaign.stars = {};
@@ -627,7 +642,8 @@ export class GameEngine {
 
   /** P4 无尽塔：无终点的单段爬楼，楼层无限延伸（5 的倍数为强敌关，永不出现 Boss）。 */
   startEndless(seed?: number, ruleset: ContentRuleset = "legacy"): void {
-    this.state = this.createRunState(seed);
+    // P14：无尽与经典分开记账
+    this.state = this.createRunState(seed, { endless: true });
     if (ruleset === "p7") {
       this.state.ruleset = ruleset;
       this.state.challenge = {

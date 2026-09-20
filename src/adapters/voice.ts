@@ -211,12 +211,12 @@ export function selectAdapterKind(
 export async function createVoiceAdapter(
   mode: VoiceMode,
   probe: { modelCached: boolean } = { modelCached: false },
-  deps: { toneWeight?: () => number } = {}
+  deps: { toneWeight?: () => number; autoCapture?: () => boolean } = {}
 ): Promise<VoiceAdapter> {
   const kind = selectAdapterKind(mode, probe);
   if (kind === "sensevoice") {
     const { SenseVoiceAdapter } = await import("./voice/sensevoice/adapter");
-    return new SenseVoiceAdapter({ toneWeight: deps.toneWeight });
+    return new SenseVoiceAdapter({ toneWeight: deps.toneWeight, autoCapture: deps.autoCapture });
   }
   return new BrowserVoiceAdapter();
 }
