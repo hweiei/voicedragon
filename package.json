@@ -28,7 +28,8 @@
     "sim:p8b": "vite-node scripts/p8b-balance.ts",
     "sim:p9": "vite-node scripts/p9-balance.ts",
     "sim:p10": "vite-node scripts/p10-balance.ts",
-    "sim:p11": "vite-node scripts/p11-balance.ts"
+    "sim:p11": "vite-node scripts/p11-balance.ts",
+    "sim:p13": "vite-node scripts/p13-balance.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",

@@ -30,6 +30,23 @@ export function pickCantoneseVoice(voices: VoiceLike[]): VoiceLike | null {
   );
 }
 
+/**
+ * 是否真的有「粤语音色」：zh-HK / 名称含 Cantonese|yue。
+ * 只认严格匹配——`zh-CN` 兜底声念粤语会把听辨变成错误示范（宁可不考）。
+ */
+export function hasCantoneseVoice(voices: VoiceLike[]): boolean {
+  return voices.some((voice) => {
+    const lang = voice.lang.toLowerCase().replace("_", "-");
+    const name = voice.name.toLowerCase();
+    return (
+      lang === "zh-hk" ||
+      lang.includes("hant-hk") ||
+      name.includes("cantonese") ||
+      name.includes("yue")
+    );
+  });
+}
+
 export class SpeechTts {
   private synth: SpeechSynthesis | null =
     typeof speechSynthesis !== "undefined" ? speechSynthesis : null;
@@ -48,6 +65,12 @@ export class SpeechTts {
 
   get supported(): boolean {
     return Boolean(this.synth);
+  }
+
+  /** P13：听音题可用性探针——有 speechSynthesis 且挑得到粤语音色才算可用。 */
+  get cantoneseAvailable(): boolean {
+    if (!this.synth) return false;
+    return hasCantoneseVoice(this.synth.getVoices());
   }
 
   /** 朗读短语（默认 0.9 倍速，跟读更清晰）。重复调用会先掐断上一条。 */

@@ -15,7 +15,12 @@ import { compareDailyRecords } from "../core/daily";
 import type { GameState } from "../core/engine";
 import { emptyProfile } from "../core/profile";
 import type { ProfileStore } from "../core/profile";
-import { emptySrsStore, normalizeLearningHistory, normalizeToneMastery } from "../core/srs";
+import {
+  emptySrsStore,
+  normalizeLearningHistory,
+  normalizeSyllableMastery,
+  normalizeToneMastery
+} from "../core/srs";
 import type { SrsStore } from "../core/srs";
 import type { VoiceMode } from "./voice";
 
@@ -219,7 +224,9 @@ export function loadSrsStore(): SrsStore {
     return {
       entries: parsed.entries && typeof parsed.entries === "object" ? parsed.entries : {},
       stats,
-      history: normalizeLearningHistory(parsed.history)
+      history: normalizeLearningHistory(parsed.history),
+      // P13：逐音节掌握度（力量化数据源）随档归一；旧档缺失 = 空
+      syllables: normalizeSyllableMastery(parsed.syllables)
     };
   } catch {
     return emptySrsStore();

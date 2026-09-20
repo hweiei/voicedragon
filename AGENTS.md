@@ -36,7 +36,7 @@ npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 
   `docs/FX-UPGRADE-PLAN.md`（P6 三期完成）及 `docs/CONTENT-EXPANSION-PLAN.md`（P7 三幕深耕）与 `docs/BUILDCRAFT-PLAN.md`（P8-A 构筑成型）、`docs/ENCOUNTER-EVOLUTION-PLAN.md`（P8-B 对手进化）、`docs/VOICE-MASTERY-PLAN.md`（P8-C 语音深化）、`docs/LEARNING-LOOP-PLAN.md`（P8-D 学习闭环）、`docs/RELEASE-READINESS-PLAN.md`（P8-E 发布与设备验收）与
   `docs/COUNTER-ATTACK-PLAN.md`（P9 守势反击）、`docs/GROWTH-PLAN.md`（P10–P15 丰富度总路线）与
   `docs/ROSTER-PLAN.md`（P10 名伶登场）、`docs/ULTIMATE-PLAN.md`（P11 声动九霄）、
-  `docs/P12-CHALLENGE-PLAN.md`（P12 切磋码）。
+  `docs/P12-CHALLENGE-PLAN.md`（P12 切磋码）、`docs/P13-WORDBOOK-PLAN.md`（P13 词林拾遗）。
 - 内容兼容：缺失 `ruleset` 的旧局按 legacy；P7 新内容只经 `skillsFor/eventsFor/itemsFor` 进入对应新局。
   不直接修改基础内容表或用扩展池替换基础池。新增参数须审查组合根包装器是否完整转发。
 - 构筑独立版本 `buildVersion:1` 仅用于新战役；缺失时保留旧玩法。升级按 `upgradedSlots` 记录具体牌组槽位，
@@ -73,10 +73,19 @@ npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 
   切磋局不读本机自适应节律：难度随码内 `adaptiveBoost`（百分点整数，缺省 0），保证同码同难；
   幕间续行摘掉 `duel`（码只约定它写明的那一幕）。战绩簿 `voice-tower-challenge-v1` 只存本机同码最佳（上限 50），
   无云端、无排行榜；起手路径（startCampaign/startEndless/startDaily/startNew）语义逐位不变。
+- P13 词林力量化独立版本 `masteryPowerVersion:1` 仅用于 p7 新局（`masteryEnabled` 同时校验规则集），legacy/未开启一律零接触。
+  定案是**判定保底**（不是加威力）：`skillMasteryView` 三档判定（tier1 每音节 ≥2 次且均分 ≥80；tier2 ≥3 次且 ≥92），
+  `masteryJudgeScore` 只抬「取档位用的分数」到不低于 65，**保底值一律 < 正音线 85**（词林不制造正音；裸分/彩/统计逐位不变），
+  加成来源经 `masteryProvider` 注入（组合根读本地 SRS；音节数不符按 0），引擎内核零 IO；`engine.masterySaves` 只是仿真仪表。
+  逐音节聚合存 `SrsStore.syllables`（整数），只经 `accumulateSyllableMastery` 写入；听辨走独立通道：
+  `recordListeningAttempt` 只累计 listening 计数，`enqueueListeningMiss` 只进错词本、**不动**发音统计。
+  听音题池 `quizPoolFor(ruleset, voiceAvailable)` 三态（legacy 18 / p7 有粤语音色 48 / 无音色 18 并如实报跳过），
+  播放只在用户点按时发生（`canSpeakCantonese` 探针，无音色禁用并说明）。词林奖励（点数/称号/主题）不含战斗字段（契约白名单锁定）。
+  `npm run sim:p13` 独立分报，掌握关行须与 P11 基线逐位一致。
 
 ## 2. 黄金契约与确定性
 
-- 引擎行为由 `tests/contract/` 十三个黄金契约测试文件锁定：**改行为先改契约并获得确认**。
+- 引擎行为由 `tests/contract/` 十五个黄金契约测试文件锁定：**改行为先改契约并获得确认**。
 - 同一规则版本下 (act, seed) 必须同一局；特效随机走独立种子流，禁止消费游戏 `rngState`。
 
 ## 3. 质量门（每次提交前全绿）
@@ -84,20 +93,21 @@ npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 
 ```bash
 npx biome check .          # 风格（或 npm run check:fix）
 npx tsc --noEmit           # 严格类型
-npx vitest run             # 单测+契约+仿真（现 416 条）
-npx vite build && npx vite-node scripts/perf-budget.ts   # 首包 ≤350KB gzip（现 89.9）
+npx vitest run             # 单测+契约+仿真（现 489 条）
+npx vite build && npx vite-node scripts/perf-budget.ts   # 首包 ≤350KB gzip（现 104.7）
 npx vite-node scripts/release-readiness.ts               # dist PWA/路径/安全头 44 项契约
 npm run sim:p8b           # 对手进化参考门45–65%、零超时；随机Bot异常须如实记录
 npm run sim:p9            # 守势反击门45–65%、零超时、每幕 counterHits>0
 npm run sim:p10           # 名伶门：每角色三幕45–65%、零超时
 npm run sim:p11           # 绝技门：默认行=P10 基线逐位、高声韵行 ultimateCasts>0、零超时
+npm run sim:p13           # 词林门：三档×三角色×三幕 45–65%、掌握关行=P11 基线逐位（须 300 局，120 局噪声误报）
 npm run sim:p8            # 构筑版独立仿真（含真实升级/删牌计数）
 npm run sim:p7            # 扩展版独立平衡报表（基础版仍用 npm run sim）
 npx playwright install --with-deps chromium firefox webkit  # 新环境一次性安装
-npx playwright test        # Chromium 业务 E2E（现 46 条）
+npx playwright test        # Chromium 业务 E2E（现 50 条）
 npm run test:release      # Chromium/Firefox/WebKit 发布矩阵（现 19 通过、1 明确跳过）
 npm run test:lighthouse   # 移动端+桌面四类分数及 LCP/TBT/CLS 硬预算
-npm run release:check      # 提交发布前串行执行全部门（需先安装三种 Playwright 浏览器）；P9/P10/P11 后另跑 npm run sim:p9、sim:p10、sim:p11
+npm run release:check      # 提交发布前串行执行全部门（需先安装三种 Playwright 浏览器）；P9 起每期另跑期次仿真（sim:p9 / sim:p10 / sim:p11 / sim:p13）
 ```
 
 ## 4. 不可触碰的红线

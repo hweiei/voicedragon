@@ -11,6 +11,7 @@ import {
   loadCampaignMeta,
   loadProfile,
   loadSettings,
+  loadSrsStore,
   saveCampaignMeta,
   saveGame,
   saveSettings
@@ -29,9 +30,12 @@ import {
 import type { DownloadProgress } from "./adapters/voice/sensevoice/model-store";
 import { type ChallengeBundle, decodeChallenge, encodeChallenge } from "./core/challenge";
 import { SCORING_WEIGHTS_V2 } from "./core/config/balance";
+import { lookupSkill } from "./core/content";
 import { GameEngine } from "./core/engine";
 import type { CampaignConfig, EmitOptions, GameState, StartCampaignArgs } from "./core/engine";
+import { masteryFloorFor } from "./core/mastery";
 import { adaptiveBoostFor } from "./core/profile";
+import { parseJyutpingTones } from "./core/tone";
 import { registerBurstSink } from "./ui/fx";
 import { FpsGovernor } from "./ui/fx/governor";
 import { burstSpecFor } from "./ui/fx/particles/emitter";
@@ -99,6 +103,34 @@ document.addEventListener("visibilitychange", () => {
 // P4 自适应难度注入：连胜略加难 / 连败略减压（设置页可关），随每局开局采样
 engine.adaptiveProvider = () =>
   settings.adaptiveEnabled !== false ? adaptiveBoostFor(loadProfile().stats.adaptiveStreak) : 0;
+
+// ─── P13 词林力量化 / 听音题可用性（组合根的注入点；内核保持零 IO） ─────────────
+
+/**
+ * 力量化：每次施法按需读取本地 SRS 聚合（内存数组，无网络、无写盘）。
+ * 只有 masteryPowerVersion=1 的 p7 新局才会被引擎调用；旧局连读档都不发生。
+ */
+engine.masteryProvider = (skillId, syllableCount) => {
+  const skill = lookupSkill(skillId);
+  const tones = skill ? parseJyutpingTones(skill.jyutping) : [];
+  // 音节数与引擎侧不一致 = 内容/查表可疑，按零加成处理（宁可少给，不给错）
+  if (!tones.length || tones.length !== syllableCount) return 0;
+  return masteryFloorFor(loadSrsStore(), skillId, tones);
+};
+
+/**
+ * 听音题可用性：必须挑得到粤语音色（zh-HK / Cantonese / yue）。
+ * 只影响问答题池大小，不参与任何战斗数值；无音色时听音题整题跳过并如实说明。
+ */
+let cantoneseTtsAvailable = false;
+function refreshTtsAvailability(): void {
+  cantoneseTtsAvailable = tts.cantoneseAvailable;
+}
+refreshTtsAvailability();
+if (typeof speechSynthesis !== "undefined") {
+  speechSynthesis.addEventListener?.("voiceschanged", () => refreshTtsAvailability());
+}
+engine.quizVoiceAvailable = () => cantoneseTtsAvailable;
 
 // ─── 战役元存档（P2 单幕 → P5 按幕）：同幕同种子★最高纪录跨局累计 ─────────────
 
@@ -171,7 +203,9 @@ async function buildAdapter(mode: VoiceMode): Promise<VoiceAdapter> {
 const voiceServices: VoiceServices = {
   tts: {
     speak: (text) => tts.speak(text),
-    stop: () => tts.stop()
+    stop: () => tts.stop(),
+    // P13：听音辨字只在有真实粤语音色时开口（没有就如实跳过，不用别的口音假装）
+    canSpeakCantonese: () => tts.cantoneseAvailable
   },
   settings: {
     get: () => settings,

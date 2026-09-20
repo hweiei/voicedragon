@@ -8,6 +8,7 @@ import {
   type SrsStore,
   emptySrsStore,
   normalizeLearningHistory,
+  normalizeSyllableMastery,
   normalizeToneMastery
 } from "./srs";
 
@@ -135,9 +136,14 @@ export function sanitizeLearningStore(input: unknown): SrsStore {
       sumTone: finite(rawStats.sumTone),
       sumConfidence: finite(rawStats.sumConfidence),
       skillsUsed,
-      toneMastery: normalizeToneMastery(rawStats.toneMastery)
+      toneMastery: normalizeToneMastery(rawStats.toneMastery),
+      // P13：听辨聚合计数属于同一隐私等级（纯计数，无文本）
+      listeningAttempts: finite(rawStats.listeningAttempts),
+      listeningCorrect: finite(rawStats.listeningCorrect)
     },
-    history: normalizeLearningHistory(source.history)
+    history: normalizeLearningHistory(source.history),
+    // P13：逐音节掌握度（整数聚合）随档导出；未知字段依旧一律丢弃
+    syllables: normalizeSyllableMastery(source.syllables)
   };
 }
 

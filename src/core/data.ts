@@ -561,6 +561,10 @@ export interface QuizQuestion {
   options: string[];
   answerIndex: number;
   explain: string;
+  /** P13 听音题：需要 TTS 朗读的汉字（无则普通文字题） */
+  audio?: string;
+  /** P13 听音题标记：无粤语音色的设备上整题跳过（诚实降级） */
+  requiresAudio?: boolean;
 }
 
 export const QUIZ_QUESTIONS: QuizQuestion[] = [

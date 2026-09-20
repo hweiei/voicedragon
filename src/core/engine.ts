@@ -55,6 +55,7 @@ import {
   relicsUpToAct,
   skillsFor
 } from "./content";
+import { quizPoolFor } from "./content/listening";
 import { type CharacterId, lookupCharacter } from "./content/roster";
 import { ULTIMATE_FOR_CHARACTER } from "./content/ultimates";
 import { type CounterStance, counterEnabled, resolveCounterDamage } from "./counter";
@@ -62,8 +63,10 @@ import { FLOOR_NAMES, MAX_FLOOR, QUIZ_QUESTIONS, clone } from "./data";
 import type { EnemyBlueprint, EnemyIntent, GameEventContent, QuizQuestion, Skill } from "./data";
 import { availableNodeIds, evaluateCombatStars, generateActMap, nodeById } from "./levelgen";
 import type { ActMap, MapNodeType } from "./levelgen";
+import { MASTERY_FLOOR, masteryEnabled, masteryJudgeScore } from "./mastery";
 import { type ChallengeState, mutationEffects, mutationStage, selectMutators } from "./mutators";
 import { applyCastPassive, resetTurnPassives, rosterEnabled } from "./roster";
+import { parseJyutpingTones } from "./tone";
 
 export type Phase =
   | "title"
@@ -252,6 +255,10 @@ export interface QuizState {
   correct: number;
   /** 已选项下标（null=未作答）；作答后停留展示解析，advanceQuiz 推进 */
   selected: number | null;
+  /** P13：本节点抽中的听音题数（UI 提示可用 🔊 重播） */
+  listeningCount?: number;
+  /** P13：本机无粤语音色而被跳过的听音题数（UI 如实说明） */
+  listeningSkipped?: number;
 }
 
 /**
@@ -305,6 +312,8 @@ export interface GameState {
   ultimateVersion?: 1;
   /** P12 切磋码版本；缺省 = 非切磋局（既有开局路径零接触）。 */
   challengeVersion?: 1;
+  /** P13 语言力量化版本；缺省 = 旧局，牌面威力逐位不变。 */
+  masteryPowerVersion?: 1;
   /** P12 切磋局身份；缺省 = 自开一局。 */
   duel?: DuelState;
   challenge?: ChallengeState;
@@ -344,6 +353,8 @@ export interface CampaignConfig {
   character?: CharacterId;
   /** P11 满堂彩绝技版本 */
   ultimateVersion?: 1;
+  /** P13 语言力量化版本（词林掌握度 → 该句 +1/+2 威力） */
+  masteryPowerVersion?: 1;
 }
 
 /** startCampaign 兼容两种形态：位置参数（旧）或 CampaignConfig（新）。 */
@@ -391,6 +402,11 @@ function makeSeed(): number {
   return time ^ random || 0x6d2b79f5;
 }
 
+/** 音节数（P13 力量化按音节逐项判定，需与内容侧同一套粤拼解析）。 */
+function syllableCountOf(jyutping: string | undefined): number {
+  return jyutping ? parseJyutpingTones(jyutping).length : 0;
+}
+
 export function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
@@ -404,6 +420,20 @@ export class GameEngine {
   private listeners = new Set<EngineListener>();
   /** P4：自适应难度系数提供者（组合根注入；默认关闭=0）。 */
   adaptiveProvider: AdaptiveProvider = () => 0;
+
+  /**
+   * P13 词林力量化注入点（组合根接本地 SRS 聚合；缺省 undefined = 零加成）。
+   * 内核依旧零 IO：引擎只拿「这句加几点威力」这一个纯数字。
+   */
+  masteryProvider?: (skillId: string, syllableCount: number) => number;
+  /** 仿真仪表：本局「词林保底」真正抬分的次数（不参与任何判定与结算）。 */
+  masterySaves = 0;
+
+  /**
+   * P13 本机是否有粤语音色（组合根注入；缺省 false = 保守跳过听音题）。
+   * 只决定问答题池大小，不参与任何战斗数值。
+   */
+  quizVoiceAvailable?: () => boolean;
 
   constructor(initialState: GameState | null = null) {
     this.state = initialState || this.createTitleState();
@@ -538,6 +568,8 @@ export class GameEngine {
     if (ruleset === "p7" && encounterVersion === 1) this.state.encounterVersion = 1;
     if (ruleset === "p7" && counterVersion === 1) this.state.counterVersion = 1;
     if (ruleset === "p7" && ultimateVersion === 1) this.state.ultimateVersion = 1;
+    // P13 语言力量化：独立门控；缺省 = 旧局，牌面威力逐位不变
+    if (ruleset === "p7" && config.masteryPowerVersion === 1) this.state.masteryPowerVersion = 1;
     // P10 名伶：独立版本门控；角色缺省文武生（确定性缺省）；起始牌组覆写不耗 RNG
     if (ruleset === "p7" && config.rosterVersion === 1) {
       this.state.rosterVersion = 1;
@@ -823,9 +855,23 @@ export class GameEngine {
   }
 
   /** P2 问答节点：3 道粤语常识题，答对题数即★数。 */
+  /**
+   * P13：题池按（内容版本 × 本机粤语音色）组装——无音色时听音题整题跳过（诚实降级）。
+   * 抽题仍走同一 pickDistinct：同设备 + 同种子 = 同题；设备能力差异如实计入报告。
+   */
   startQuiz(nodeId: string): void {
-    const questions = this.pickDistinct(QUIZ_QUESTIONS, QUIZ_PER_NODE);
-    this.state.quiz = { nodeId, questions, index: 0, correct: 0, selected: null };
+    const voiceAvailable = this.quizVoiceAvailable?.() ?? false;
+    const { pool, listeningTotal } = quizPoolFor(this.state.ruleset, voiceAvailable);
+    const questions = this.pickDistinct(pool, QUIZ_PER_NODE);
+    this.state.quiz = {
+      nodeId,
+      questions,
+      index: 0,
+      correct: 0,
+      selected: null,
+      listeningCount: questions.filter((question) => question.requiresAudio).length,
+      listeningSkipped: voiceAvailable ? 0 : listeningTotal
+    };
     this.state.phase = "quiz";
   }
 
@@ -1111,7 +1157,24 @@ export class GameEngine {
     combat.voiceBoost = 0;
     player.buffs = player.buffs.filter((buff) => buff.id !== "voice-interference");
 
-    const tier = this.getScoreTier(score);
+    // P13 词林力量化：掌握度只抬「判定档位」的下限，不进裸分、不进彩（彩仍看 rawScore）
+    const masteryFloor = masteryEnabled(this.state)
+      ? clamp(
+          this.masteryProvider?.(skill.id, syllableCountOf(skill.jyutping)) ?? 0,
+          0,
+          MASTERY_FLOOR
+        )
+      : 0;
+    const masteryJudge = masteryJudgeScore(
+      score,
+      masteryFloor,
+      (value) => this.getScoreTier(value).key
+    );
+    const appliedMastery = masteryJudge.applied;
+    // 仿真仪表：保底真正救回档位的次数（不影响任何判定；掌握关行恒为 0）
+    if (masteryJudge.rescued) this.masterySaves += 1;
+    const judgedScore = clamp(masteryJudge.judged, 0, 100);
+    const tier = this.getScoreTier(judgedScore);
     combat.energy -= skill.cost;
     combat.scoreHistory.push(score);
     // P11 满堂彩：按裸分累积/断彩（不含声韵加成——彩要真本事；绝技不经此路径）
@@ -1124,6 +1187,11 @@ export class GameEngine {
 
     const scaledPower = Math.max(1, Math.round(skill.power * tier.multiplier));
     const messages = [`你说出「${skill.phrase}」：${tier.label} ${score} 分。`];
+    if (appliedMastery > 0) {
+      messages.push(
+        `词林保底：判定按 ${judgedScore} 分起算（+${appliedMastery}，这句已练透——正音仍需当场唱准）。`
+      );
+    }
     const passiveMessages: string[] = []; // P10 名伶被动消息：结算后置顶，确保 HUD 可见
     let damageDone = 0;
     let armorGained = 0;

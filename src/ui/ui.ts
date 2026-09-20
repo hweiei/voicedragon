@@ -91,11 +91,28 @@ import {
 } from "../core/learning-archive";
 import { generateActMap } from "../core/levelgen";
 import type { ActNode } from "../core/levelgen";
+import {
+  type ListeningQuestion,
+  type ListeningSession,
+  applyListeningResult,
+  emptyListeningSession,
+  judgeListening,
+  listeningPoolFor,
+  listeningSessionSummary
+} from "../core/listening";
+import { skillMasteryView } from "../core/mastery";
 import { mutationList } from "../core/mutators";
 import { countSrsGraduated, markCodexSeen, recordRunEnd, recordVoiceCast } from "../core/profile";
 import type { ProfileStore } from "../core/profile";
 import { scoreLabel, scorePronunciation } from "../core/scoring";
-import { buildLearningReport, dailyPicks, dailyPracticeProgress, recordAttempt } from "../core/srs";
+import {
+  buildLearningReport,
+  dailyPicks,
+  dailyPracticeProgress,
+  enqueueListeningMiss,
+  recordAttempt,
+  recordListeningAttempt
+} from "../core/srs";
 import {
   type PitchFrame,
   TONE_TEMPLATES,
@@ -106,6 +123,13 @@ import {
   resamplePoints
 } from "../core/tone";
 import { buildVoiceCoach } from "../core/voice-coach";
+import {
+  WORDBOOK_THEME_REQUIREMENT,
+  type WordbookEntry,
+  wordbookEntries,
+  wordbookFocusIds,
+  wordbookProgress
+} from "../core/wordbook";
 import { playBattleFx } from "./fx";
 import { VoiceAura } from "./fx/voice-aura";
 import { drawRunPoster, sharePoster } from "./poster";
@@ -146,10 +170,30 @@ function mapQuizNodeIds(mapSeed: number): string[] {
 const THEME_DEFS = [
   { id: "ink", name: "墨色", requirement: 0, desc: "默认 · 水墨金印" },
   { id: "neon", name: "霓虹", requirement: 60, desc: "成就点 60 解锁 · 赛博纸醉" },
+  {
+    id: "wordbook",
+    name: "词林",
+    requirement: 80,
+    desc: "词林点数 80 或成就点 80 解锁 · 青简墨香"
+  },
   { id: "paper", name: "宣纸", requirement: 120, desc: "成就点 120 解锁 · 米白粉彩" }
 ] as const;
 
 type ThemeId = (typeof THEME_DEFS)[number]["id"];
+
+/** 词林点数（读本地 SRS 聚合；纯装饰口径，与图鉴词林页签同源——不含任何战斗数值）。 */
+function wordbookPointsNow(): number {
+  return wordbookProgress(wordbookEntries(loadSrsStore(), profileCache.codex)).points;
+}
+
+/** 主题解锁：extended 主题按成就点；「词林」主题走**双源门槛**（成就点或词林点数任一达标）。 */
+function themeUnlocked(def: (typeof THEME_DEFS)[number]): boolean {
+  const points = achievementPoints(profileCache.unlocked);
+  if (def.id === "wordbook") {
+    return points >= def.requirement || wordbookPointsNow() >= def.requirement;
+  }
+  return points >= def.requirement;
+}
 
 // ─── 注入服务（组合根提供） ───────────────────────────────────────────────────
 
@@ -157,6 +201,8 @@ export interface VoiceServices {
   tts: {
     speak(text: string): void;
     stop(): void;
+    /** P13：本机是否有真实粤语音色（听音辨字的前提；没有就如实跳过） */
+    canSpeakCantonese(): boolean;
   };
   settings: {
     get(): GameSettings;
@@ -307,7 +353,7 @@ function drawPitchCurves(
 
 function skillCard(
   skill: Skill,
-  options: { action?: string; disabled?: boolean; deckIndex?: number } = {}
+  options: { action?: string; disabled?: boolean; deckIndex?: number; mastered?: boolean } = {}
 ): string {
   const action = options.action || "cast-skill";
   const disabled = Boolean(options.disabled);
@@ -315,6 +361,11 @@ function skillCard(
   return `
     <button class="skill-card${extraClass}" type="button" data-action="${action}" data-skill-id="${escapeHtml(skill.id)}" ${options.deckIndex !== undefined ? `data-deck-index="${options.deckIndex}"` : ""} data-type-mark="${skillTypeMark(skill)}" ${disabled ? "disabled" : ""}>
       <span class="skill-cost">${skill.cost}</span>
+      ${
+        options.mastered
+          ? '<span class="wordbook-mark" title="已入词林：练透的句子判定保底「清晰」（正音仍需当场唱准）">词林</span>'
+          : ""
+      }
       <strong>${escapeHtml(skill.name)}</strong>
       <span class="jyutping">${escapeHtml(skill.jyutping)}</span>
       <span class="meaning">${escapeHtml(skill.lesson)}</span>
@@ -658,10 +709,11 @@ function campaignMapTemplate(state: GameState): string {
     </section>`;
 }
 
-function quizTemplate(state: GameState): string {
+function quizTemplate(state: GameState, canSpeakCantonese: boolean): string {
   const quiz = state.quiz!;
   const question = quiz.questions[quiz.index];
   const answered = quiz.selected !== null;
+  const listening = Boolean(question.requiresAudio);
   const options = question.options
     .map((option, index) => {
       let cls = "choice-button quiz-option";
@@ -685,8 +737,33 @@ function quizTemplate(state: GameState): string {
     <section class="screen story-screen">
       ${hud(state)}
       ${challengeBanner(state)}
-      <p class="eyebrow">街坊问答 · 第 ${quiz.index + 1} / ${quiz.questions.length} 题 · 已答对 ${quiz.correct} 题</p>
+      <p class="eyebrow">${listening ? "街坊问答 · 听音辨字" : "街坊问答"} · 第 ${quiz.index + 1} / ${quiz.questions.length} 题 · 已答对 ${quiz.correct} 题</p>
       <h1 class="screen-title quiz-question">${escapeHtml(question.question)}</h1>
+      ${
+        listening
+          ? `<div class="panel quiz-audio-panel">
+              <p class="settings-note">这是听音题：先点播放听一遍（不会自动播），再选你听到的是哪个。</p>
+              <button class="secondary-button full-button" type="button" data-action="quiz-audio" ${
+                canSpeakCantonese ? "" : "disabled"
+              }>🔊 播放发音</button>
+              ${
+                canSpeakCantonese
+                  ? ""
+                  : '<p class="settings-note">本机没有粤语音色，这道题只能靠提示作答——换到带粤语音色的浏览器或系统语音才公平。</p>'
+              }
+            </div>`
+          : ""
+      }
+      ${
+        !listening && (quiz.listeningSkipped ?? 0) > 0
+          ? `<div class="notice-strip">本节点原有 ${quiz.listeningSkipped} 道听音题，因本机没有粤语音色已跳过（不假装有音频）。</div>`
+          : ""
+      }
+      ${
+        !listening && !(quiz.listeningSkipped ?? 0) && (quiz.listeningCount ?? 0) > 0
+          ? `<p class="screen-subtitle">本节点含 ${quiz.listeningCount} 道听音题，遇到时点 🔊 播放。</p>`
+          : ""
+      }
       <div class="choice-list">${options}</div>
       ${
         answered
@@ -725,7 +802,11 @@ function bravoMeter(bravo: number, locked: boolean, used: boolean): string {
   </div>`;
 }
 
-function battleTemplate(state: GameState, engine: GameEngine): string {
+function battleTemplate(
+  state: GameState,
+  engine: GameEngine,
+  mastered: ReadonlySet<string>
+): string {
   const combat = state.combat!;
   const enemy = combat.enemy;
   const intent = engine.getIntentPreview()!;
@@ -740,7 +821,8 @@ function battleTemplate(state: GameState, engine: GameEngine): string {
       const skill = engine.getDeckSkill(card.index)!;
       return skillCard(skill, {
         disabled: combat.energy < skill.cost || combat.locked,
-        deckIndex: card.index
+        deckIndex: card.index,
+        mastered: mastered.has(skill.id)
       });
     })
     .join("");
@@ -1006,7 +1088,18 @@ export class GameUI {
   private combatStartHp: number | null = null;
   /** P3/P4：标题层视图（游戏界面 / 练习场 / 学习报告 / 成就 / 图鉴） */
   private view: "game" | "practice" | "report" | "achievements" | "codex" = "game";
+  /** P13：图鉴页签（登楼履痕 / 词林拾遗），保持上次选择 */
+  private codexTab: "hall" | "wordbook" = "hall";
+  /** P13：已练透（tier ≥1）的技能 id 集——卡面「词林」标记（练习后失效重算） */
+  private masteredCache: Set<string> | null = null;
   private practiceSkillId: string | null = null;
+  /** P13：练习场模式（跟读校准 / 听音辨字） */
+  private practiceMode: "tone" | "listening" = "tone";
+  private listeningRound = 0;
+  private listeningQueue: ListeningQuestion[] = [];
+  private listeningIndex = 0;
+  private listeningSelected: number | null = null;
+  private listeningSession: ListeningSession = emptyListeningSession();
   private practiceRecording = false;
   private practiceLiveFrames: PitchFrame[] = [];
   private practiceResult: VoiceScoreResult | null = null;
@@ -1101,6 +1194,27 @@ export class GameUI {
       void this.copyDuelText(button.dataset.kind as "code" | "link" | "line");
     if (action === "open-practice") this.openPractice();
     if (action === "practice-select") this.openPractice(button.dataset.skillId);
+    if (action === "practice-mode") {
+      this.practiceMode = button.dataset.mode === "listening" ? "listening" : "tone";
+      this.adapter?.cancel();
+      this.services.tts.stop();
+      this.practiceRecording = false;
+      if (this.practiceMode === "listening" && !this.listeningQueue.length)
+        this.startListeningRound();
+      this.render(this.engine.state);
+    }
+    if (action === "open-practice-listening") this.openPracticeListening();
+    if (action === "listening-play") {
+      const question = this.currentListeningQuestion();
+      if (question) this.services.tts.speak(question.audio);
+    }
+    if (action === "listening-answer")
+      this.answerListening(Number(button.dataset.optionIndex ?? "-1"));
+    if (action === "listening-next") this.nextListening();
+    if (action === "listening-restart") {
+      this.startListeningRound(true);
+      this.render(this.engine.state);
+    }
     if (action === "practice-tts") {
       const skill = this.currentPracticeSkill();
       if (skill) this.services.tts.speak(skill.phrase);
@@ -1118,10 +1232,20 @@ export class GameUI {
     }
     if (action === "open-achievements") this.openView("achievements");
     if (action === "open-codex") this.openView("codex");
+    if (action === "codex-tab") {
+      this.codexTab = button.dataset.tab === "wordbook" ? "wordbook" : "hall";
+      this.render(this.engine.state);
+    }
     if (action === "share-poster") void this.shareRunPoster();
     if (action === "close-view") this.closeView();
     if (action === "show-help") this.openHelp();
     if (action === "open-settings") this.openSettings();
+    if (action === "quiz-audio") {
+      const quiz = this.engine.state.quiz;
+      const question = quiz?.questions[quiz.index];
+      // 只在玩家点按时播放（自动播放合规）；无音色时按钮为 disabled
+      if (question?.audio) this.services.tts.speak(question.audio);
+    }
     if (action === "choose-floor") this.engine.chooseFloorOption(button.dataset.optionId!);
     if (action === "cast-ultimate") this.openUltimate();
     if (action === "cast-skill") {
@@ -1376,8 +1500,13 @@ export class GameUI {
     // P3/P4 标题层视图：练习场 / 学习报告 / 成就 / 图鉴（引擎停留在 title 相）
     if (isTitle && this.view !== "game") {
       if (this.view === "practice") {
-        this.root.innerHTML = this.practiceTemplate();
-        this.paintPracticeCanvas();
+        if (this.practiceMode === "listening") {
+          if (!this.listeningQueue.length) this.startListeningRound();
+          this.root.innerHTML = this.listeningTemplate();
+        } else {
+          this.root.innerHTML = this.practiceTemplate();
+          this.paintPracticeCanvas();
+        }
       } else if (this.view === "report") {
         this.root.innerHTML = this.reportTemplate();
       } else if (this.view === "achievements") {
@@ -1401,12 +1530,14 @@ export class GameUI {
       this.root.innerHTML = state.campaign
         ? campaignMapTemplate(state)
         : towerTemplate(state, this.engine);
-    else if (state.phase === "battle") this.root.innerHTML = battleTemplate(state, this.engine);
+    else if (state.phase === "battle")
+      this.root.innerHTML = battleTemplate(state, this.engine, this.masteredSkillIds());
     else if (state.phase === "event") this.root.innerHTML = eventTemplate(state);
     else if (state.phase === "rest") this.root.innerHTML = restTemplate(state);
     else if (state.phase === "shop") this.root.innerHTML = shopTemplate(state);
     else if (state.phase === "reward") this.root.innerHTML = rewardTemplate(state);
-    else if (state.phase === "quiz") this.root.innerHTML = quizTemplate(state);
+    else if (state.phase === "quiz")
+      this.root.innerHTML = quizTemplate(state, this.services.tts.canSpeakCantonese());
     else if (state.phase === "victory") this.root.innerHTML = endTemplate(state, this.engine, true);
     else if (state.phase === "defeat") this.root.innerHTML = endTemplate(state, this.engine, false);
 
@@ -2152,12 +2283,12 @@ export class GameUI {
           <h3>外观主题（P4）</h3>
           ${THEME_DEFS.map((def) => {
             const points = achievementPoints(profileCache.unlocked);
-            const locked = points < def.requirement;
+            const locked = !themeUnlocked(def);
             const active = (settings.theme ?? "ink") === def.id;
             return `
               <label class="radio-line ${locked ? "locked" : ""}">
                 <input type="radio" name="theme" value="${def.id}" ${active ? "checked" : ""} ${locked ? "disabled" : ""} />
-                <span>${escapeHtml(def.name)} · ${escapeHtml(def.desc)}${locked ? `（当前 ${points} 点）` : ""}</span>
+                <span>${escapeHtml(def.name)} · ${escapeHtml(def.desc)}${locked ? `（当前成就 ${points} 点 / 词林 ${wordbookPointsNow()} 点）` : ""}</span>
               </label>`;
           }).join("")}
         </div>
@@ -2433,8 +2564,170 @@ export class GameUI {
     return (this.practiceSkillId ? lookupSkill(this.practiceSkillId) : null) ?? null;
   }
 
+  /** P13 听辨：建池 → 每轮取 8 题（轮转，确定性；同一档案每次进入顺序一致）。 */
+  private startListeningRound(advance = false): void {
+    const pool = listeningPoolFor(profileCache.codex.skills, 24);
+    if (!pool.length) {
+      this.listeningQueue = [];
+      this.listeningSession = emptyListeningSession();
+      return;
+    }
+    if (advance) this.listeningRound += 1;
+    const perRound = Math.min(8, pool.length);
+    const offset = (this.listeningRound * perRound) % pool.length;
+    this.listeningQueue = Array.from(
+      { length: perRound },
+      (_, index) => pool[(offset + index) % pool.length]
+    );
+    this.listeningIndex = 0;
+    this.listeningSelected = null;
+    this.listeningSession = emptyListeningSession();
+  }
+
+  private currentListeningQuestion(): ListeningQuestion | null {
+    return this.listeningQueue[this.listeningIndex] ?? null;
+  }
+
+  /** 作答：只写听辨计数（对/错）与错词本入队，绝不动发音统计。 */
+  private answerListening(optionIndex: number): void {
+    const question = this.currentListeningQuestion();
+    if (!question || this.listeningSelected !== null) return;
+    this.listeningSelected = optionIndex;
+    const correct = judgeListening(question, optionIndex);
+    const store = loadSrsStore();
+    recordListeningAttempt(store, correct);
+    if (!correct && question.skillId) enqueueListeningMiss(store, question.skillId);
+    saveSrsStore(store);
+    applyListeningResult(this.listeningSession, question, correct);
+    vibrate(correct ? "light" : "heavy");
+    this.render(this.engine.state);
+  }
+
+  private nextListening(): void {
+    if (this.listeningSelected === null) return;
+    this.listeningSelected = null;
+    this.listeningIndex += 1;
+    this.services.tts.stop();
+    this.render(this.engine.state);
+  }
+
+  private openPracticeListening(): void {
+    this.view = "practice";
+    this.practiceMode = "listening";
+    this.startListeningRound();
+    this.render(this.engine.state);
+  }
+
+  /** 练习场模式栏（跟读校准 / 听音辨字）。 */
+  private practiceModeBar(): string {
+    const tab = (id: "tone" | "listening", label: string): string =>
+      `<button class="tab-button${this.practiceMode === id ? " active" : ""}" type="button" role="tab" aria-selected="${this.practiceMode === id}" data-action="practice-mode" data-mode="${id}">${label}</button>`;
+    return `<div class="tab-bar" role="tablist" aria-label="练习场模式">${tab("tone", "跟读校准")}${tab("listening", "听音辨字")}</div>`;
+  }
+
+  /** P13 听辨页：无粤语音色就诚实跳过；有音色走「播放 → 作答 → 解析 → 下一题」。 */
+  private listeningTemplate(): string {
+    const canSpeak = this.services.tts.canSpeakCantonese();
+    const head = `
+      <header class="practice-head">
+        <button class="ghost-button" type="button" data-action="close-view">← 返回</button>
+        <div>
+          <p class="eyebrow">练习场 · 听音辨字</p>
+          <h1 class="screen-title">听准了再选</h1>
+        </div>
+      </header>
+      ${this.practiceModeBar()}`;
+    if (!canSpeak) {
+      return `
+    <section class="screen practice-screen">
+      ${head}
+      <div class="panel listening-skip">
+        <p class="eyebrow">诚实跳过</p>
+        <h2>本机没有粤语音色</h2>
+        <p>听音辨字靠的是真实粤语发音——合成别的口音念粤语词，只会把你带偏。所以这里如实跳过。</p>
+        <p class="settings-note">换到带粤语音色的浏览器 / 系统语音（如 macOS / Windows 的粤语语音包）后，这里会自动开放，题池也会同步变大。</p>
+      </div>
+      <div class="panel listening-howto">
+        <div class="section-label"><h2>听音辨字怎么考</h2><p>六调与声韵的最小对立对</p></div>
+        <p>例如 <strong>sī</strong> 与 <strong>sì</strong>：同一个音节框架，只差一个声调。听一遍，再选出你听到的那个。答错会告诉你差在哪，并把相关句子送进错词本——但<strong>不记为发音成绩</strong>。</p>
+      </div>
+    </section>`;
+    }
+    const question = this.currentListeningQuestion();
+    const sessionLine = listeningSessionSummary(this.listeningSession);
+    if (!question) {
+      const missed = this.listeningSession.missedSkillIds
+        .map((id) => lookupSkill(id)?.phrase)
+        .filter((phrase): phrase is string => Boolean(phrase));
+      return `
+    <section class="screen practice-screen">
+      ${head}
+      <div class="panel listening-summary">
+        <p class="eyebrow">本轮听辨结束</p>
+        <h2>${escapeHtml(sessionLine)}</h2>
+        ${
+          missed.length
+            ? `<p class="settings-note">已进错词本：${missed.map((phrase) => escapeHtml(phrase)).join(" · ")}</p>`
+            : '<p class="settings-note">全对——一个错词都没留下。</p>'
+        }
+        <p class="settings-note">听辨只记「对/错」两个聚合数字，不保存音频、不写发音成绩。</p>
+      </div>
+      <div class="practice-actions">
+        <button class="primary-button full-button" type="button" data-action="listening-restart">下一轮（换一批题）</button>
+        <button class="ghost-button full-button" type="button" data-action="open-report">去学习报告 / 错词本</button>
+      </div>
+    </section>`;
+    }
+    const answered = this.listeningSelected !== null;
+    const correct = answered && judgeListening(question, this.listeningSelected!);
+    const options = question.options
+      .map((option, index) => {
+        let cls = "choice-button quiz-option";
+        let mark = "›";
+        if (answered) {
+          if (option.correct) {
+            cls += " is-correct";
+            mark = "✓";
+          } else if (index === this.listeningSelected) {
+            cls += " is-wrong";
+            mark = "✗";
+          }
+        }
+        return `
+        <button class="${cls}" type="button" data-action="listening-answer" data-option-index="${index}" ${answered ? "disabled" : ""}>
+          <span><strong>${escapeHtml(option.label)}</strong></span><span>${mark}</span>
+        </button>`;
+      })
+      .join("");
+    return `
+    <section class="screen practice-screen">
+      ${head}
+      <div class="listening-strip">
+        <span>第 ${this.listeningIndex + 1} / ${this.listeningQueue.length} 题</span>
+        <span>${escapeHtml(sessionLine)}</span>
+      </div>
+      <div class="panel listening-card">
+        <p class="eyebrow">${question.kind === "pair" ? "最小对立对" : "整句听辨"} · ${question.contrast === "tone" ? "声调对比" : question.contrast === "initial" ? "声母对比" : "韵母对比"}</p>
+        <h2>${escapeHtml(question.prompt)}</h2>
+        <button class="secondary-button full-button" type="button" data-action="listening-play">🔊 播放${answered ? "（可再听一遍）" : "发音"}</button>
+        <p class="settings-note">不会自动播放——点一下再听，避免在公共场合突然出声。</p>
+      </div>
+      <div class="choice-list" data-kind="${question.kind}">${options}</div>
+      ${
+        answered
+          ? `<div class="panel outcome-card">
+              <strong>${correct ? "答对了" : "答错了"}</strong>
+              <p>${escapeHtml(question.explain)}</p>
+            </div>
+            <button class="primary-button full-button" type="button" data-action="listening-next">${this.listeningIndex + 1 < this.listeningQueue.length ? "下一题" : "看本轮小结"}</button>`
+          : '<p class="screen-subtitle">先播放，再选你听到的那个。</p>'
+      }
+    </section>`;
+  }
+
   private openPractice(skillId?: string): void {
     this.view = "practice";
+    if (skillId) this.practiceMode = "tone";
     if (skillId && lookupSkill(skillId)) this.practiceSkillId = skillId;
     if (!this.currentPracticeSkill()) this.practiceSkillId = ALL_SKILLS[0].id;
     this.practiceResult = null;
@@ -2518,6 +2811,20 @@ export class GameUI {
     this.render(this.engine.state);
   }
 
+  /** P13：已练透的技能 id 集（卡面标记用；结果按会话缓存，每次真实跟读后失效）。 */
+  private masteredSkillIds(): Set<string> {
+    if (!this.masteredCache) {
+      const store = loadSrsStore();
+      const ids = new Set<string>();
+      for (const skill of ALL_SKILLS) {
+        const view = skillMasteryView(store, skill.id, parseJyutpingTones(skill.jyutping));
+        if (view.tier >= 1) ids.add(skill.id);
+      }
+      this.masteredCache = ids;
+    }
+    return this.masteredCache;
+  }
+
   /** 真实语音尝试计入学习闭环（QTE/键盘判定不算发音练习）。 */
   private recordVoiceAttempt(skillId: string, result: VoiceScoreResult): void {
     if (result.source === "qte" || result.source === "manual-test") return;
@@ -2531,6 +2838,7 @@ export class GameUI {
       toneSyllableScores: result.toneDetail?.perSyllable ?? null
     });
     saveSrsStore(store);
+    this.masteredCache = null;
   }
 
   private practiceTemplate(): string {
@@ -2573,6 +2881,7 @@ export class GameUI {
           <h1 class="screen-title">跟读校准</h1>
         </div>
       </header>
+      ${this.practiceModeBar()}
       <div class="practice-chips">${chips}</div>
       <div class="panel practice-target">
         <div class="practice-phrase">
@@ -2675,7 +2984,12 @@ export class GameUI {
           <span class="ach-state">${got ? "✓" : ""}</span>
         </div>`;
     }).join("");
-    const nextTheme = THEME_DEFS.find((def) => points < def.requirement);
+    const nextTheme = THEME_DEFS.find((def) => !themeUnlocked(def));
+    const nextThemeHint = nextTheme
+      ? nextTheme.id === "wordbook"
+        ? `再攒 ${nextTheme.requirement - points} 点（或把词林点数练到 ${nextTheme.requirement}）解锁「词林」主题。`
+        : `再攒 ${nextTheme.requirement - points} 点解锁「${nextTheme.name}」主题。`
+      : "全部主题已解锁，可在设置页换装。";
     return `
     <section class="screen achievements-screen">
       <header class="practice-head">
@@ -2685,12 +2999,127 @@ export class GameUI {
           <h1 class="screen-title">${unlocked.size} / ${ACHIEVEMENTS.length} · ${points} 点</h1>
         </div>
       </header>
-      <p class="screen-subtitle">总成就点 ${points} / ${ACHIEVEMENT_POINTS_TOTAL}。${nextTheme ? `再攒 ${nextTheme.requirement - points} 点解锁「${nextTheme.name}」主题。` : "全部主题已解锁，可在设置页换装。"}</p>
+      <p class="screen-subtitle">总成就点 ${points} / ${ACHIEVEMENT_POINTS_TOTAL}。${nextThemeHint}</p>
       <div class="ach-list">${cards}</div>
     </section>`;
   }
 
   /** P4 图鉴页：履历点亮的卡牌 / 敌人 / 遗物 / 道具 / 事件 */
+  /** P13 词林页签：收录 / 逐句掌握度 / 点数与称号 / 听辨统计（纯装饰出口）。 */
+  private wordbookMarkup(): string {
+    const store = loadSrsStore();
+    const entries = wordbookEntries(store, profileCache.codex);
+    const progress = wordbookProgress(entries);
+    const focusIds = wordbookFocusIds(entries, 3);
+    const themeGap = Math.max(0, WORDBOOK_THEME_REQUIREMENT - progress.points);
+    const listeningAttempts = store.stats.listeningAttempts ?? 0;
+    const listeningCorrect = store.stats.listeningCorrect ?? 0;
+    const listeningRate = listeningAttempts
+      ? Math.round((listeningCorrect / listeningAttempts) * 100)
+      : null;
+    const tierLabel = (entry: WordbookEntry): string => {
+      const mastery = entry.mastery;
+      if (!mastery) return "场景词";
+      if (mastery.tier === 2) return "二档 · 练透";
+      if (mastery.tier === 1) return "一档 · 掌握";
+      return mastery.graded > 0 ? "在练" : "未练";
+    };
+    const row = (entry: WordbookEntry): string => {
+      const mastery = entry.mastery;
+      const syllables = mastery
+        ? mastery.syllables
+            .map(
+              (syl) =>
+                `<span class="wordbook-syl${syl.reached ? " reached" : syl.attempts > 0 ? " lagging" : ""}">${escapeHtml(syl.toneName ?? "—")}<small>${syl.average ?? "—"}</small></span>`
+            )
+            .join("")
+        : "";
+      return `
+        <div class="wordbook-row">
+          <span class="wordbook-tier tier-${mastery?.tier ?? 0}">${escapeHtml(tierLabel(entry))}</span>
+          <div class="wordbook-row-body">
+            <strong>${escapeHtml(entry.phrase)}</strong>
+            <small>${escapeHtml(entry.jyutping ?? "——")} · ${escapeHtml(entry.lesson)}</small>
+            ${syllables ? `<div class="wordbook-syl-row">${syllables}</div>` : ""}
+          </div>
+          <div class="wordbook-row-side">
+            ${entry.collected ? '<span class="wordbook-collected">已入词林</span>' : '<span class="wordbook-collected muted">未收录</span>'}
+            ${
+              entry.kind === "skill"
+                ? `<button class="mini-button" type="button" data-action="practice-select" data-skill-id="${escapeHtml(entry.id)}">去练</button>`
+                : ""
+            }
+          </div>
+        </div>`;
+    };
+    const skills = entries.filter((entry) => entry.kind === "skill");
+    const group = (title: string, list: WordbookEntry[], open = false): string =>
+      list.length
+        ? `<details class="panel codex-section wordbook-group"${open ? " open" : ""}>
+            <summary>${escapeHtml(title)} <small>${list.length}</small></summary>
+            <div class="wordbook-list">${list.map(row).join("")}</div>
+          </details>`
+        : "";
+    const tier2 = skills.filter((entry) => (entry.mastery?.tier ?? 0) === 2);
+    const tier1 = skills.filter((entry) => (entry.mastery?.tier ?? 0) === 1);
+    const practicing = skills.filter(
+      (entry) => (entry.mastery?.tier ?? 0) === 0 && (entry.mastery?.graded ?? 0) > 0
+    );
+    const untouched = skills.filter((entry) => (entry.mastery?.graded ?? 0) === 0);
+    const scenes = entries.filter((entry) => entry.kind === "scene");
+    const focus = focusIds
+      .map((id) => {
+        const entry = skills.find((item) => item.id === id);
+        if (!entry) return "";
+        return `<button class="ghost-button" type="button" data-action="practice-select" data-skill-id="${escapeHtml(entry.id)}">${escapeHtml(entry.phrase)} · ${entry.mastery?.average ?? "—"} 分</button>`;
+      })
+      .join("");
+    const nextTitle = progress.nextTitle;
+    return `
+      <div class="panel wordbook-summary">
+        <p class="eyebrow">词林拾遗 · 称号「${escapeHtml(progress.title.name)}」</p>
+        <h2 class="wordbook-points">${progress.points} 点</h2>
+        <p class="settings-note">点数只换称号与主题，<strong>不出售任何战斗强度</strong>。</p>
+        <div class="learning-summary-grid">
+          <div><strong>${progress.collected}/${progress.total}</strong><small>已收录条目</small></div>
+          <div><strong>${tier2.length}</strong><small>练透的句子</small></div>
+          <div><strong>${progress.gradedSyllables}/${progress.totalSyllables}</strong><small>已评音节</small></div>
+        </div>
+        ${
+          nextTitle
+            ? `<p class="settings-note">再攒 ${nextTitle.requirement - progress.points} 点到「${escapeHtml(nextTitle.name)}」：${escapeHtml(nextTitle.desc)}。</p>`
+            : `<p class="settings-note">称号已到顶——「${escapeHtml(progress.title.name)}」。</p>`
+        }
+        <p class="settings-note">${
+          themeGap > 0
+            ? `词林点数还差 ${themeGap} 点解锁「词林」主题（设置页换装）。`
+            : "「词林」主题已解锁，可在设置页换装。"
+        }</p>
+      </div>
+      <div class="panel wordbook-listening">
+        <div class="section-label"><h2>听音辨字</h2><p>${
+          listeningRate == null
+            ? "还没练过听辨"
+            : `${listeningAttempts} 题 · 正确率 ${listeningRate}%`
+        }</p></div>
+        <p class="settings-note">听辨只记「对/错」两个数，不混进发音成绩；答错的可回链句子自动进错词本。</p>
+        <button class="secondary-button full-button" type="button" data-action="open-practice-listening">去练习场 · 听音辨字</button>
+      </div>
+      ${
+        focus
+          ? `<div class="panel wordbook-focus">
+              <div class="section-label"><h2>最该补的三句</h2><p>按均分升序</p></div>
+              <div class="button-row">${focus}</div>
+            </div>`
+          : ""
+      }
+      ${group("已练透（二档）", tier2, true)}
+      ${group("一档掌握", tier1, true)}
+      ${group("还在练", practicing, true)}
+      ${untouched.length ? group("未开练的句子", untouched) : ""}
+      ${scenes.length ? group("场景词（奇遇 · 不评掌握度）", scenes) : ""}`;
+  }
+
   private codexTemplate(): string {
     const codex = profileCache.codex;
     const section = (
@@ -2719,6 +3148,26 @@ export class GameUI {
           <div class="codex-grid">${items}</div>
         </details>`;
     };
+    const tab = this.codexTab;
+    const tabBar = `
+      <div class="tab-bar" role="tablist" aria-label="图鉴页签">
+        <button class="tab-button${tab === "hall" ? " active" : ""}" type="button" role="tab" aria-selected="${tab === "hall"}" data-action="codex-tab" data-tab="hall">登楼履痕</button>
+        <button class="tab-button${tab === "wordbook" ? " active" : ""}" type="button" role="tab" aria-selected="${tab === "wordbook"}" data-action="codex-tab" data-tab="wordbook">词林拾遗</button>
+      </div>`;
+    if (tab === "wordbook") {
+      return `
+    <section class="screen codex-screen">
+      <header class="practice-head">
+        <button class="ghost-button" type="button" data-action="close-view">← 返回</button>
+        <div>
+          <p class="eyebrow">图鉴 · 词林拾遗</p>
+          <h1 class="screen-title">练过的句子，都在这</h1>
+        </div>
+      </header>
+      ${tabBar}
+      ${this.wordbookMarkup()}
+    </section>`;
+    }
     return `
     <section class="screen codex-screen">
       <header class="practice-head">
@@ -2728,6 +3177,7 @@ export class GameUI {
           <h1 class="screen-title">见过什么，一目了然</h1>
         </div>
       </header>
+      ${tabBar}
       ${section(
         "声诀（技能）",
         ALL_SKILLS.map((s) => ({ id: s.id, name: s.name, tip: `${s.phrase} · ${s.jyutping}` })),
@@ -2761,7 +3211,13 @@ export class GameUI {
   }
 
   private reportTemplate(): string {
-    const report = buildLearningReport(loadSrsStore(), new Date());
+    const srsStore = loadSrsStore();
+    const report = buildLearningReport(srsStore, new Date());
+    const listeningAttempts = srsStore.stats.listeningAttempts ?? 0;
+    const listeningCorrect = srsStore.stats.listeningCorrect ?? 0;
+    const listeningLine = listeningAttempts
+      ? `${listeningCorrect}/${listeningAttempts}（${Math.round((listeningCorrect / listeningAttempts) * 100)}%）`
+      : "未开始——练习场 · 听音辨字";
     const axes: { label: string; value: number; muted?: string }[] = [
       { label: "字准", value: report.wordAvg },
       {
@@ -2873,6 +3329,7 @@ export class GameUI {
         <div class="radar-notes">
           <p>开口练习 <strong>${report.voiceAttempts}</strong> 次 · 覆盖短句 <strong>${report.vocab}</strong> / ${ALL_SKILLS.length}</p>
           ${axes[1].muted ? `<p class="settings-note">调准轴：${escapeHtml(axes[1].muted)}（端侧模型可产出）</p>` : ""}
+          <p class="settings-note">听辨 ${escapeHtml(listeningLine)}（只记对错，不混进发音成绩）</p>
           <p class="settings-note">今日挑战：${escapeHtml(todayRecord ? (todayRecord.victory ? `已通关 · 综合 ${todayRecord.averageScore}` : `到第 ${todayRecord.floor} 层 · 综合 ${todayRecord.averageScore}`) : "未挑战")}</p>
         </div>
       </div>

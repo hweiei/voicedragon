@@ -3752,3 +3752,254 @@ body.reduce-motion .bravo-meter.full .bravo-pip.lit {
   grid-template-columns: 1fr;
   gap: 2px;
 }
+
+/* ═══════════════ P13 词林拾遗：页签 · 词林 · 听辨 · 保底标记 ═══════════════ */
+
+/* 页签（图鉴双页签 / 练习场双模式共用） */
+.tab-bar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.tab-button {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--paper-soft);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: border-color 0.18s var(--ease-out-hard), color 0.18s var(--ease-out-hard), background
+    0.18s var(--ease-out-hard);
+}
+.tab-button.active {
+  border-color: rgba(214, 169, 77, 0.5);
+  background: rgba(214, 169, 77, 0.12);
+  color: var(--gold-bright);
+}
+.tab-button:hover:not(.active) {
+  border-color: rgba(232, 209, 167, 0.32);
+  color: var(--paper);
+}
+
+/* 词林页签：称号 / 点数 / 掌握度 */
+.wordbook-summary {
+  display: grid;
+  gap: 8px;
+}
+.wordbook-points {
+  margin: 0;
+  font-size: 34px;
+  line-height: 1.1;
+  color: var(--gold-bright);
+  font-variant-numeric: tabular-nums;
+}
+.wordbook-summary .learning-summary-grid {
+  margin-top: 2px;
+}
+.wordbook-group summary {
+  cursor: pointer;
+}
+.wordbook-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+.wordbook-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "tier body mark";
+  gap: 8px 10px;
+  align-items: start;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.02);
+}
+.wordbook-row > .wordbook-tier {
+  grid-area: tier;
+}
+.wordbook-row-body {
+  grid-area: body;
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.wordbook-row-body strong {
+  font-size: 14px;
+}
+.wordbook-row-body small {
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.wordbook-row-side {
+  grid-area: mark;
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+}
+.wordbook-collected {
+  align-self: center;
+  padding: 3px 8px;
+  border: 1px solid rgba(79, 154, 125, 0.45);
+  border-radius: 999px;
+  background: rgba(79, 154, 125, 0.12);
+  color: var(--jade);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.wordbook-collected.muted {
+  border-color: var(--line);
+  background: transparent;
+  color: var(--muted);
+}
+.wordbook-tier {
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.wordbook-tier.tier-1 {
+  border-color: rgba(214, 169, 77, 0.42);
+  background: rgba(214, 169, 77, 0.1);
+  color: var(--gold-bright);
+}
+.wordbook-tier.tier-2 {
+  border-color: rgba(79, 154, 125, 0.5);
+  background: rgba(79, 154, 125, 0.14);
+  color: var(--jade);
+}
+.wordbook-syl-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 4px;
+}
+.wordbook-syl {
+  display: inline-grid;
+  justify-items: center;
+  min-width: 40px;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.wordbook-syl small {
+  color: inherit;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.wordbook-syl.reached {
+  border-color: rgba(79, 154, 125, 0.45);
+  color: var(--jade);
+}
+.wordbook-syl.lagging {
+  border-color: rgba(230, 94, 85, 0.4);
+  color: var(--danger);
+}
+.wordbook-focus .button-row {
+  display: grid;
+  gap: 8px;
+}
+
+/* 卡面「已入词林」标记（练透的句子判定保底清晰） */
+.wordbook-mark {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 2px 7px;
+  border: 1px solid rgba(79, 154, 125, 0.5);
+  border-radius: 999px;
+  background: rgba(15, 40, 32, 0.86);
+  color: var(--jade);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+.skill-card {
+  position: relative;
+}
+
+/* 听音题（街坊问答里的 🔊 题） */
+.quiz-audio-panel {
+  display: grid;
+  gap: 8px;
+}
+.quiz-audio-panel .settings-note {
+  margin: 0;
+}
+
+/* 练习场 · 听音辨字 */
+.listening-strip {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.listening-card {
+  display: grid;
+  gap: 10px;
+}
+.listening-card h2 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.5;
+}
+.listening-card .settings-note {
+  margin: 0;
+}
+/* 整句听辨的选项是粤拼（不给汉字，避免剧透答案）：等宽更易逐音节比对 */
+.choice-list[data-kind="phrase"] .quiz-option strong {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 15px;
+  letter-spacing: 0.01em;
+}
+.listening-skip h2,
+.listening-summary h2 {
+  margin: 4px 0 6px;
+  font-size: 19px;
+}
+.listening-skip p,
+.listening-summary p,
+.listening-howto p {
+  margin: 0 0 6px;
+  line-height: 1.7;
+}
+.listening-howto {
+  margin-top: 12px;
+}
+
+/* 词林（青简墨香）：竹简青 × 藤黄印 */
+body[data-theme="wordbook"] {
+  --ink: #0b1512;
+  --ink-2: #11211b;
+  --ink-3: #173026;
+  --paper: #e7f3e7;
+  --paper-soft: #bcd6c4;
+  --muted: #86a596;
+  --line: rgba(120, 200, 168, 0.2);
+  --red: #d8724f;
+  --red-bright: #ef8c62;
+  --gold: #c9a94f;
+  --gold-bright: #e8cf8c;
+  --jade: #5fd0a0;
+  --cyan: #7fb8b0;
+  color-scheme: dark;
+  background: radial-gradient(circle at 50% -10%, rgba(95, 208, 160, 0.13), transparent 38%),
+    linear-gradient(155deg, #07110e 0%, #10221c 55%, #0a1714 100%);
+}
+body[data-theme="wordbook"] .panel,
+body[data-theme="wordbook"] .hud-card,
+body[data-theme="wordbook"] .summary-card,
+body[data-theme="wordbook"] .modal-sheet {
+  box-shadow: 0 10px 34px rgba(6, 26, 20, 0.42);
+}

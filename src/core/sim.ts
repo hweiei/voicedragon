@@ -15,13 +15,15 @@ import { evolutionEnabled, intentAt, resolveEnemyAction } from "./encounters";
  * 随机 Bot（random）= 下限玩家：均匀决策。CI 只对 greedy 的胜率带 45–65% 设阈值。
  */
 
-import { type ContentRuleset, lookupSkill } from "./content";
+import { ALL_SKILLS, type ContentRuleset, lookupSkill } from "./content";
 import type { CharacterId } from "./content/roster";
 import { counterEnabled } from "./counter";
 import type { Skill } from "./data";
 import { GameEngine } from "./engine";
 import type { GameState } from "./engine";
 import { childrenIds, mulberry32, nodeById } from "./levelgen";
+import { masteryFloorFor, syntheticMasteryStore } from "./mastery";
+import { parseJyutpingTones } from "./tone";
 
 export type BotId = "random" | "greedy";
 
@@ -73,6 +75,8 @@ export interface SimRunResult {
   passiveHits?: number;
   /** P11：绝技实际发动次数（彩满且发动）。 */
   ultimateCasts?: number;
+  /** P13：词林保底真正抬分的次数（机制运转证据；不参与任何判定）。 */
+  masterySaves?: number;
 }
 
 export interface SimOptions {
@@ -92,6 +96,32 @@ export interface SimOptions {
   qteSource?: boolean;
   /** P11：满堂彩绝技版本 */
   ultimateVersion?: 1;
+  /** P13：语言力量化之门控（注入合成掌握度档案） */
+  masteryPowerVersion?: 1;
+  /**
+   * P13：合成掌握度档案——`score` 为每音节均分、`attempts` 为每音节尝试次数。
+   * `deckOnly: true` 只覆盖起始牌组（现实上界）；缺省覆盖全卡池（理论最坏上界）。
+   */
+  masteryProfile?: { score: number; attempts: number; deckOnly?: boolean };
+}
+
+/** P13：把合成掌握度注入引擎（数值仍由真实纯函数 masteryFloorFor 判定）。 */
+function attachMastery(engine: GameEngine, options: SimOptions): void {
+  const profile = options.masteryProfile;
+  if (!profile || options.masteryPowerVersion !== 1) return;
+  const skills = ALL_SKILLS.map((skill) => ({
+    id: skill.id,
+    tones: parseJyutpingTones(skill.jyutping)
+  }));
+  const scoped = profile.deckOnly
+    ? skills.filter((skill) => (engine.state.player?.deck ?? []).includes(skill.id))
+    : skills;
+  const store = syntheticMasteryStore(scoped, profile.score, profile.attempts);
+  engine.masteryProvider = (skillId, syllableCount) => {
+    const skill = scoped.find((entry) => entry.id === skillId);
+    if (!skill || skill.tones.length !== syllableCount) return 0;
+    return masteryFloorFor(store, skillId, skill.tones);
+  };
 }
 
 const MAX_TURNS_PER_BATTLE = 60;
@@ -324,8 +354,10 @@ export function simulateCampaign(options: SimOptions): SimRunResult {
     counterVersion: options.counterVersion,
     rosterVersion: options.rosterVersion,
     character: options.character,
-    ultimateVersion: options.ultimateVersion
+    ultimateVersion: options.ultimateVersion,
+    masteryPowerVersion: options.masteryPowerVersion
   });
+  attachMastery(engine, options);
   // Bot 决策流独立于引擎 LCG：同种子下游戏随机与决策随机都可复现
   const rng = mulberry32((options.seed ^ 0x5eed_b07 ^ (options.act * 0x85eb_ca6b)) >>> 0);
 
@@ -348,7 +380,8 @@ export function simulateCampaign(options: SimOptions): SimRunResult {
     ...(options.encounterVersion === 1 ? { bossPhases, newElites } : {}),
     ...(options.counterVersion === 1 ? { counterHits } : {}),
     ...(options.rosterVersion === 1 ? { passiveHits } : {}),
-    ...(options.ultimateVersion === 1 ? { ultimateCasts } : {})
+    ...(options.ultimateVersion === 1 ? { ultimateCasts } : {}),
+    ...(options.masteryPowerVersion === 1 ? { masterySaves: engine.masterySaves } : {})
   });
 
   while (steps < MAX_STEPS_PER_RUN) {
@@ -653,6 +686,8 @@ export interface SimSummary {
   counterHits?: number;
   passiveHits?: number;
   ultimateCasts?: number;
+  /** P13：词林保底真正抬分的次数（机制运转证据；不参与任何判定）。 */
+  masterySaves?: number;
 }
 
 /** 幕级蒙特卡洛：种子流 = hash(baseSeed, act, runIndex)，全确定性可复现。 */
@@ -670,6 +705,8 @@ export function simulateAct(options: {
   character?: CharacterId;
   qteSource?: boolean;
   ultimateVersion?: 1;
+  masteryPowerVersion?: 1;
+  masteryProfile?: { score: number; attempts: number; deckOnly?: boolean };
 }): SimSummary {
   const { act, bot, runs } = options;
   const baseSeed = options.baseSeed ?? 0x2026_0919;
@@ -686,6 +723,7 @@ export function simulateAct(options: {
   let counterHits = 0;
   let passiveHits = 0;
   let ultimateCasts = 0;
+  let masterySaves = 0;
   for (let index = 0; index < runs; index += 1) {
     const seed = (baseSeed + act * 0x1b873593 + index * 0x9e3779b9) >>> 0;
     const result = simulateCampaign({
@@ -700,7 +738,9 @@ export function simulateAct(options: {
       rosterVersion: options.rosterVersion,
       character: options.character,
       qteSource: options.qteSource,
-      ultimateVersion: options.ultimateVersion
+      ultimateVersion: options.ultimateVersion,
+      masteryPowerVersion: options.masteryPowerVersion,
+      masteryProfile: options.masteryProfile
     });
     if (result.win) wins += 1;
     floorSum += result.floor;
@@ -714,6 +754,7 @@ export function simulateAct(options: {
     counterHits += result.counterHits ?? 0;
     passiveHits += result.passiveHits ?? 0;
     ultimateCasts += result.ultimateCasts ?? 0;
+    masterySaves += result.masterySaves ?? 0;
   }
   return {
     act,
@@ -730,6 +771,7 @@ export function simulateAct(options: {
     ...(options.encounterVersion === 1 ? { bossPhases, newElites } : {}),
     ...(options.counterVersion === 1 ? { counterHits } : {}),
     ...(options.rosterVersion === 1 ? { passiveHits } : {}),
-    ...(options.ultimateVersion === 1 ? { ultimateCasts } : {})
+    ...(options.ultimateVersion === 1 ? { ultimateCasts } : {}),
+    ...(options.masteryPowerVersion === 1 ? { masterySaves } : {})
   };
 }

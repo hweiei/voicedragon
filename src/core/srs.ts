@@ -40,6 +40,23 @@ export interface SrsEntry {
   focusTone?: TrackedTone;
 }
 
+/**
+ * P13 单音节掌握度聚合（每个技能短语按音节序号累计）。
+ * 只存整数聚合（次数/和/最好/最近），不含识别文本、时间戳与 F0 帧。
+ */
+export interface SyllableStat {
+  attempts: number;
+  sumScore: number;
+  bestScore: number;
+  lastScore: number;
+}
+
+/** skillId → 该短语逐音节聚合（下标 = 音节序号）。 */
+export type SyllableMasteryMap = Record<string, SyllableStat[]>;
+
+/** 单句音节数上限（长句绝技也就 8 个音节，32 是防御性上限）。 */
+export const SYLLABLE_MASTERY_LIMIT = 32;
+
 /** 全局练习聚合（学习报告四轴：字准 / 调准 / 信心 / 词汇量）。 */
 export interface SrsStats {
   voiceAttempts: number;
@@ -50,6 +67,9 @@ export interface SrsStats {
   skillsUsed: string[];
   /** P8-C 六调音节画像；只累计有本地 F0 明细的真实语音。 */
   toneMastery: ToneMasteryMap;
+  /** P13 听辨小考聚合（感知通道，独立于发音统计）。 */
+  listeningAttempts: number;
+  listeningCorrect: number;
 }
 
 export interface LearningDay {
@@ -69,6 +89,8 @@ export interface SrsStore {
   stats: SrsStats;
   /** P8-D 最多 90 个有练习的本地自然日；旧档加载时补空数组。 */
   history: LearningDay[];
+  /** P13 逐音节掌握度（力量化的唯一数据源）；旧档缺失 = 空。 */
+  syllables?: SyllableMasteryMap;
 }
 
 /** 进入错词本的综合分门槛（低于即钉子户）。 */
@@ -109,6 +131,35 @@ export function normalizeToneMastery(input: unknown): ToneMasteryMap {
     base[tone] = { attempts, sumScore, bestScore, lastScore };
   }
   return base;
+}
+
+/** 旧档/异常音节聚合归一：只保留合法技能 id 与定长整数数组，不修改传入对象。 */
+export function normalizeSyllableMastery(input: unknown): SyllableMasteryMap {
+  const result: SyllableMasteryMap = {};
+  if (!input || typeof input !== "object") return result;
+  for (const [skillId, raw] of Object.entries(input as Record<string, unknown>).slice(0, 1000)) {
+    if (!/^[a-z0-9-]{1,128}$/.test(skillId) || !Array.isArray(raw)) continue;
+    const stats: SyllableStat[] = [];
+    for (const value of raw.slice(0, SYLLABLE_MASTERY_LIMIT)) {
+      if (!value || typeof value !== "object") continue;
+      const source = value as Partial<SyllableStat>;
+      const attempts = isFiniteNumber(source.attempts)
+        ? Math.max(0, Math.min(100000, Math.floor(source.attempts)))
+        : 0;
+      const sumScore = isFiniteNumber(source.sumScore)
+        ? Math.max(0, Math.min(attempts * 100, Math.round(source.sumScore)))
+        : 0;
+      const bestScore = isFiniteNumber(source.bestScore)
+        ? Math.max(0, Math.min(100, Math.round(source.bestScore)))
+        : 0;
+      const lastScore = isFiniteNumber(source.lastScore)
+        ? Math.max(0, Math.min(100, Math.round(source.lastScore)))
+        : 0;
+      stats.push({ attempts, sumScore, bestScore, lastScore });
+    }
+    if (stats.length) result[skillId] = stats;
+  }
+  return result;
 }
 
 function dateFromKey(key: string): Date | null {
@@ -199,9 +250,12 @@ export function emptySrsStore(): SrsStore {
       sumTone: 0,
       sumConfidence: 0,
       skillsUsed: [],
-      toneMastery: emptyToneMastery()
+      toneMastery: emptyToneMastery(),
+      listeningAttempts: 0,
+      listeningCorrect: 0
     },
-    history: []
+    history: [],
+    syllables: {}
   };
 }
 
@@ -288,6 +342,33 @@ function applyAttemptDetail(
   }
 }
 
+/**
+ * P13 逐音节掌握度累计（纯函数）：只用「逐音节调准分」这一个数据源
+ * （端侧引擎的 F0 明细）；无声/QTE 通道没有该数据 ⇒ 不产生掌握度（诚实降级）。
+ */
+function accumulateSyllableMastery(
+  map: SyllableMasteryMap,
+  skillId: string,
+  attempt: AttemptInput
+): SyllableMasteryMap {
+  const scores = attempt.toneSyllableScores;
+  if (!scores?.length) return map;
+  const list = map[skillId] ? [...map[skillId]] : [];
+  for (let index = 0; index < Math.min(scores.length, SYLLABLE_MASTERY_LIMIT); index += 1) {
+    const raw = scores[index];
+    if (!Number.isFinite(raw)) continue;
+    const score = Math.max(0, Math.min(100, Math.round(raw)));
+    const bucket = list[index] ?? { attempts: 0, sumScore: 0, bestScore: 0, lastScore: 0 };
+    list[index] = {
+      attempts: bucket.attempts + 1,
+      sumScore: bucket.sumScore + score,
+      bestScore: Math.max(bucket.bestScore, score),
+      lastScore: score
+    };
+  }
+  return { ...map, [skillId]: list };
+}
+
 function recordLearningDay(
   store: SrsStore,
   skillId: string,
@@ -331,6 +412,12 @@ export function recordAttempt(
   now = new Date()
 ): SrsStore {
   const stats = store.stats;
+  // P13：逐音节掌握度是力量化的唯一数据源，随存档持久化（只有整数聚合）
+  store.syllables = accumulateSyllableMastery(
+    normalizeSyllableMastery(store.syllables),
+    skillId,
+    attempt
+  );
   stats.voiceAttempts += 1;
   stats.sumWord += Math.round(attempt.wordScore ?? attempt.score);
   if (attempt.toneScore != null && Number.isFinite(attempt.toneScore)) {
@@ -369,6 +456,42 @@ export function recordAttempt(
     applyAttemptDetail(entry, attempt, focus);
     store.entries[skillId] = entry;
   }
+  return store;
+}
+
+/**
+ * P13 听辨闭环：听错一句 → 进/更新**产出队列**（错词本），
+ * 但**不计入**任何发音统计（听见 ≠ 说出；感知通道与产出通道分开计量）。
+ */
+export function enqueueListeningMiss(store: SrsStore, skillId: string, now = new Date()): SrsStore {
+  const existing = store.entries[skillId];
+  if (existing) {
+    existing.lapses += 1;
+    existing.intervalDays = 1;
+    existing.ease = Math.max(1.3, existing.ease - 0.2);
+    existing.dueAt = new Date(now.getTime() + DAY_MS).toISOString();
+    return store;
+  }
+  store.entries[skillId] = {
+    id: skillId,
+    ease: 2.5,
+    intervalDays: 1,
+    dueAt: new Date(now.getTime() + DAY_MS).toISOString(),
+    // 还没有产出分：用听辨错题分数占位（0），并标记来源由调用方在文案里说明
+    lastScore: 0,
+    bestScore: 0,
+    attempts: 1,
+    lapses: 1,
+    addedAt: now.toISOString(),
+    lastReviewAt: now.toISOString()
+  };
+  return store;
+}
+
+/** P13 听辨会话计分（只累计聚合计数，感知通道独立于发音统计）。 */
+export function recordListeningAttempt(store: SrsStore, correct: boolean): SrsStore {
+  store.stats.listeningAttempts += 1;
+  if (correct) store.stats.listeningCorrect += 1;
   return store;
 }
 
