@@ -319,6 +319,8 @@ export interface GameState {
   masteryPowerVersion?: 1;
   /** P15 铸剑炉内容版本；缺省 = 旧局，事件/题池与 P14 逐位一致。 */
   forgeVersion?: 1;
+  /** P17 词海内容版本；缺省 = 旧局，短句/题池与 P16 逐位一致。 */
+  lexiconVersion?: 1;
   /** P15 锻造流派遗物已于本局首胜授予（一局一件，确定性，不入随机池）。 */
   forgeRelicGranted?: 1;
   /** P12 切磋局身份；缺省 = 自开一局。 */
@@ -374,6 +376,8 @@ export interface CampaignConfig {
   masteryPowerVersion?: 1;
   /** P15 铸剑炉内容版本（锻造事件/遗物/题池；仅 ruleset=p7 生效） */
   forgeVersion?: 1;
+  /** P17 词海内容版本（+155 短句 / +80 问答；仅 ruleset=p7 生效） */
+  lexiconVersion?: 1;
 }
 
 /** startCampaign 兼容两种形态：位置参数（旧）或 CampaignConfig（新）。 */
@@ -592,6 +596,8 @@ export class GameEngine {
     if (ruleset === "p7" && config.masteryPowerVersion === 1) this.state.masteryPowerVersion = 1;
     // P15 铸剑炉内容：独立门控；缺省 = 旧局，事件/题池逐位不变（流派遗物首胜授予）
     if (ruleset === "p7" && config.forgeVersion === 1) this.state.forgeVersion = 1;
+    // P17 词海内容：独立门控；缺省 = 旧局，短句/题池逐位不变
+    if (ruleset === "p7" && config.lexiconVersion === 1) this.state.lexiconVersion = 1;
     // P10 名伶：独立版本门控；角色缺省文武生（确定性缺省）；起始牌组覆写不耗 RNG
     if (ruleset === "p7" && config.rosterVersion === 1) {
       this.state.rosterVersion = 1;
@@ -712,7 +718,8 @@ export class GameEngine {
         rosterVersion: run.roster,
         character: run.character,
         ultimateVersion: run.ultimate,
-        forgeVersion: run.forge
+        forgeVersion: run.forge,
+        lexiconVersion: run.lexicon
       });
     } else {
       this.startNew(run.seed);
@@ -902,7 +909,8 @@ export class GameEngine {
     const { pool, listeningTotal } = quizPoolFor(
       this.state.ruleset,
       voiceAvailable,
-      this.state.forgeVersion
+      this.state.forgeVersion,
+      this.state.lexiconVersion
     );
     const questions = this.pickDistinct(pool, QUIZ_PER_NODE);
     this.state.quiz = {
@@ -1800,7 +1808,9 @@ export class GameEngine {
     const skillPool = skillsFor(
       this.state.campaign?.act ?? 1,
       this.state.ruleset,
-      this.state.counterVersion
+      this.state.counterVersion,
+      undefined,
+      this.state.lexiconVersion
     );
     const relicPool = relicsUpToAct(this.state.campaign?.act ?? 1);
     const choices = this.pickDistinct(skillPool, 3).map((skill) => skill.id);
@@ -1876,7 +1886,8 @@ export class GameEngine {
             this.state.campaign?.act ?? 1,
             this.state.ruleset,
             this.state.counterVersion,
-            this.state.characterId
+            this.state.characterId,
+            this.state.lexiconVersion
           )
         );
         player.deck.push(learned.id);
@@ -2026,7 +2037,8 @@ export class GameEngine {
         this.state.campaign?.act ?? 1,
         this.state.ruleset,
         this.state.counterVersion,
-        this.state.characterId
+        this.state.characterId,
+        this.state.lexiconVersion
       ),
       2
     ).map((skill, index) => ({

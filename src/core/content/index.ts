@@ -20,6 +20,7 @@ import {
 import { COUNTER_SKILLS } from "./counter";
 import { EXPANSION_EVENTS, EXPANSION_ITEMS, EXPANSION_SKILLS } from "./expansion";
 import { FORGE_EVENTS, FORGE_RELICS } from "./forge";
+import { P17_SKILLS } from "./p17";
 import { type CharacterId, SIGNATURE_SKILLS, SIGNATURE_SKILL_LIST } from "./roster";
 import { ULTIMATE_SKILLS } from "./ultimates";
 
@@ -59,7 +60,11 @@ export function relicsUpToAct(act: number): Relic[] {
 
 /** 跨幕合并注册表（图鉴 / 练习场 / 雷达分母）。act 1 在前，顺序稳定。 */
 export const ALL_SKILLS: readonly Skill[] = [
-  ...ACT_PACKS.flatMap((pack) => [...pack.skills, ...EXPANSION_SKILLS[pack.act]]),
+  ...ACT_PACKS.flatMap((pack) => [
+    ...pack.skills,
+    ...EXPANSION_SKILLS[pack.act],
+    ...P17_SKILLS[pack.act]
+  ]),
   ...COUNTER_SKILLS,
   ...SIGNATURE_SKILL_LIST,
   ...ULTIMATE_SKILLS
@@ -101,12 +106,15 @@ export function skillsFor(
   act: number,
   ruleset?: ContentRuleset,
   counterVersion?: 1,
-  character?: CharacterId
+  character?: CharacterId,
+  lexiconVersion?: 1
 ): Skill[] {
   if (ruleset !== "p7") return skillsUpToAct(act);
   const base = ACT_PACKS.slice(0, actContent(act).act).flatMap((pack) => [
     ...pack.skills,
-    ...EXPANSION_SKILLS[pack.act]
+    ...EXPANSION_SKILLS[pack.act],
+    // P17 词海：短句累计入池，仅 lexiconVersion=1 的新战役（基础表/EXPANSION 只读）
+    ...(lexiconVersion === 1 ? P17_SKILLS[pack.act] : [])
   ]);
   // P9：反击卡只在显式开启 counterVersion 的新战役进入卡池（奖励/夜市/事件学艺共用）。
   const pooled = counterVersion === 1 ? [...base, ...COUNTER_SKILLS] : base;

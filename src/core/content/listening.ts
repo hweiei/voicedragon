@@ -13,6 +13,7 @@ import { MINIMAL_PAIRS, listeningQuestionFromPhrase } from "../listening";
 import { FORGE_QUIZ } from "./forge";
 import type { ContentRuleset } from "./index";
 import { ALL_SKILLS } from "./index";
+import { P17_QUIZ } from "./p17";
 
 /** 短语声调题的取句（固定顺序，保证题池稳定可复现）。 */
 const LISTENING_PHRASE_IDS = [
@@ -96,14 +97,20 @@ export const LISTENING_QUIZ: QuizQuestion[] = [...pairQuizQuestions(), ...phrase
 export function quizPoolFor(
   ruleset: ContentRuleset | undefined,
   voiceAvailable: boolean,
-  forgeVersion?: 1
+  forgeVersion?: 1,
+  lexiconVersion?: 1
 ): { pool: QuizQuestion[]; listeningTotal: number } {
   if (ruleset !== "p7") return { pool: QUIZ_QUESTIONS, listeningTotal: 0 };
   const forge = forgeVersion === 1 ? FORGE_QUIZ : [];
+  // P17 词海：+80 文字题（词义/场景/拼音），不依赖 TTS，不设听音降级
+  const lexicon = lexiconVersion === 1 ? P17_QUIZ : [];
   if (!voiceAvailable)
-    return { pool: [...QUIZ_QUESTIONS, ...forge], listeningTotal: LISTENING_QUIZ.length };
+    return {
+      pool: [...QUIZ_QUESTIONS, ...forge, ...lexicon],
+      listeningTotal: LISTENING_QUIZ.length
+    };
   return {
-    pool: [...QUIZ_QUESTIONS, ...forge, ...LISTENING_QUIZ],
+    pool: [...QUIZ_QUESTIONS, ...forge, ...lexicon, ...LISTENING_QUIZ],
     listeningTotal: LISTENING_QUIZ.length
   };
 }

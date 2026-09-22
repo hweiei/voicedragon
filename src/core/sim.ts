@@ -100,6 +100,8 @@ export interface SimOptions {
   ultimateVersion?: 1;
   /** P15：铸剑炉内容版本（锻造事件/遗物/题池入局） */
   forgeVersion?: 1;
+  /** P17：词海内容版本（+155 短句 / +80 问答入局） */
+  lexiconVersion?: 1;
   /** P13：语言力量化之门控（注入合成掌握度档案） */
   masteryPowerVersion?: 1;
   /**
@@ -362,6 +364,7 @@ export function simulateCampaign(options: SimOptions): SimRunResult {
     character: options.character,
     ultimateVersion: options.ultimateVersion,
     forgeVersion: options.forgeVersion,
+    lexiconVersion: options.lexiconVersion,
     masteryPowerVersion: options.masteryPowerVersion
   });
   attachMastery(engine, options);
@@ -716,6 +719,7 @@ export function simulateAct(options: {
   qteSource?: boolean;
   ultimateVersion?: 1;
   forgeVersion?: 1;
+  lexiconVersion?: 1;
   masteryPowerVersion?: 1;
   masteryProfile?: { score: number; attempts: number; deckOnly?: boolean };
 }): SimSummary {
@@ -751,6 +755,7 @@ export function simulateAct(options: {
       qteSource: options.qteSource,
       ultimateVersion: options.ultimateVersion,
       forgeVersion: options.forgeVersion,
+      lexiconVersion: options.lexiconVersion,
       masteryPowerVersion: options.masteryPowerVersion,
       masteryProfile: options.masteryProfile
     });

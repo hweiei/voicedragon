@@ -1634,6 +1634,7 @@ export class GameUI {
       rosterVersion: 1,
       ultimateVersion: 1,
       forgeVersion: 1,
+      lexiconVersion: 1,
       character: character.id
     });
   }

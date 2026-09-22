@@ -38,7 +38,8 @@ npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 
   `docs/ROSTER-PLAN.md`（P10 名伶登场）、`docs/ULTIMATE-PLAN.md`（P11 声动九霄）、
   `docs/P12-CHALLENGE-PLAN.md`（P12 切磋码）、`docs/P13-WORDBOOK-PLAN.md`（P13 词林拾遗）、
   `docs/P14-REFINE-PLAN.md`（P14 声之细织）、`docs/P15-FORGE-PLAN.md`（P15 铸剑炉）与
-  `docs/P16-LEARN-FAST-PLAN.md`（P16 乐学快打·学习体验调优）。
+  `docs/P16-LEARN-FAST-PLAN.md`（P16 乐学快打·学习体验调优）与
+  `docs/P17-LEXICON-PLAN.md`（P17 词海·内容大扩容）。
 - 内容兼容：缺失 `ruleset` 的旧局按 legacy；P7 新内容只经 `skillsFor/eventsFor/itemsFor` 进入对应新局。
   不直接修改基础内容表或用扩展池替换基础池。新增参数须审查组合根包装器是否完整转发。
 - 构筑独立版本 `buildVersion:1` 仅用于新战役；缺失时保留旧玩法。升级按 `upgradedSlots` 记录具体牌组槽位，
@@ -115,7 +116,7 @@ npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 
 ```bash
 npx biome check .          # 风格（或 npm run check:fix）
 npx tsc --noEmit           # 严格类型
-npx vitest run             # 单测+契约+仿真+属性测试（现 572 条，含 P15 属性门/契约门/仿真门、P16 换带后的期次平衡门）
+npx vitest run             # 单测+契约+仿真+属性测试（现 586 条，含 P17 词海契约门/平衡门）
 npx vite build && npx vite-node scripts/perf-budget.ts   # 首包 ≤350KB gzip（现 106.4）
 npx vite-node scripts/release-readiness.ts               # dist PWA/路径/安全头 44 项契约
 npm run sim:p8b           # 对手进化参考门45–65%、零超时；随机Bot异常须如实记录

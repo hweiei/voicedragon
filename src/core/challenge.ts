@@ -30,14 +30,16 @@ export type ChallengeVersionKey =
   | "counter"
   | "roster"
   | "ultimate"
-  | "forge";
+  | "forge"
+  | "lexicon";
 export const CHALLENGE_VERSION_KEYS: readonly ChallengeVersionKey[] = [
   "build",
   "encounter",
   "counter",
   "roster",
   "ultimate",
-  "forge"
+  "forge",
+  "lexicon"
 ];
 
 /** 版本束在码内的紧凑字段名（必须与 ruleset 的 "r" 等其它字段互不冲突）。 */
@@ -47,7 +49,8 @@ const VERSION_FIELD: Record<ChallengeVersionKey, string> = {
   counter: "c",
   roster: "n",
   ultimate: "u",
-  forge: "f"
+  forge: "f",
+  lexicon: "l"
 };
 
 export interface ChallengeBundle {
@@ -63,6 +66,8 @@ export interface ChallengeBundle {
   ultimate?: 1;
   /** P15 铸剑炉内容版本；旧码无此字段 = 旧内容池，逐位同局（零破坏）。 */
   forge?: 1;
+  /** P17 词海内容版本；旧码无此字段 = 旧内容池，逐位同局（零破坏）。 */
+  lexicon?: 1;
   character?: CharacterId;
   /** 每日挑战的日期键（YYYY-MM-DD）；仅 daily 模式。 */
   dateKey?: string;
@@ -220,6 +225,7 @@ const PAYLOAD_KEYS = new Set([
   "n",
   "u",
   "f",
+  "l",
   "ch",
   "d",
   "mu",
@@ -455,6 +461,9 @@ export interface PassThroughState {
   counterVersion?: 1;
   rosterVersion?: 1;
   ultimateVersion?: 1;
+  /** P17 顺手补 P15 缺口：锻造局发码此前不带 f 字段（同码不同局）。 */
+  forgeVersion?: 1;
+  lexiconVersion?: 1;
   characterId?: CharacterId;
   challenge?: { mode: "daily" | "endless"; seed: number; dateKey?: string } | null;
   campaign?: { act: number; map: { seed: number } } | null;
@@ -503,6 +512,8 @@ export function challengeFromRun(state: PassThroughState): ChallengeBundle | nul
       if (state.counterVersion === 1) bundle.counter = 1;
       if (state.rosterVersion === 1) bundle.roster = 1;
       if (state.ultimateVersion === 1) bundle.ultimate = 1;
+      if (state.forgeVersion === 1) bundle.forge = 1;
+      if (state.lexiconVersion === 1) bundle.lexicon = 1;
       if (state.characterId) bundle.character = state.characterId;
     }
     return withBoost(bundle);
@@ -518,6 +529,7 @@ export function challengeVersionLabel(bundle: ChallengeBundle): string {
   if (bundle.counter) parts.push("守势反击 v1");
   if (bundle.roster) parts.push("名伶 v1");
   if (bundle.ultimate) parts.push("绝技 v1");
+  if (bundle.lexicon) parts.push("词海 v1");
   const character = bundle.character ? lookupCharacter(bundle.character) : undefined;
   if (character) parts.push(character.name);
   for (const mutator of mutationList(bundle.mutators))

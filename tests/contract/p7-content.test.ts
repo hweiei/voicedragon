@@ -22,11 +22,12 @@ function battle(act = 1, seed = 123): GameEngine {
 }
 
 describe("P7 版本化内容契约", () => {
-  test("49 技能 / 38 事件 / 8 道具；基础池与旧默认不变（P9 反击卡/P10 签名技/P11 绝技句仅进对应版本池）", () => {
+  test("269 技能 / 38 事件 / 8 道具；基础池与旧默认不变（P9 反击卡/P10 签名技/P11 绝技句仅进对应版本池）", () => {
     // P9/P10/P11：ALL_SKILLS 收录版本内容（图鉴/练习场可见），未开版本时池不变
     // P15：ALL_EVENTS 全集 26 → 38（+12 锻造事件，仅收录展示；抽选池门控见 eventsFor 断言）
     // P16：每幕 +2 乐学短句（入 EXPANSION_SKILLS，基础表不动）：43 → 49
-    expect(ALL_SKILLS).toHaveLength(49);
+    // P17：+220 词海短句（入 content/p17，仅 lexiconVersion=1 进池；ALL_SKILLS 全集收录展示）
+    expect(ALL_SKILLS).toHaveLength(269);
     expect(ALL_EVENTS).toHaveLength(38);
     expect(ALL_ITEMS).toHaveLength(8);
     expect([1, 2, 3].map((act) => skillsFor(act, "p7").length)).toEqual([18, 30, 42]);
