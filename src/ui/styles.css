@@ -1871,6 +1871,15 @@ button:disabled {
   display: block;
 }
 
+/* P15 锻造遗物的流派标签：随遗物名同行展示（展示字段，不参与判定） */
+.inventory-item strong .forge-school {
+  display: inline;
+  margin-left: 6px;
+  color: var(--gold);
+  font-size: 8px;
+  font-weight: 400;
+}
+
 .inventory-item small {
   margin-top: 3px;
   color: var(--muted);

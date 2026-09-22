@@ -59,3 +59,7 @@ jobs:
         run: npm run test:release
       - name: Lighthouse mobile + desktop budgets
         run: npm run test:lighthouse
+      - name: Install CJK fonts (visual regression 中文渲染一致)
+        run: sudo apt-get install -y fonts-noto-cjk
+      - name: Visual regression (4 屏 × 2 视口 × reduce-motion，16 基线)
+        run: npm run test:visual

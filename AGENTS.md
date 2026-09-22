@@ -37,7 +37,7 @@ npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 
   `docs/COUNTER-ATTACK-PLAN.md`（P9 守势反击）、`docs/GROWTH-PLAN.md`（P10–P15 丰富度总路线）与
   `docs/ROSTER-PLAN.md`（P10 名伶登场）、`docs/ULTIMATE-PLAN.md`（P11 声动九霄）、
   `docs/P12-CHALLENGE-PLAN.md`（P12 切磋码）、`docs/P13-WORDBOOK-PLAN.md`（P13 词林拾遗）、
-  `docs/P14-REFINE-PLAN.md`（P14 声之细织）。
+  `docs/P14-REFINE-PLAN.md`（P14 声之细织）、`docs/P15-FORGE-PLAN.md`（P15 铸剑炉）。
 - 内容兼容：缺失 `ruleset` 的旧局按 legacy；P7 新内容只经 `skillsFor/eventsFor/itemsFor` 进入对应新局。
   不直接修改基础内容表或用扩展池替换基础池。新增参数须审查组合根包装器是否完整转发。
 - 构筑独立版本 `buildVersion:1` 仅用于新战役；缺失时保留旧玩法。升级按 `upgradedSlots` 记录具体牌组槽位，
@@ -90,6 +90,11 @@ npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 
   采样点在**建局**（`createRunState(seed, {campaign,act}|{endless})`），续行换幕重采样；每日与切磋局仍钉 0 / 取码内值。
   `AdaptiveProvider` 带可选上下文（零参实现仍合法）；`profile.stats.adaptiveStreak` 仅存档兼容、不再驱动难度。
   难度数据只存 `voice-tower-difficulty-v1`（评级 + 胜负计数），契约白名单锁定；文案一律称「本地启发式」，不许叫 ML。
+- P15 铸剑炉内容独立版本 `forgeVersion:1` 仅用于 p7 新局：事件 26→38、问答 +30 文化题只经
+  `eventsFor/quizPoolFor` 第三参进入；**六件流派遗物不入任何随机抽取池**（防池稀释定案），
+  在锻造局首胜按（角色×幕）槽位确定性授予一件（`finishCombatVictory`，`forgeRelicGranted` 一局一件）。
+  遗物 `school` 为展示字段不参与判定；「每场一次」钩子走 `combat.forgeUsed`。切磋码版本束增列 `forge`（字段 `f`），
+  旧码无此字段 = 旧内容池逐位同局（零破坏）。属性测试（fast-check，dev-only）与视觉回归（Playwright 截图门）只加门不放宽旧门。
 
 ## 2. 黄金契约与确定性
 
@@ -101,7 +106,7 @@ npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 
 ```bash
 npx biome check .          # 风格（或 npm run check:fix）
 npx tsc --noEmit           # 严格类型
-npx vitest run             # 单测+契约+仿真（现 518 条）
+npx vitest run             # 单测+契约+仿真+属性测试（现 562 条，含 P15 属性门/契约门/仿真门）
 npx vite build && npx vite-node scripts/perf-budget.ts   # 首包 ≤350KB gzip（现 106.4）
 npx vite-node scripts/release-readiness.ts               # dist PWA/路径/安全头 44 项契约
 npm run sim:p8b           # 对手进化参考门45–65%、零超时；随机Bot异常须如实记录
@@ -110,6 +115,8 @@ npm run sim:p10           # 名伶门：每角色三幕45–65%、零超时
 npm run sim:p11           # 绝技门：默认行=P10 基线逐位、高声韵行 ultimateCasts>0、零超时
 npm run sim:p13           # 词林门：三档×三角色×三幕 45–65%、掌握关行=P11 基线逐位（须 300 局，120 局噪声误报）
 # P14 无独立平衡仿真（不改曲线）；端点时延报表走 npx vitest run tests/sim/p14-latency.test.ts
+npm run sim:p15           # 铸剑炉门：锻造行三角色×三幕 45–65%、零超时；基线行=P11 基线逐位；事件 12/12 遗物 6/6 入局
+npm run test:visual       # 视觉回归门：4 屏×2 视口×reduce-motion 开/关 = 16 基线（仅 Chromium；更新须人工过目）
 npm run sim:p8            # 构筑版独立仿真（含真实升级/删牌计数）
 npm run sim:p7            # 扩展版独立平衡报表（基础版仍用 npm run sim）
 npx playwright install --with-deps chromium firefox webkit  # 新环境一次性安装

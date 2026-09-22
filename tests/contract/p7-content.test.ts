@@ -22,10 +22,11 @@ function battle(act = 1, seed = 123): GameEngine {
 }
 
 describe("P7 版本化内容契约", () => {
-  test("43 技能 / 26 事件 / 8 道具；基础池与旧默认不变（P9 反击卡/P10 签名技/P11 绝技句仅进对应版本池）", () => {
+  test("43 技能 / 38 事件 / 8 道具；基础池与旧默认不变（P9 反击卡/P10 签名技/P11 绝技句仅进对应版本池）", () => {
     // P9/P10/P11：ALL_SKILLS 收录版本内容（图鉴/练习场可见），未开版本时池不变
+    // P15：ALL_EVENTS 全集 26 → 38（+12 锻造事件，仅收录展示；抽选池门控见 eventsFor 断言）
     expect(ALL_SKILLS).toHaveLength(43);
-    expect(ALL_EVENTS).toHaveLength(26);
+    expect(ALL_EVENTS).toHaveLength(38);
     expect(ALL_ITEMS).toHaveLength(8);
     expect([1, 2, 3].map((act) => skillsFor(act, "p7").length)).toEqual([16, 26, 36]);
     expect([1, 2, 3].map((act) => skillsFor(act, "p7", 1).length)).toEqual([17, 27, 37]);
@@ -39,6 +40,8 @@ describe("P7 版本化内容契约", () => {
     );
     expect(skillsFor(1, "p7", 1).map((x) => x.id)).not.toContain("p10-gu-paan-saang-fai");
     expect([1, 2, 3].map((act) => eventsFor(act, "p7").length)).toEqual([10, 8, 8]);
+    // P15：锻造事件只进 forgeVersion=1 的 p7 新局；缺省逐位不变（各幕 +4）
+    expect([1, 2, 3].map((act) => eventsFor(act, "p7", 1).length)).toEqual([14, 12, 12]);
     expect(skillsFor(1)).toEqual(SKILLS);
     expect(itemsFor()).toBe(ITEMS);
     for (const entries of [ALL_SKILLS, ALL_EVENTS, ALL_ITEMS])

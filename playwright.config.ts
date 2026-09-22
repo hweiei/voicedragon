@@ -7,6 +7,7 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "tests/e2e",
+  testIgnore: ["visual/**"], // P15 视觉门独立配置 playwright.visual.config.ts
   timeout: 30_000,
   fullyParallel: true,
   retries: process.env.CI ? 1 : 0,

@@ -77,6 +77,8 @@ export interface SimRunResult {
   ultimateCasts?: number;
   /** P13：词林保底真正抬分的次数（机制运转证据；不参与任何判定）。 */
   masterySaves?: number;
+  /** P15：`captureFinalState` 开启时返回终局状态引用（引擎已停表，不再变更）。 */
+  finalState?: GameState;
 }
 
 export interface SimOptions {
@@ -96,6 +98,8 @@ export interface SimOptions {
   qteSource?: boolean;
   /** P11：满堂彩绝技版本 */
   ultimateVersion?: 1;
+  /** P15：铸剑炉内容版本（锻造事件/遗物/题池入局） */
+  forgeVersion?: 1;
   /** P13：语言力量化之门控（注入合成掌握度档案） */
   masteryPowerVersion?: 1;
   /**
@@ -103,9 +107,11 @@ export interface SimOptions {
    * `deckOnly: true` 只覆盖起始牌组（现实上界）；缺省覆盖全卡池（理论最坏上界）。
    */
   masteryProfile?: { score: number; attempts: number; deckOnly?: boolean };
+  /** P15 属性测试钩子：每步观察一次状态（存档往返等不变量用；不参与任何判定）。 */
+  observe?: (state: GameState) => void;
+  /** P15 属性测试钩子：终局时把状态引用挂进结果的 `finalState`。 */
+  captureFinalState?: boolean;
 }
-
-/** P13：把合成掌握度注入引擎（数值仍由真实纯函数 masteryFloorFor 判定）。 */
 function attachMastery(engine: GameEngine, options: SimOptions): void {
   const profile = options.masteryProfile;
   if (!profile || options.masteryPowerVersion !== 1) return;
@@ -355,6 +361,7 @@ export function simulateCampaign(options: SimOptions): SimRunResult {
     rosterVersion: options.rosterVersion,
     character: options.character,
     ultimateVersion: options.ultimateVersion,
+    forgeVersion: options.forgeVersion,
     masteryPowerVersion: options.masteryPowerVersion
   });
   attachMastery(engine, options);
@@ -381,11 +388,13 @@ export function simulateCampaign(options: SimOptions): SimRunResult {
     ...(options.counterVersion === 1 ? { counterHits } : {}),
     ...(options.rosterVersion === 1 ? { passiveHits } : {}),
     ...(options.ultimateVersion === 1 ? { ultimateCasts } : {}),
-    ...(options.masteryPowerVersion === 1 ? { masterySaves: engine.masterySaves } : {})
+    ...(options.masteryPowerVersion === 1 ? { masterySaves: engine.masterySaves } : {}),
+    ...(options.captureFinalState ? { finalState: engine.state } : {})
   });
 
   while (steps < MAX_STEPS_PER_RUN) {
     steps += 1;
+    options.observe?.(state);
     maxFloor = Math.max(maxFloor, state.floor);
     if (state.phase === "victory")
       return finish({ win: true, floor: maxFloor, turns, battles, timeout });
@@ -705,6 +714,7 @@ export function simulateAct(options: {
   character?: CharacterId;
   qteSource?: boolean;
   ultimateVersion?: 1;
+  forgeVersion?: 1;
   masteryPowerVersion?: 1;
   masteryProfile?: { score: number; attempts: number; deckOnly?: boolean };
 }): SimSummary {
@@ -739,6 +749,7 @@ export function simulateAct(options: {
       character: options.character,
       qteSource: options.qteSource,
       ultimateVersion: options.ultimateVersion,
+      forgeVersion: options.forgeVersion,
       masteryPowerVersion: options.masteryPowerVersion,
       masteryProfile: options.masteryProfile
     });

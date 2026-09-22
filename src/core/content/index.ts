@@ -19,6 +19,7 @@ import {
 } from "../data";
 import { COUNTER_SKILLS } from "./counter";
 import { EXPANSION_EVENTS, EXPANSION_ITEMS, EXPANSION_SKILLS } from "./expansion";
+import { FORGE_EVENTS, FORGE_RELICS } from "./forge";
 import { type CharacterId, SIGNATURE_SKILLS, SIGNATURE_SKILL_LIST } from "./roster";
 import { ULTIMATE_SKILLS } from "./ultimates";
 
@@ -63,11 +64,15 @@ export const ALL_SKILLS: readonly Skill[] = [
   ...SIGNATURE_SKILL_LIST,
   ...ULTIMATE_SKILLS
 ];
-export const ALL_RELICS: readonly Relic[] = ACT_PACKS.flatMap((pack) => pack.relics);
-export const ALL_EVENTS: readonly GameEventContent[] = ACT_PACKS.flatMap((pack) => [
-  ...pack.events,
-  ...EXPANSION_EVENTS[pack.act]
-]);
+/** P15：全集含锻造内容（图鉴/词林/奖励横幅展示与查找用）；抽选池见 `relicsFor`。 */
+export const ALL_RELICS: readonly Relic[] = [
+  ...ACT_PACKS.flatMap((pack) => pack.relics),
+  ...FORGE_RELICS
+];
+export const ALL_EVENTS: readonly GameEventContent[] = [
+  ...ACT_PACKS.flatMap((pack) => [...pack.events, ...EXPANSION_EVENTS[pack.act]]),
+  ...Object.values(FORGE_EVENTS).flat()
+];
 
 /** 图鉴「楼中对手」全集：普通敌人 + 精英 + 各幕 Boss。 */
 export function codexEnemyList(): EnemyBlueprint[] {
@@ -109,7 +114,20 @@ export function skillsFor(
   const signature = character ? SIGNATURE_SKILLS[character] : undefined;
   return signature ? [...pooled, signature] : pooled;
 }
-export function eventsFor(act: number, ruleset?: ContentRuleset): GameEventContent[] {
+export function eventsFor(
+  act: number,
+  ruleset?: ContentRuleset,
+  forgeVersion?: 1
+): GameEventContent[] {
   const pack = actContent(act);
-  return ruleset === "p7" ? [...pack.events, ...EXPANSION_EVENTS[pack.act]] : pack.events;
+  if (ruleset !== "p7") return pack.events;
+  const base = [...pack.events, ...EXPANSION_EVENTS[pack.act]];
+  // P15：锻造事件只进显式开启锻造版本的新局（缺失即与 P14 逐位一致）
+  return forgeVersion === 1 ? [...base, ...FORGE_EVENTS[pack.act]] : base;
 }
+
+/**
+ * P15 锻造遗物**不入随机池**（仿校准定案）：六件流派遗物在锻造局首胜时按
+ * （角色 × 幕）确定性授予，见 `engine.finishCombatVictory`；随机抽取池
+ * （宝箱/精英/夜市/事件换取）保持 `relicsUpToAct` 逐位不变，杜绝池稀释。
+ */

@@ -55,8 +55,9 @@ import {
   relicsUpToAct,
   skillsFor
 } from "./content";
+import { FORGE_RELICS } from "./content/forge";
 import { quizPoolFor } from "./content/listening";
-import { type CharacterId, lookupCharacter } from "./content/roster";
+import { CHARACTERS, type CharacterId, lookupCharacter } from "./content/roster";
 import { ULTIMATE_FOR_CHARACTER } from "./content/ultimates";
 import { type CounterStance, counterEnabled, resolveCounterDamage } from "./counter";
 import { FLOOR_NAMES, MAX_FLOOR, QUIZ_QUESTIONS, clone } from "./data";
@@ -193,6 +194,8 @@ export interface CombatState {
   bravo?: number;
   /** P11 本场绝技已发动（每场一次）；旧档缺省未用。 */
   ultimateUsed?: boolean;
+  /** P15 锻造遗物「每场一次」消耗标记（存已生效的遗物 id；旧档缺省不启用）。 */
+  forgeUsed?: string[];
 }
 
 export interface EventState extends GameEventContent {
@@ -314,6 +317,10 @@ export interface GameState {
   challengeVersion?: 1;
   /** P13 语言力量化版本；缺省 = 旧局，牌面威力逐位不变。 */
   masteryPowerVersion?: 1;
+  /** P15 铸剑炉内容版本；缺省 = 旧局，事件/题池与 P14 逐位一致。 */
+  forgeVersion?: 1;
+  /** P15 锻造流派遗物已于本局首胜授予（一局一件，确定性，不入随机池）。 */
+  forgeRelicGranted?: 1;
   /** P12 切磋局身份；缺省 = 自开一局。 */
   duel?: DuelState;
   challenge?: ChallengeState;
@@ -365,6 +372,8 @@ export interface CampaignConfig {
   ultimateVersion?: 1;
   /** P13 语言力量化版本（词林掌握度 → 该句 +1/+2 威力） */
   masteryPowerVersion?: 1;
+  /** P15 铸剑炉内容版本（锻造事件/遗物/题池；仅 ruleset=p7 生效） */
+  forgeVersion?: 1;
 }
 
 /** startCampaign 兼容两种形态：位置参数（旧）或 CampaignConfig（新）。 */
@@ -581,6 +590,8 @@ export class GameEngine {
     if (ruleset === "p7" && ultimateVersion === 1) this.state.ultimateVersion = 1;
     // P13 语言力量化：独立门控；缺省 = 旧局，牌面威力逐位不变
     if (ruleset === "p7" && config.masteryPowerVersion === 1) this.state.masteryPowerVersion = 1;
+    // P15 铸剑炉内容：独立门控；缺省 = 旧局，事件/题池逐位不变（流派遗物首胜授予）
+    if (ruleset === "p7" && config.forgeVersion === 1) this.state.forgeVersion = 1;
     // P10 名伶：独立版本门控；角色缺省文武生（确定性缺省）；起始牌组覆写不耗 RNG
     if (ruleset === "p7" && config.rosterVersion === 1) {
       this.state.rosterVersion = 1;
@@ -700,7 +711,8 @@ export class GameEngine {
         counterVersion: run.counter,
         rosterVersion: run.roster,
         character: run.character,
-        ultimateVersion: run.ultimate
+        ultimateVersion: run.ultimate,
+        forgeVersion: run.forge
       });
     } else {
       this.startNew(run.seed);
@@ -757,6 +769,16 @@ export class GameEngine {
 
   hasRelic(id: string): boolean {
     return Boolean(this.state.player?.relics.includes(id));
+  }
+
+  /** P15 锻造遗物「每场一次」消耗：本场首次生效返回 true，随后恒 false。 */
+  private forgeConsume(relicId: string): boolean {
+    const combat = this.state.combat;
+    if (!combat || !this.hasRelic(relicId)) return false;
+    combat.forgeUsed ??= [];
+    if (combat.forgeUsed.includes(relicId)) return false;
+    combat.forgeUsed.push(relicId);
+    return true;
   }
 
   prepareFloorOptions(): void {
@@ -877,7 +899,11 @@ export class GameEngine {
    */
   startQuiz(nodeId: string): void {
     const voiceAvailable = this.quizVoiceAvailable?.() ?? false;
-    const { pool, listeningTotal } = quizPoolFor(this.state.ruleset, voiceAvailable);
+    const { pool, listeningTotal } = quizPoolFor(
+      this.state.ruleset,
+      voiceAvailable,
+      this.state.forgeVersion
+    );
     const questions = this.pickDistinct(pool, QUIZ_PER_NODE);
     this.state.quiz = {
       nodeId,
@@ -996,6 +1022,11 @@ export class GameEngine {
       bellTriggered: false,
       lemonTriggered: false
     };
+    // P15 戏班锦囊：战斗开始时得 4 两（锻造局授予的流派遗物；每场一次）
+    if (this.forgeConsume("p15-gam-noung")) {
+      player.gold += 4;
+      this.state.combat.log.push("戏班锦囊：战斗开始获得 4 两。");
+    }
     // P7：只消费已存档词缀，独立随机采样不触碰游戏 LCG。
     const modifiers = mutationEffects(this.state.challenge?.mutatorIds);
     const combat = this.state.combat;
@@ -1271,9 +1302,15 @@ export class GameEngine {
       dealDamage(scaledPower, { bypassArmor: bypass });
       if (skill.id === "ding-ngang-soeng" && score >= 85) gainArmor(3);
     } else if (skill.type === "multi") {
-      for (let i = 0; i < (skill.hits ?? 1); i += 1) dealDamage(scaledPower);
+      // P15 醒狮铜铃：本场首次多段招式每段 +1（锻造局授予的流派遗物）
+      const lionBell = this.forgeConsume("p15-sing-tung-ling") ? 1 : 0;
+      for (let i = 0; i < (skill.hits ?? 1); i += 1) dealDamage(scaledPower + lionBell);
+      if (lionBell) messages.push("醒狮铜铃摇响：每段伤害 +1。");
     } else if (skill.type === "guard") {
-      gainArmor(scaledPower + (score >= 65 && skill.id === "m-sai-geng" ? 2 : 0));
+      // P15 守夜铁牌：本场首次护甲招式额外 +2（锻造局授予的流派遗物）
+      const ironPlate = this.forgeConsume("p15-tit-paai") ? 2 : 0;
+      gainArmor(scaledPower + (score >= 65 && skill.id === "m-sai-geng" ? 2 : 0) + ironPlate);
+      if (ironPlate) messages.push("守夜铁牌：护甲额外 +2。");
       if (skill.id === "dak-haan-jam-caa") healing += this.healPlayer(3);
       // P9 反击姿态：数据化字段驱动（skill.counter），仅反击版本战役生效。
       if (skill.counter && counterEnabled(this.state)) {
@@ -1302,7 +1339,10 @@ export class GameEngine {
       combat.hand = this.drawHand(combat.handSize ?? 3);
       messages.push("你借势换了一组技能。");
     } else if (skill.type === "heal") {
-      healing += this.healPlayer(scaledPower);
+      // P15 陈皮老壶：本场首次治疗招式多回复 4（锻造局授予的流派遗物）
+      const agedPot = this.forgeConsume("p15-cean-bei-wu") ? 4 : 0;
+      healing += this.healPlayer(scaledPower + agedPot);
+      if (agedPot) messages.push("陈皮老壶回甘：多回复 4 点生命。");
       gainArmor(5);
       // P10 顾盼生辉：良好发音清除发音干扰
       if (skill.id === "p10-gu-paan-saang-fai" && score >= 65) {
@@ -1347,6 +1387,11 @@ export class GameEngine {
       healing += relicHealing;
       combat.teaTriggered = true;
       messages.push("粤韵茶盅回响，回复 2 点生命。");
+    }
+    // P15 镇楼老鼓：本场首次正音（≥85）施法追加 1 点伤害（锻造局授予的流派遗物）
+    if (score >= 85 && this.forgeConsume("p15-zan-lou-gu")) {
+      dealDamage(1);
+      messages.push("镇楼老鼓擂响：追加 1 点伤害。");
     }
 
     if (damageDone) messages.push(`造成 ${damageDone} 点伤害。`);
@@ -1701,6 +1746,20 @@ export class GameEngine {
     this.state.stats!.enemiesDefeated += 1;
     if (isElite) this.state.stats!.elitesDefeated += 1;
 
+    // P15 铸剑炉 · 流派遗物：锻造局首胜按（角色 × 幕）确定性授予一件（不入随机池，零稀释）。
+    // 槽位 = 角色序号 × 3 +（幕 − 1），mod 6——三角色 × 三幕共九个开局槽位覆盖全部六件。
+    if (this.state.forgeVersion === 1 && !this.state.forgeRelicGranted) {
+      this.state.forgeRelicGranted = 1;
+      const characterIndex = CHARACTERS.findIndex((entry) => entry.id === this.state.characterId);
+      const actNo = this.state.campaign?.act ?? 1;
+      const slot = (characterIndex >= 0 ? characterIndex : CHARACTERS.length) * 3 + (actNo - 1);
+      const relic = FORGE_RELICS[slot % FORGE_RELICS.length];
+      if (relic && !this.state.player!.relics.includes(relic.id)) {
+        this.state.player!.relics.push(relic.id);
+        combat.log.unshift(`铸剑炉授器：获得「${relic.name}」（${relic.school ?? "百搭行头"}）。`);
+      }
+    }
+
     // P5 凌云香囊：战斗胜利后回复 5 点生命
     if (this.hasRelic("cloud-herb")) this.healPlayer(5);
     // P5 战役续航：胜利后小额回血（经典/无尽不适用，行为不变）
@@ -1781,7 +1840,11 @@ export class GameEngine {
 
   startEvent(): void {
     this.state.phase = "event";
-    const eventPool = eventsFor(this.state.campaign?.act ?? 1, this.state.ruleset);
+    const eventPool = eventsFor(
+      this.state.campaign?.act ?? 1,
+      this.state.ruleset,
+      this.state.forgeVersion
+    );
     this.state.event = {
       ...clone(this.pick(eventPool)),
       resolved: false,
@@ -1928,7 +1991,9 @@ export class GameEngine {
     if (this.state.phase !== "rest") return;
     const player = this.state.player!;
     if (action === "heal") {
-      const amount = Math.ceil(player.maxHp * REST_HEAL.ratio);
+      // P15 街客茶壶：歇脚回复额外 +4（锻造局授予的流派遗物）
+      const amount =
+        Math.ceil(player.maxHp * REST_HEAL.ratio) + (this.hasRelic("p15-gaa-haak-wo") ? 4 : 0);
       const healed = this.healPlayer(amount);
       this.state.notice = `歇息完毕，回复 ${healed} 点生命。`;
     } else if (action === "practice") {

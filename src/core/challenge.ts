@@ -24,13 +24,20 @@ export const CHALLENGE_MODES = ["campaign", "endless", "daily", "classic"] as co
 export type ChallengeMode = (typeof CHALLENGE_MODES)[number];
 
 /** 版本束：每期机制的独立门控；只认 1（将来 2 必须由新引擎显式支持）。 */
-export type ChallengeVersionKey = "build" | "encounter" | "counter" | "roster" | "ultimate";
+export type ChallengeVersionKey =
+  | "build"
+  | "encounter"
+  | "counter"
+  | "roster"
+  | "ultimate"
+  | "forge";
 export const CHALLENGE_VERSION_KEYS: readonly ChallengeVersionKey[] = [
   "build",
   "encounter",
   "counter",
   "roster",
-  "ultimate"
+  "ultimate",
+  "forge"
 ];
 
 /** 版本束在码内的紧凑字段名（必须与 ruleset 的 "r" 等其它字段互不冲突）。 */
@@ -39,7 +46,8 @@ const VERSION_FIELD: Record<ChallengeVersionKey, string> = {
   encounter: "e",
   counter: "c",
   roster: "n",
-  ultimate: "u"
+  ultimate: "u",
+  forge: "f"
 };
 
 export interface ChallengeBundle {
@@ -53,6 +61,8 @@ export interface ChallengeBundle {
   counter?: 1;
   roster?: 1;
   ultimate?: 1;
+  /** P15 铸剑炉内容版本；旧码无此字段 = 旧内容池，逐位同局（零破坏）。 */
+  forge?: 1;
   character?: CharacterId;
   /** 每日挑战的日期键（YYYY-MM-DD）；仅 daily 模式。 */
   dateKey?: string;
@@ -209,6 +219,7 @@ const PAYLOAD_KEYS = new Set([
   "c",
   "n",
   "u",
+  "f",
   "ch",
   "d",
   "mu",

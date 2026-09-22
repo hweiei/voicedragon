@@ -65,6 +65,8 @@ export interface Relic {
   name: string;
   short: string;
   description: string;
+  /** P15 构筑流派标签（展示字段，呼应 P8-A 流派；旧遗物缺省，不参与任何判定）。 */
+  school?: string;
 }
 
 export type ItemEffect =

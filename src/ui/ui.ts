@@ -1633,6 +1633,7 @@ export class GameUI {
       counterVersion: 1,
       rosterVersion: 1,
       ultimateVersion: 1,
+      forgeVersion: 1,
       character: character.id
     });
   }
@@ -2540,7 +2541,10 @@ export class GameUI {
       ? player.relics
           .map((id) => {
             const relic = lookupRelic(id)!;
-            return `<div class="inventory-item"><span class="item-mark">${escapeHtml(relic.short)}</span><div><strong>${escapeHtml(relic.name)}</strong><small>${escapeHtml(relic.description)}</small></div><span></span></div>`;
+            const schoolTag = relic.school
+              ? `<small class="forge-school">「${escapeHtml(relic.school)}」</small>`
+              : "";
+            return `<div class="inventory-item"><span class="item-mark">${escapeHtml(relic.short)}</span><div><strong>${escapeHtml(relic.name)}${schoolTag}</strong><small>${escapeHtml(relic.description)}</small></div><span></span></div>`;
           })
           .join("")
       : `<div class="notice-strip">尚未获得遗物。击败第五层强敌可获得一件。</div>`;

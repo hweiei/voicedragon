@@ -17,6 +17,7 @@
     "perf": "vite build && vite-node scripts/perf-budget.ts",
     "release:artifact": "vite build && vite-node scripts/release-readiness.ts",
     "test:e2e": "vite build && playwright test",
+    "test:visual": "vite build && playwright test --config=playwright.visual.config.ts",
     "test:release": "vite build && playwright test --config=playwright.release.config.ts",
     "test:lighthouse": "vite build && vite-node scripts/lighthouse-budget.ts",
     "release:check": "npm run ci && npm run test:e2e && npm run test:release && npm run test:lighthouse && npm run sim:p8b",
@@ -29,12 +30,14 @@
     "sim:p9": "vite-node scripts/p9-balance.ts",
     "sim:p10": "vite-node scripts/p10-balance.ts",
     "sim:p11": "vite-node scripts/p11-balance.ts",
-    "sim:p13": "vite-node scripts/p13-balance.ts"
+    "sim:p13": "vite-node scripts/p13-balance.ts",
+    "sim:p15": "vite-node scripts/p15-balance.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
     "@colbymchenry/codegraph": "^1.6.0",
     "@playwright/test": "^1.63.0",
+    "fast-check": "^4.10.2",
     "lighthouse": "^12.8.2",
     "typescript": "~5.6.2",
     "vite": "^6.0.0",

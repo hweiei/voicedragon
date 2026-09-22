@@ -10,6 +10,7 @@
 
 import { QUIZ_QUESTIONS, type QuizQuestion } from "../data";
 import { MINIMAL_PAIRS, listeningQuestionFromPhrase } from "../listening";
+import { FORGE_QUIZ } from "./forge";
 import type { ContentRuleset } from "./index";
 import { ALL_SKILLS } from "./index";
 
@@ -89,13 +90,20 @@ export const LISTENING_QUIZ: QuizQuestion[] = [...pairQuizQuestions(), ...phrase
  * 问答节点题池（纯函数）：
  * - legacy：基础 18 题，逐位不变；
  * - p7 + 有粤语音色：基础 + 30 听音题；
- * - p7 + 无粤语音色：基础池（听音题被跳过——诚实降级，绝不用错误音色冒充）。
+ * - p7 + 无粤语音色：基础池（听音题被跳过——诚实降级，绝不用错误音色冒充）；
+ * - P15：`forgeVersion=1` 的 p7 新局再并入 30 道锻造文化题（文字题，不依赖音色）。
  */
 export function quizPoolFor(
   ruleset: ContentRuleset | undefined,
-  voiceAvailable: boolean
+  voiceAvailable: boolean,
+  forgeVersion?: 1
 ): { pool: QuizQuestion[]; listeningTotal: number } {
   if (ruleset !== "p7") return { pool: QUIZ_QUESTIONS, listeningTotal: 0 };
-  if (!voiceAvailable) return { pool: QUIZ_QUESTIONS, listeningTotal: LISTENING_QUIZ.length };
-  return { pool: [...QUIZ_QUESTIONS, ...LISTENING_QUIZ], listeningTotal: LISTENING_QUIZ.length };
+  const forge = forgeVersion === 1 ? FORGE_QUIZ : [];
+  if (!voiceAvailable)
+    return { pool: [...QUIZ_QUESTIONS, ...forge], listeningTotal: LISTENING_QUIZ.length };
+  return {
+    pool: [...QUIZ_QUESTIONS, ...forge, ...LISTENING_QUIZ],
+    listeningTotal: LISTENING_QUIZ.length
+  };
 }
