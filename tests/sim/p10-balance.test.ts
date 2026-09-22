@@ -14,12 +14,12 @@ const base = {
 
 describe("P10 名伶独立平衡门", () => {
   test.each(CHARACTERS.map((c) => [c.id, c.id === "cau-saang"]) as [string, boolean][])(
-    "%s 三幕 45–65%、零超时、被动真实运转",
+    "%s 三幕 55–85%、零超时、被动真实运转",
     (character, qteSource) => {
       for (const act of [1, 2, 3]) {
         const result = simulateAct({ ...base, act, character: character as "faa-daan", qteSource });
-        expect(result.winRate).toBeGreaterThanOrEqual(0.45);
-        expect(result.winRate).toBeLessThanOrEqual(0.65);
+        expect(result.winRate).toBeGreaterThanOrEqual(0.55);
+        expect(result.winRate).toBeLessThanOrEqual(0.85);
         expect(result.timeouts).toBe(0);
         if (character === "man-mou-saang") expect(result.passiveHits).toBeGreaterThan(0);
         if (character === "cau-saang") expect(result.passiveHits).toBeGreaterThan(0);

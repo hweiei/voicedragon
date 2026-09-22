@@ -130,7 +130,7 @@ function attachMastery(engine: GameEngine, options: SimOptions): void {
   };
 }
 
-const MAX_TURNS_PER_BATTLE = 60;
+const MAX_TURNS_PER_BATTLE = 90;
 const MAX_STEPS_PER_RUN = 6000;
 
 /** 三角分布采样（便宜的正态近似）：中心 mean，半波幅 sd。 */
@@ -519,7 +519,8 @@ export function simulateCampaign(options: SimOptions): SimRunResult {
         }
       }
       if (state.phase === "battle") {
-        // 超时保护：视为败北（真实玩家不会 60 回合不倒）
+        // 超时保护：视为败北。真实游戏无回合上限；90 回合仍未分胜负只可能是死锁。
+        // （P16：旧值 60 会把"弱牌组的正当长线战斗"误判为死锁——仿真只抓死锁，不代替玩家认输）
         timeout = true;
         return finish({ win: false, floor: maxFloor, turns, battles, timeout });
       }

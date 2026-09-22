@@ -24,7 +24,7 @@ test("新战役启用扩展池；标题内容数量由注册表生成", async ({
   await preset(page);
   await page.goto("/");
   await expect(page.locator(".title-screen .content-version")).toContainText(
-    "43 招式 · 38 奇遇 · 8 道具"
+    "49 招式 · 38 奇遇 · 8 道具"
   );
   await page.getByRole("button", { name: /战役 · 第一幕/ }).click();
   await page

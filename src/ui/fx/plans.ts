@@ -19,7 +19,16 @@ export type FxTarget =
 
 export interface FloaterSpec {
   text: string;
-  kind: "damage" | "armor" | "heal" | "star";
+  kind:
+    | "damage"
+    | "armor"
+    | "heal"
+    | "star"
+    /** P16 乐学快打：施法档位浮字（正音/清晰/入门/未稳），学习回报感的第一落点 */
+    | "tier-master"
+    | "tier-clear"
+    | "tier-learning"
+    | "tier-shaky";
   target: FxTarget;
   /** 相对计划起点的延迟（交错节奏：闪光 0 → 抖动 16 → 浮字 40，见方案 §5-M2） */
   delayMs?: number;
@@ -78,6 +87,53 @@ export const SHAKE_MAX_AMP = 8;
 const FALLBACK_RATIO = 0.4;
 /** 浮字入场延迟：让闪光/抖动先手 40ms（0/16/40 交错节奏的第三拍） */
 const FLOATER_DELAY_MS = 40;
+/** P16 档位浮字延迟：让伤害数字先落，档位评价紧随其后（第四拍） */
+const TIER_FLOATER_DELAY_MS = 130;
+
+/** 档位浮字分档线：与引擎 tierFor（src/core/engine.ts）同源 */
+const TIER_MASTER_SCORE = 85;
+const TIER_CLEAR_SCORE = 65;
+const TIER_LEARNING_SCORE = 40;
+
+/**
+ * P16 乐学快打：把发音档位变成看得见的回报（纯函数）。
+ * 与引擎档位线一致：≥85 正音 / ≥65 清晰 / ≥40 入门 / 其余 未稳。
+ * 正音带 crit 金光（与伤害暴击同源视觉语言）；低档用柔和字色，不做负面羞辱。
+ */
+export function tierFloaterFor(score: number | undefined): FloaterSpec | null {
+  if (score === undefined || !Number.isFinite(score)) return null;
+  if (score >= TIER_MASTER_SCORE) {
+    return {
+      text: "正音！",
+      kind: "tier-master",
+      target: "enemy-stage",
+      delayMs: TIER_FLOATER_DELAY_MS,
+      crit: true
+    };
+  }
+  if (score >= TIER_CLEAR_SCORE) {
+    return {
+      text: "清晰",
+      kind: "tier-clear",
+      target: "enemy-stage",
+      delayMs: TIER_FLOATER_DELAY_MS
+    };
+  }
+  if (score >= TIER_LEARNING_SCORE) {
+    return {
+      text: "入门",
+      kind: "tier-learning",
+      target: "enemy-stage",
+      delayMs: TIER_FLOATER_DELAY_MS
+    };
+  }
+  return {
+    text: "未稳",
+    kind: "tier-shaky",
+    target: "enemy-stage",
+    delayMs: TIER_FLOATER_DELAY_MS
+  };
+}
 
 /** 伤害 → 震屏振幅：线性分级、两端夹取（纯函数）。「手枪不配火箭的晃法」。 */
 export function ampFor(damage: number, enemyMaxHp: number): number {
@@ -130,6 +186,7 @@ export function planFor(effect: string | undefined, ctx: FxContext = {}): FxPlan
         Number.isFinite(ctx.enemyMaxHp) &&
         (ctx.enemyMaxHp ?? 0) > 0 &&
         damage >= (ctx.enemyMaxHp as number) * HEAVY_HIT_RATIO;
+      const tier = tierFloaterFor(ctx.score);
       const floaters: FloaterSpec[] = [
         {
           text: `-${damage}`,
@@ -138,7 +195,8 @@ export function planFor(effect: string | undefined, ctx: FxContext = {}): FxPlan
           delayMs: FLOATER_DELAY_MS,
           crit
         },
-        ...buffFloaters(ctx)
+        ...buffFloaters(ctx),
+        ...(tier ? [tier] : [])
       ];
       return {
         id: crit ? "hit.crit" : "hit",
@@ -152,7 +210,9 @@ export function planFor(effect: string | undefined, ctx: FxContext = {}): FxPlan
     }
 
     case "skill": {
-      const floaters = buffFloaters(ctx);
+      // P16：防御/治疗类出声施法同样给档位反馈（学习回报不止于攻击）
+      const tier = tierFloaterFor(ctx.score);
+      const floaters = [...buffFloaters(ctx), ...(tier ? [tier] : [])];
       return floaters.length > 0 ? { id: "skill", priority: 1, floaters } : null;
     }
 

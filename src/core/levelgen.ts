@@ -197,7 +197,8 @@ function assignTypes(rng: () => number, grid: ActNode[][]): void {
   // 关键节点先占坑（配额即最低保障；位置随机但类型规则由 validateActMap 守护）
   take((n) => n.row >= ACT_MAP.noEliteRows && n.row <= bossRow - 1, randInt(rng, 3, 5), "elite");
   take((n) => n.row >= 2 && n.row <= prizeMaxRow, randInt(rng, 2, 3), "treasure");
-  take((n) => n.row >= 2 && n.row <= prizeMaxRow, randInt(rng, 2, 3), "quiz");
+  // P16 乐学快打：问答 2–3 → 3–4（闯关中的粤语文化输入密度，题库同步 8→16）
+  take((n) => n.row >= 2 && n.row <= prizeMaxRow, randInt(rng, 3, 4), "quiz");
   take((n) => n.row >= 2 && n.row <= prizeMaxRow, 2, "shop");
   // P5：歇脚配额 3→4（15 行地图约 10+ 场战斗，3 处续航不足——平衡仿真结论）
   take((n) => n.row >= 1 && n.row <= bossRow - 1, 4, "rest");
@@ -321,7 +322,7 @@ export function validateActMap(map: ActMap): string[] {
   const countOf = (type: MapNodeType) => map.nodes.filter((n) => n.type === type).length;
   if (countOf("elite") < 3) problems.push("强敌不足 3 个");
   if (countOf("treasure") < 2) problems.push("宝箱不足 2 个");
-  if (countOf("quiz") < 2) problems.push("问答不足 2 个");
+  if (countOf("quiz") < 3) problems.push("问答不足 3 个");
   if (countOf("shop") < 2) problems.push("夜市不足 2 个");
   if (countOf("rest") < 3) problems.push("歇脚处不足 3 个");
   if (countOf("event") < 3) problems.push("奇遇不足 3 个");

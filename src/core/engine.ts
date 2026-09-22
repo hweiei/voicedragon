@@ -1180,8 +1180,9 @@ export class GameEngine {
   getScoreTier(score: number): ScoreTier {
     if (score >= 85) return { key: "master", label: "正音", multiplier: 1.32 };
     if (score >= 65) return { key: "clear", label: "清晰", multiplier: 1 };
-    if (score >= 40) return { key: "learning", label: "入门", multiplier: 0.78 };
-    return { key: "shaky", label: "未稳", multiplier: 0.52 };
+    // P16 乐学快打：低分档是初学者常态，减罚让"每句练习"更快打完、更快听到下一句
+    if (score >= 40) return { key: "learning", label: "入门", multiplier: 0.88 };
+    return { key: "shaky", label: "未稳", multiplier: 0.62 };
   }
 
   resolveSkill(

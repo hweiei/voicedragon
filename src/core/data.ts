@@ -293,7 +293,7 @@ export const ENEMIES: EnemyBlueprint[] = [
     epithet: "风一吹就散，嘴却很硬",
     glyph: "卒",
     hue: "crimson",
-    hp: 34,
+    hp: 27,
     attack: 6,
     pattern: [
       { type: "attack", amount: 1, label: "竹枪突刺" },
@@ -307,7 +307,7 @@ export const ENEMIES: EnemyBlueprint[] = [
     epithet: "躲在骑楼阴影里听声辨位",
     glyph: "影",
     hue: "violet",
-    hp: 38,
+    hp: 30,
     attack: 7,
     pattern: [
       { type: "debuff", amount: 1, label: "封喉灰" },
@@ -321,7 +321,7 @@ export const ENEMIES: EnemyBlueprint[] = [
     epithet: "门环震动时，它便睁眼",
     glyph: "狮",
     hue: "gold",
-    hp: 48,
+    hp: 38,
     attack: 8,
     pattern: [
       { type: "guard", guard: 9, label: "镇门" },
@@ -335,7 +335,7 @@ export const ENEMIES: EnemyBlueprint[] = [
     epithet: "每换一张脸，招式也会改变",
     glyph: "伶",
     hue: "cyan",
-    hp: 44,
+    hp: 35,
     attack: 8,
     pattern: [
       { type: "attack", amount: 0.8, hits: 2, label: "水袖双击" },
@@ -349,7 +349,7 @@ export const ENEMIES: EnemyBlueprint[] = [
     epithet: "专吞含糊不清的尾音",
     glyph: "钟",
     hue: "teal",
-    hp: 56,
+    hp: 45,
     attack: 9,
     pattern: [
       { type: "attack", amount: 1, label: "钟摆横扫" },
@@ -366,7 +366,7 @@ export const ELITES: EnemyBlueprint[] = [
     epithet: "踏七星桩而来",
     glyph: "王",
     hue: "crimson",
-    hp: 82,
+    hp: 74,
     attack: 11,
     pattern: [
       { type: "guardAttack", amount: 0.8, guard: 10, label: "采青试探" },
@@ -380,7 +380,7 @@ export const ELITES: EnemyBlueprint[] = [
     epithet: "只问来处，不问归途",
     glyph: "渡",
     hue: "violet",
-    hp: 76,
+    hp: 68,
     attack: 12,
     pattern: [
       { type: "attack", amount: 1.2, label: "船篙点水" },
@@ -630,6 +630,63 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
     options: ["质问对方为什么吃饭", "日常寒暄：吃饭了吗", "餐厅催单用语", "宣布开饭"],
     answerIndex: 1,
     explain: "这是广府最常见的寒暄之一，重点不在“饭”，在于打招呼。"
+  },
+  // P16 乐学快打：题库 8→16，提高闯关中的粤语输入密度
+  {
+    id: "q-doze-mgoi",
+    question: "收到朋友送的礼物，最得体的道谢是说？",
+    options: ["唔该", "多谢", "唔使", "好嘢"],
+    answerIndex: 1,
+    explain: "「多谢」（do6 ze6）用于接受馈赠/款待；「唔该」偏向劳驾别人或感谢服务。"
+  },
+  {
+    id: "q-yamcha",
+    question: "「饮茶」（jam2 caa4）在广府生活里指的是？",
+    options: ["只喝茶不吃东西", "上茶楼喝茶吃点心", "一种减肥方法", "睡前仪式"],
+    answerIndex: 1,
+    explain: "「饮茶」是上茶楼叹茶吃点心的社交活动，一盅两件是经典搭配。"
+  },
+  {
+    id: "q-maaidan",
+    question: "吃完饭你喊一声「埋单」（maai4 daan1），意思是？",
+    options: ["要打包", "结账", "加菜", "投诉"],
+    answerIndex: 1,
+    explain: "「埋单」即结账（把账单「埋」拢来算），也引申为“收尾、了结”。"
+  },
+  {
+    id: "q-diksi",
+    question: "粤语「的士」（dik1 si2）一词是怎么来的？",
+    options: ["古汉语传承词", "英语 taxi 的音译", "日语借词", "自造象声词"],
+    answerIndex: 1,
+    explain: "粤语吸收了大量英语音译词：的士（taxi）、巴士（bus）、士多（store）。"
+  },
+  {
+    id: "q-ge",
+    question: "粤语虚词「嘅」（ge3）的用法最接近普通话的哪个字？",
+    options: ["了", "的", "吗", "把"],
+    answerIndex: 1,
+    explain: "「嘅」是结构助词，相当于普通话“的”：我嘅书 = 我的书。"
+  },
+  {
+    id: "q-haang-gaai",
+    question: "朋友约你「行街」（haang4 gaai1），你们要去干什么？",
+    options: ["上街散步逛街", "去修马路", "跑马拉松", "摆地摊"],
+    answerIndex: 0,
+    explain: "「行街」就是逛街、散步购物；「行」（haang4）是走、步行的意思。"
+  },
+  {
+    id: "q-sau-seon",
+    question: "出门旅行回来给同事带的「手信」（sau2 seon3）是指？",
+    options: ["手写的信", "伴手礼、小礼物", "工资", "简历"],
+    answerIndex: 1,
+    explain: "「手信」指探亲访友或旅行归来携带的小礼物，贵在心意不在贵重。"
+  },
+  {
+    id: "q-gaau-dim",
+    question: "「搞掂」（gaau2 dim6）在日常粤语里的意思是？",
+    options: ["搞砸了", "办妥了、搞定", "搞卫生", "吵架"],
+    answerIndex: 1,
+    explain: "「搞掂」= 搞定、办妥：件事搞掂喇 = 事情办好了。"
   }
 ];
 

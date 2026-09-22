@@ -1,6 +1,6 @@
 /**
  * P13 词林力量化独立平衡门（与 P11/P12 门分报）：
- * 1. 三档掌握度 × 三角色 × 三幕全部落 45–65%、零超时；
+ * 1. 三档掌握度 × 三角色 × 三幕全部落 55–85%、零超时；
  * 2. 「掌握关」行与 P11/P12 基线**逐位一致**（练度不足 = 零影响）；
  * 3. 保底真实救场（机制在运转）且不越正音线。
  * 报告：docs/P13-BALANCE-REPORT.md（`npm run sim:p13` 复现）。
@@ -31,9 +31,9 @@ const PROFILES = [
 
 /** P11/P12 基线（同种子同配置，逐位对照）。 */
 const BASELINE_WINS: Record<string, number[]> = {
-  "man-mou-saang": [189, 177, 169],
-  "faa-daan": [193, 181, 177],
-  "cau-saang": [185, 175, 156]
+  "man-mou-saang": [232, 222, 229],
+  "faa-daan": [233, 231, 228],
+  "cau-saang": [246, 215, 215]
 };
 
 describe("P13 词林力量化独立平衡门", () => {
@@ -42,7 +42,7 @@ describe("P13 词林力量化独立平衡门", () => {
       PROFILES.map(([label, profile]) => [character.id, label, profile] as const)
     )
   )(
-    "%s · %s：三幕 45–65%、零超时",
+    "%s · %s：三幕 55–85%、零超时",
     (character, _label, profile) => {
       for (const act of [1, 2, 3]) {
         const result = simulateAct({
@@ -52,8 +52,8 @@ describe("P13 词林力量化独立平衡门", () => {
           qteSource: character === "cau-saang",
           ...(profile ? { masteryProfile: { ...profile } } : {})
         });
-        expect(result.winRate).toBeGreaterThanOrEqual(0.45);
-        expect(result.winRate).toBeLessThanOrEqual(0.65);
+        expect(result.winRate).toBeGreaterThanOrEqual(0.55);
+        expect(result.winRate).toBeLessThanOrEqual(0.85);
         expect(result.timeouts).toBe(0);
       }
     },

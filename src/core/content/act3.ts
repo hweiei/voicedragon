@@ -105,7 +105,7 @@ export const ACT3_CONTENT: ActContentPack = {
       epithet: "报信快过你换气",
       glyph: "雀",
       hue: "cyan",
-      hp: 40,
+      hp: 36,
       attack: 9,
       pattern: [
         { type: "attack", amount: 1.05, label: "疾哨" },
@@ -119,7 +119,7 @@ export const ACT3_CONTENT: ActContentPack = {
       epithet: "招牌熄了半边，它还亮着",
       glyph: "虹",
       hue: "violet",
-      hp: 44,
+      hp: 40,
       attack: 9,
       pattern: [
         { type: "debuff", amount: 2, label: "残光晃眼" },
@@ -133,7 +133,7 @@ export const ACT3_CONTENT: ActContentPack = {
       epithet: "鼓点抢在你的字头",
       glyph: "鼓",
       hue: "crimson",
-      hp: 47,
+      hp: 42,
       attack: 10,
       pattern: [
         { type: "attack", amount: 0.85, hits: 2, label: "双槌连擂" },
@@ -147,7 +147,7 @@ export const ACT3_CONTENT: ActContentPack = {
       epithet: "线断了，调子还挂着",
       glyph: "鸢",
       hue: "gold",
-      hp: 52,
+      hp: 47,
       attack: 10,
       pattern: [
         { type: "guardAttack", amount: 0.8, guard: 8, label: "剪风" },
@@ -161,7 +161,7 @@ export const ACT3_CONTENT: ActContentPack = {
       epithet: "你说过的话，它原样砸回来",
       glyph: "回",
       hue: "teal",
-      hp: 55,
+      hp: 50,
       attack: 11,
       pattern: [
         { type: "silence", amount: 10, label: "空钟" },
@@ -177,7 +177,7 @@ export const ACT3_CONTENT: ActContentPack = {
       epithet: "每句尾音都劈一道闪",
       glyph: "雷",
       hue: "crimson",
-      hp: 86,
+      hp: 82,
       attack: 13,
       pattern: [
         { type: "attack", amount: 1.3, label: "雷斧劈" },
@@ -191,10 +191,10 @@ export const ACT3_CONTENT: ActContentPack = {
       epithet: "一句花腔，戏棚都要让路",
       glyph: "凤",
       hue: "gold",
-      hp: 82,
+      hp: 78,
       attack: 14,
       pattern: [
-        { type: "guardAttack", amount: 0.9, guard: 12, label: "水袖回风" },
+        { type: "guardAttack", amount: 0.9, guard: 2, label: "水袖回风" },
         { type: "attack", amount: 1.85, label: "凤鸣穿云" },
         { type: "silence", amount: 11, label: "假嗓封喉" }
       ]

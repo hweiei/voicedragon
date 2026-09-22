@@ -5,7 +5,7 @@
  *   npm run sim                 # 默认每格 300 局（确定性种子，结果可复现）
  *   SIM_RUNS=1000 npm run sim   # 自定义局数
  *
- * CI 阈值守卫见 tests/sim/balance.test.ts（贪心参考 Bot 三幕胜率须落 45–65%）。
+ * CI 阈值守卫见 tests/sim/balance.test.ts（贪心参考 Bot 三幕胜率须落 55–75%，P16 换带）。
  */
 
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -44,7 +44,7 @@ const lines: string[] = [
   "# 平衡仿真报告（自动生成，勿手改）",
   "",
   `> 生成时间：${now.toISOString()} · 每格 ${RUNS} 局 · 种子基 ${BASE_SEED}（全确定性，可复现）`,
-  "> 阈值：贪心参考 Bot（声韵均值 74）各幕胜率须落在 **45%–65%**（CI 守卫：tests/sim/balance.test.ts）",
+  "> 阈值：贪心参考 Bot（声韵均值 74）各幕胜率须落在 **55%–75%**（P16 乐学快打换带；CI 守卫：tests/sim/balance.test.ts）",
   "",
   "| 幕 | 主题 | Bot | 胜率 | 均到达层 | 场均回合 | 战斗场 | 超时 |",
   "| --- | --- | --- | --- | --- | --- | --- | --- |"

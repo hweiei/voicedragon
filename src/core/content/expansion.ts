@@ -55,6 +55,32 @@ export const EXPANSION_SKILLS: Record<number, Skill[]> = {
       cost: 2,
       power: 11,
       description: "回复 {power} 点生命，并获得 5 点护甲。"
+    },
+    {
+      id: "p16-zou-san",
+      name: "早晨",
+      phrase: "早晨",
+      alternatives: ["早晨"],
+      jyutping: "zou2 san4",
+      lesson: "早上好的问候，开口先赢一半",
+      type: "guard",
+      rarity: "common",
+      cost: 1,
+      power: 8,
+      description: "获得 {power} 点护甲。晨运开声，先声夺人。"
+    },
+    {
+      id: "p16-do-ze",
+      name: "多谢",
+      phrase: "多谢",
+      alternatives: ["多谢", "多謝"],
+      jyutping: "do6 ze6",
+      lesson: "接受馈赠时道谢",
+      type: "heal",
+      rarity: "common",
+      cost: 1,
+      power: 6,
+      description: "回复 {power} 点生命。心怀感激，声气自顺。"
     }
   ],
   "2": [
@@ -123,6 +149,32 @@ export const EXPANSION_SKILLS: Record<number, Skill[]> = {
       cost: 2,
       power: 20,
       description: "获得 {power} 点护甲，本回合抵挡来袭。"
+    },
+    {
+      id: "p16-gei-cin",
+      name: "几钱",
+      phrase: "几钱",
+      alternatives: ["几钱", "幾錢", "多少钱"],
+      jyutping: "gei2 cin2",
+      lesson: "问价钱，砍价先开口",
+      type: "attack",
+      rarity: "common",
+      cost: 1,
+      power: 9,
+      description: "造成 {power} 点伤害。问价一声，直击要害。"
+    },
+    {
+      id: "p16-sik-baau-mei",
+      name: "食饱未",
+      phrase: "食饱未",
+      alternatives: ["食饱未", "食飽未", "吃饱了吗"],
+      jyutping: "sik6 baau2 mei6",
+      lesson: "熟人见面最暖的一句寒暄",
+      type: "hybrid",
+      rarity: "common",
+      cost: 1,
+      power: 6,
+      description: "造成 {power} 点伤害，并获得 {power} 点护甲。"
     }
   ],
   "3": [
@@ -190,6 +242,33 @@ export const EXPANSION_SKILLS: Record<number, Skill[]> = {
       cost: 2,
       power: 11,
       description: "造成 {power} 点伤害，并获得等量护甲。"
+    },
+    {
+      id: "p16-jat-jin-wai-ding",
+      name: "一言为定",
+      phrase: "一言为定",
+      alternatives: ["一言为定", "一言為定"],
+      jyutping: "jat1 jin4 wai6 ding6",
+      lesson: "说一不二，一诺千金",
+      type: "guard",
+      rarity: "common",
+      cost: 1,
+      power: 10,
+      description: "获得 {power} 点护甲。一言既出，稳如磐石。"
+    },
+    {
+      id: "p16-hou-je",
+      name: "好嘢",
+      phrase: "好嘢",
+      alternatives: ["好嘢", "真棒"],
+      jyutping: "hou2 je5",
+      lesson: "干得漂亮，喝彩打气",
+      type: "multi",
+      rarity: "common",
+      cost: 1,
+      power: 6,
+      hits: 2,
+      description: "连续攻击 2 次，每次造成 {power} 点伤害。"
     }
   ]
 };

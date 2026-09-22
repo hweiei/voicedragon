@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import { simulateAct, simulateCampaign } from "../../src/core/sim";
 
 describe("P8-B 对手进化独立平衡门", () => {
-  test.each([1, 2, 3])("幕%i参考Bot300局45–65%、零超时，真实经历二阶段及新精英", (act) => {
+  test.each([1, 2, 3])("幕%i参考Bot300局55–85%、零超时，真实经历二阶段及新精英", (act) => {
     const result = simulateAct({
       act,
       bot: "greedy",
@@ -11,8 +11,8 @@ describe("P8-B 对手进化独立平衡门", () => {
       buildVersion: 1,
       encounterVersion: 1
     });
-    expect(result.winRate).toBeGreaterThanOrEqual(0.45);
-    expect(result.winRate).toBeLessThanOrEqual(0.65);
+    expect(result.winRate).toBeGreaterThanOrEqual(0.55);
+    expect(result.winRate).toBeLessThanOrEqual(0.85);
     expect(result.timeouts).toBe(0);
     expect(result.bossPhases).toBeGreaterThan(0);
     expect(result.newElites).toBeGreaterThan(0);

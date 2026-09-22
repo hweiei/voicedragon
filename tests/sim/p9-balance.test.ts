@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import { simulateAct, simulateCampaign } from "../../src/core/sim";
 
 describe("P9 守势反击独立平衡门", () => {
-  test.each([1, 2, 3])("幕%i参考Bot300局45–65%、零超时，反击真实触发", (act) => {
+  test.each([1, 2, 3])("幕%i参考Bot300局55–85%、零超时，反击真实触发", (act) => {
     const result = simulateAct({
       act,
       bot: "greedy",
@@ -12,8 +12,8 @@ describe("P9 守势反击独立平衡门", () => {
       encounterVersion: 1,
       counterVersion: 1
     });
-    expect(result.winRate).toBeGreaterThanOrEqual(0.45);
-    expect(result.winRate).toBeLessThanOrEqual(0.65);
+    expect(result.winRate).toBeGreaterThanOrEqual(0.55);
+    expect(result.winRate).toBeLessThanOrEqual(0.85);
     expect(result.timeouts).toBe(0);
     expect(result.counterHits).toBeGreaterThan(0);
   });

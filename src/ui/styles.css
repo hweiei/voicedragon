@@ -3178,6 +3178,34 @@ body {
   font-size: 1.8rem;
 }
 
+/* P16 乐学快打：施法档位浮字（正音/清晰/入门/未稳）——
+   位置略高于伤害数字，避免同拍叠字；正音走 .fx-crit 金光 */
+.fx-floater.fx-tier-master,
+.fx-floater.fx-tier-clear,
+.fx-floater.fx-tier-learning,
+.fx-floater.fx-tier-shaky {
+  top: 2%;
+  font-size: 1.15rem;
+  letter-spacing: 0.08em;
+}
+
+.fx-floater.fx-tier-master {
+  color: #ffd873;
+  font-size: 1.4rem;
+}
+
+.fx-floater.fx-tier-clear {
+  color: #9fe3b4;
+}
+
+.fx-floater.fx-tier-learning {
+  color: #e8dcc8;
+}
+
+.fx-floater.fx-tier-shaky {
+  color: #c9a49b;
+}
+
 @keyframes fx-float-up {
   0% {
     opacity: 0;

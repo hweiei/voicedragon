@@ -11,7 +11,8 @@ import {
   SHAKE_MAX_AMP,
   SHAKE_MIN_AMP,
   ampFor,
-  planFor
+  planFor,
+  tierFloaterFor
 } from "../../src/ui/fx/plans";
 
 describe("ampFor 震屏振幅分级", () => {
@@ -116,5 +117,40 @@ describe("planFor: skill / enemy / 胜负 / 奇遇", () => {
     expect(planFor("item")).toBeNull();
     expect(planFor(undefined)).toBeNull();
     expect(planFor("")).toBeNull();
+  });
+});
+
+describe("P16 档位浮字：把发音档位变成看得见的回报", () => {
+  test("四档分层与引擎档位线同源（85/65/40），未给分不出浮字", () => {
+    expect(tierFloaterFor(100)).toMatchObject({ text: "正音！", kind: "tier-master", crit: true });
+    expect(tierFloaterFor(85)).toMatchObject({ text: "正音！", kind: "tier-master" });
+    expect(tierFloaterFor(84)).toMatchObject({ text: "清晰", kind: "tier-clear" });
+    expect(tierFloaterFor(65)).toMatchObject({ text: "清晰", kind: "tier-clear" });
+    expect(tierFloaterFor(64)).toMatchObject({ text: "入门", kind: "tier-learning" });
+    expect(tierFloaterFor(40)).toMatchObject({ text: "入门", kind: "tier-learning" });
+    expect(tierFloaterFor(39)).toMatchObject({ text: "未稳", kind: "tier-shaky" });
+    expect(tierFloaterFor(0)).toMatchObject({ text: "未稳", kind: "tier-shaky" });
+    expect(tierFloaterFor(undefined)).toBeNull();
+    expect(tierFloaterFor(Number.NaN)).toBeNull();
+  });
+
+  test("hit 计划：伤害浮字之后追加档位浮字（确定性：同入参同计划）", () => {
+    const plan = planFor("hit", { damage: 12, score: 91, enemyMaxHp: 40 });
+    const kinds = plan?.floaters?.map((floater) => floater.kind) ?? [];
+    expect(kinds[0]).toBe("damage");
+    expect(kinds).toContain("tier-master");
+    expect(planFor("hit", { damage: 12, score: 91, enemyMaxHp: 40 })).toEqual(plan);
+  });
+
+  test("skill 计划（防御/治疗类出声施法）同样有档位反馈", () => {
+    const plan = planFor("skill", { armor: 8, score: 70 });
+    expect(plan?.floaters?.some((floater) => floater.kind === "tier-clear")).toBe(true);
+  });
+
+  test("无发音分（无声通道等）不加档位浮字", () => {
+    const plan = planFor("hit", { damage: 10, enemyMaxHp: 40 });
+    expect(plan?.floaters?.every((floater) => !String(floater.kind).startsWith("tier-"))).toBe(
+      true
+    );
   });
 });

@@ -22,17 +22,18 @@ function battle(act = 1, seed = 123): GameEngine {
 }
 
 describe("P7 版本化内容契约", () => {
-  test("43 技能 / 38 事件 / 8 道具；基础池与旧默认不变（P9 反击卡/P10 签名技/P11 绝技句仅进对应版本池）", () => {
+  test("49 技能 / 38 事件 / 8 道具；基础池与旧默认不变（P9 反击卡/P10 签名技/P11 绝技句仅进对应版本池）", () => {
     // P9/P10/P11：ALL_SKILLS 收录版本内容（图鉴/练习场可见），未开版本时池不变
     // P15：ALL_EVENTS 全集 26 → 38（+12 锻造事件，仅收录展示；抽选池门控见 eventsFor 断言）
-    expect(ALL_SKILLS).toHaveLength(43);
+    // P16：每幕 +2 乐学短句（入 EXPANSION_SKILLS，基础表不动）：43 → 49
+    expect(ALL_SKILLS).toHaveLength(49);
     expect(ALL_EVENTS).toHaveLength(38);
     expect(ALL_ITEMS).toHaveLength(8);
-    expect([1, 2, 3].map((act) => skillsFor(act, "p7").length)).toEqual([16, 26, 36]);
-    expect([1, 2, 3].map((act) => skillsFor(act, "p7", 1).length)).toEqual([17, 27, 37]);
+    expect([1, 2, 3].map((act) => skillsFor(act, "p7").length)).toEqual([18, 30, 42]);
+    expect([1, 2, 3].map((act) => skillsFor(act, "p7", 1).length)).toEqual([19, 31, 43]);
     // P10：签名技只进对应角色池（各 +1），其他角色与无角色调用不可获取
     expect([1, 2, 3].map((act) => skillsFor(act, "p7", 1, "faa-daan").length)).toEqual([
-      18, 28, 38
+      20, 32, 44
     ]);
     expect(skillsFor(1, "p7", 1, "faa-daan").map((x) => x.id)).toContain("p10-gu-paan-saang-fai");
     expect(skillsFor(1, "p7", 1, "faa-daan").map((x) => x.id)).not.toContain(

@@ -104,7 +104,7 @@ export const ACT2_CONTENT: ActContentPack = {
       epithet: "在湿甲板上拖出长长的回声",
       glyph: "水",
       hue: "teal",
-      hp: 40,
+      hp: 32,
       attack: 8,
       pattern: [
         { type: "attack", amount: 1, label: "缆绳抽击" },
@@ -118,7 +118,7 @@ export const ACT2_CONTENT: ActContentPack = {
       epithet: "嘴上抹盐，专腌含糊的尾音",
       glyph: "咸",
       hue: "gold",
-      hp: 42,
+      hp: 34,
       attack: 8,
       pattern: [
         { type: "debuff", amount: 1, label: "腌声盐雾" },
@@ -132,7 +132,7 @@ export const ACT2_CONTENT: ActContentPack = {
       epithet: "灯芯一晃，调子就跟着跑",
       glyph: "灯",
       hue: "violet",
-      hp: 46,
+      hp: 37,
       attack: 9,
       pattern: [
         { type: "attack", amount: 0.75, hits: 2, label: "灯影双闪" },
@@ -146,7 +146,7 @@ export const ACT2_CONTENT: ActContentPack = {
       epithet: "吊得起整箱货，也吊得住话头",
       glyph: "吊",
       hue: "crimson",
-      hp: 55,
+      hp: 44,
       attack: 10,
       pattern: [
         { type: "guard", guard: 10, label: "锁钩" },
@@ -160,7 +160,7 @@ export const ACT2_CONTENT: ActContentPack = {
       epithet: "跟错它一句，就被浪带走半层",
       glyph: "妖",
       hue: "cyan",
-      hp: 50,
+      hp: 40,
       attack: 9,
       pattern: [
         { type: "silence", amount: 9, label: "哑潮" },
@@ -176,7 +176,7 @@ export const ACT2_CONTENT: ActContentPack = {
       epithet: "灯转一圈，就要听清一句",
       glyph: "守",
       hue: "gold",
-      hp: 88,
+      hp: 79,
       attack: 12,
       pattern: [
         { type: "guardAttack", amount: 0.85, guard: 10, label: "旋灯扫照" },
@@ -190,7 +190,7 @@ export const ACT2_CONTENT: ActContentPack = {
       epithet: "香灰写字，卜签先卜你的声",
       glyph: "祝",
       hue: "crimson",
-      hp: 84,
+      hp: 76,
       attack: 13,
       pattern: [
         { type: "attack", amount: 1.2, label: "签筒摇喝" },

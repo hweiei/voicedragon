@@ -37,7 +37,8 @@ npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 
   `docs/COUNTER-ATTACK-PLAN.md`（P9 守势反击）、`docs/GROWTH-PLAN.md`（P10–P15 丰富度总路线）与
   `docs/ROSTER-PLAN.md`（P10 名伶登场）、`docs/ULTIMATE-PLAN.md`（P11 声动九霄）、
   `docs/P12-CHALLENGE-PLAN.md`（P12 切磋码）、`docs/P13-WORDBOOK-PLAN.md`（P13 词林拾遗）、
-  `docs/P14-REFINE-PLAN.md`（P14 声之细织）、`docs/P15-FORGE-PLAN.md`（P15 铸剑炉）。
+  `docs/P14-REFINE-PLAN.md`（P14 声之细织）、`docs/P15-FORGE-PLAN.md`（P15 铸剑炉）与
+  `docs/P16-LEARN-FAST-PLAN.md`（P16 乐学快打·学习体验调优）。
 - 内容兼容：缺失 `ruleset` 的旧局按 legacy；P7 新内容只经 `skillsFor/eventsFor/itemsFor` 进入对应新局。
   不直接修改基础内容表或用扩展池替换基础池。新增参数须审查组合根包装器是否完整转发。
 - 构筑独立版本 `buildVersion:1` 仅用于新战役；缺失时保留旧玩法。升级按 `upgradedSlots` 记录具体牌组槽位，
@@ -95,6 +96,14 @@ npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 
   在锻造局首胜按（角色×幕）槽位确定性授予一件（`finishCombatVictory`，`forgeRelicGranted` 一局一件）。
   遗物 `school` 为展示字段不参与判定；「每场一次」钩子走 `combat.forgeUsed`。切磋码版本束增列 `forge`（字段 `f`），
   旧码无此字段 = 旧内容池逐位同局（零破坏）。属性测试（fast-check，dev-only）与视觉回归（Playwright 截图门）只加门不放宽旧门。
+- P16 乐学快打（学习体验优先的 Owner 调参，见 `docs/P16-LEARN-FAST-PLAN.md`）：档位倍率入门 0.88 / 未稳 0.62
+  （只减少低分档惩罚，正音/清晰档不变）；敌人基础血量按幕调（幕1–2 小怪 −20%、幕3 −10%、各幕精英 −10%、Boss 不动）；
+  凤冠花旦「水袖回风」叠甲 12→2（叠甲×沉默曾构成磨甲死锁，真实玩家同样受困）。
+  **平衡门换带**：基线三幕贪心胜率 55–75%（旧 45–65），变体门（p7/构筑/进化/反击/名伶/绝技/词林/锻造）55–85%，
+  基线快照 `BASELINE_WINS` 已按 P16 数值回填；仿真单场安全阀 60→90 回合（真实游戏无回合上限，阀门只抓死锁）。
+  新短句只进 `EXPANSION_SKILLS`（基础表只读红线不变），题库 8→16、问答节点每图 3–4；
+  档位浮字（正音！/清晰/入门/未稳）在 `src/ui/fx/plans.ts` 纯计划层（`tierFloaterFor`），不新增演出系统。
+  调参必先 `npm run sim` 对表 `docs/BALANCE-REPORT.md`，禁止凭直觉改。
 
 ## 2. 黄金契约与确定性
 
@@ -106,7 +115,7 @@ npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 
 ```bash
 npx biome check .          # 风格（或 npm run check:fix）
 npx tsc --noEmit           # 严格类型
-npx vitest run             # 单测+契约+仿真+属性测试（现 562 条，含 P15 属性门/契约门/仿真门）
+npx vitest run             # 单测+契约+仿真+属性测试（现 572 条，含 P15 属性门/契约门/仿真门、P16 换带后的期次平衡门）
 npx vite build && npx vite-node scripts/perf-budget.ts   # 首包 ≤350KB gzip（现 106.4）
 npx vite-node scripts/release-readiness.ts               # dist PWA/路径/安全头 44 项契约
 npm run sim:p8b           # 对手进化参考门45–65%、零超时；随机Bot异常须如实记录
@@ -120,7 +129,7 @@ npm run test:visual       # 视觉回归门：4 屏×2 视口×reduce-motion 开
 npm run sim:p8            # 构筑版独立仿真（含真实升级/删牌计数）
 npm run sim:p7            # 扩展版独立平衡报表（基础版仍用 npm run sim）
 npx playwright install --with-deps chromium firefox webkit  # 新环境一次性安装
-npx playwright test        # Chromium 业务 E2E（现 54 条）
+npx playwright test        # Chromium 业务 E2E（现 55 条）
 npm run test:release      # Chromium/Firefox/WebKit 发布矩阵（现 19 通过、1 明确跳过）
 npm run test:lighthouse   # 移动端+桌面四类分数及 LCP/TBT/CLS 硬预算
 npm run release:check      # 提交发布前串行执行全部门（需先安装三种 Playwright 浏览器）；P9 起每期另跑期次仿真（sim:p9 / sim:p10 / sim:p11 / sim:p13）

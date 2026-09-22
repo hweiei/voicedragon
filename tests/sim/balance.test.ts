@@ -1,9 +1,10 @@
 /**
  * P5 平衡仿真 CI 守卫（REDESIGN-PLAN §7.7 / §10 验收）：
  * - 确定性：同种子必同结果（战役可复现的基石）；
- * - 难度带：贪心参考 Bot（声韵均值 74）三幕胜率均须落在 45%–65%；
+ * - 难度带：贪心参考 Bot（声韵均值 74）三幕胜率均须落在 55%–75%
+ *   （P16 乐学快打：学习工具定位，"赢得顺、说得多"优先，旧带 45–65 见 P16 方案 §1）；
  * - 技能梯度：发音更好的玩家胜率必须更高（声即法力）；
- * - 超时保护：正常不应触发（60 回合未分胜负的判负局为 0）。
+ * - 超时保护：正常不应触发（90 回合未分胜负 = 死锁，判负局须为 0；真实游戏无回合上限）。
  *
  * 与 docs/BALANCE-REPORT.md 同源（同种子基 / 同局数），报表与 CI 数字一致。
  */
@@ -29,13 +30,13 @@ describe("simulation determinism", () => {
   });
 });
 
-describe("balance band: greedy reference bot within 45%–65% per act", () => {
+describe("balance band: greedy reference bot within 55%–75% per act (P16)", () => {
   for (const pack of ACT_PACKS) {
     test(`act ${pack.act} (${pack.theme})`, () => {
       const summary = simulateAct({ act: pack.act, bot: "greedy", runs: RUNS });
       expect(summary.timeouts).toBe(0);
-      expect(summary.winRate).toBeGreaterThanOrEqual(0.45);
-      expect(summary.winRate).toBeLessThanOrEqual(0.65);
+      expect(summary.winRate).toBeGreaterThanOrEqual(0.55);
+      expect(summary.winRate).toBeLessThanOrEqual(0.75);
     });
   }
 
