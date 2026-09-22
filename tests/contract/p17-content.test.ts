@@ -10,7 +10,8 @@ import { describe, expect, test } from "vitest";
 import { decodeChallenge, encodeChallenge } from "../../src/core/challenge";
 import { ALL_SKILLS, lookupSkill, skillsFor } from "../../src/core/content";
 import { quizPoolFor } from "../../src/core/content/listening";
-import { P17_QUIZ, P17_SKILLS } from "../../src/core/content/p17";
+import { P17_QUIZ, P17_SKILLS, freshLexiconSkills } from "../../src/core/content/p17";
+import { GameEngine } from "../../src/core/engine";
 import { parseJyutpingTones } from "../../src/core/tone";
 
 describe("P17 词海内容契约", () => {
@@ -96,5 +97,46 @@ describe("P17 词海内容契约", () => {
       false
     );
     expect(skillsFor(3).some((s) => s.id.startsWith("p17-"))).toBe(false);
+  });
+
+  /** 词海局速胜到奖励屏（同种子可重放） */
+  function lexiconBattle(seed: number): GameEngine {
+    const engine = new GameEngine();
+    engine.startCampaign({ act: 1, seed, ruleset: "p7", lexiconVersion: 1 });
+    engine.chooseFloorOption(engine.state.floorOptions[0].id);
+    engine.state.combat!.enemy.hp = 1;
+    engine.resolveSkill("ding-ngang-soeng", 100);
+    return engine;
+  }
+
+  test("奖励三选一保底 1 张本局未学过的词海句（学习密度；同种子同奖励）", () => {
+    const engine = lexiconBattle(20260923);
+    const deck = engine.state.player!.deck;
+    const choices = engine.state.reward!.choices;
+    expect(choices).toHaveLength(3);
+    expect(choices.some((id) => id.startsWith("p17-") && !deck.includes(id))).toBe(true);
+    // 确定性契约：同种子重放，奖励逐位一致
+    expect(lexiconBattle(20260923).state.reward!.choices).toEqual(choices);
+    // 学掉保底句后，下一场仍保底（fresh 随牌组收缩）
+    engine.chooseReward();
+    const second = new GameEngine();
+    second.startCampaign({ act: 1, seed: 77, ruleset: "p7", lexiconVersion: 1 });
+    second.chooseFloorOption(second.state.floorOptions[0].id);
+    second.state.combat!.enemy.hp = 1;
+    second.resolveSkill("ding-ngang-soeng", 100);
+    const deck2 = second.state.player!.deck;
+    expect(
+      second.state.reward!.choices.some((id) => id.startsWith("p17-") && !deck2.includes(id))
+    ).toBe(true);
+  });
+
+  test("freshLexiconSkills 纯规则：只筛词海句、排除已入牌组", () => {
+    const pool = skillsFor(1, "p7", 1, undefined, 1);
+    const fresh = freshLexiconSkills(pool, []);
+    expect(fresh).toHaveLength(73); // 幕1 词海句全量
+    expect(fresh.every((skill) => skill.id.startsWith("p17-"))).toBe(true);
+    const one = fresh[0].id;
+    expect(freshLexiconSkills(pool, [one]).some((skill) => skill.id === one)).toBe(false);
+    expect(freshLexiconSkills(pool, [one]).length).toBe(72);
   });
 });

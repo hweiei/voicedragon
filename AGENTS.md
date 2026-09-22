@@ -105,6 +105,16 @@ npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 
   新短句只进 `EXPANSION_SKILLS`（基础表只读红线不变），题库 8→16、问答节点每图 3–4；
   档位浮字（正音！/清晰/入门/未稳）在 `src/ui/fx/plans.ts` 纯计划层（`tierFloaterFor`），不新增演出系统。
   调参必先 `npm run sim` 对表 `docs/BALANCE-REPORT.md`，禁止凭直觉改。
+- P17 词海内容独立版本 `lexiconVersion:1` 仅用于 p7 新局：+220 短句只经 `skillsFor` 第五参、
+  +80 问答只经 `quizPoolFor` 第四参进入；数据全部在 `src/core/content/p17/`（基础表/EXPANSION 只读）。
+  切磋码版本束增列 `lexicon`（字段 `l`，PAYLOAD_KEYS 白名单登记；旧码无字段 = 旧池逐位同局）。
+  全库 269 卡 / 266 句 / 156 题，唯一汉字 370（指标口径以句/题为主，见方案 §0 目标修正）。
+  基线零漂移由 `tests/sim/p17-balance.test.ts` 直接锁定（不带 lexicon 的 wins=[191,202,215]）。
+  粤拼 LSHK 方案人工编写，**待母语审校**；修正只改 p17/ 数据文件，契约自动跟随。
+  顺手修复：`challengeFromRun` 现随码携带 forge（P15 缺口：锻造局发码曾丢 f 字段）。
+- P17-F2 奖励保底新句：词海局（lexiconVersion=1）奖励三选一经 `rewardSkillChoices` 保底 1 张
+  本局未学过的词海句（`freshLexiconSkills` 纯规则、中位放置、rng 走引擎 = 同种子同奖励）；
+  非词海局/词海句耗尽走原路径**逐位不变**。改奖励逻辑勿绕过此方法。
 
 ## 2. 黄金契约与确定性
 
@@ -116,7 +126,7 @@ npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 
 ```bash
 npx biome check .          # 风格（或 npm run check:fix）
 npx tsc --noEmit           # 严格类型
-npx vitest run             # 单测+契约+仿真+属性测试（现 586 条，含 P17 词海契约门/平衡门）
+npx vitest run             # 单测+契约+仿真+属性测试（现 588 条，含 P17 词海契约门/平衡门/奖励保底门）
 npx vite build && npx vite-node scripts/perf-budget.ts   # 首包 ≤350KB gzip（现 106.4）
 npx vite-node scripts/release-readiness.ts               # dist PWA/路径/安全头 44 项契约
 npm run sim:p8b           # 对手进化参考门45–65%、零超时；随机Bot异常须如实记录

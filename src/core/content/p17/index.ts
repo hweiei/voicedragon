@@ -15,4 +15,12 @@ export const P17_SKILLS: Record<number, Skill[]> = {
   3: P17_SKILLS_ACT3
 };
 
+/**
+ * P17 词海学习密度（纯规则）：奖励池里"本局还没学过的词海句"。
+ * 引擎奖励三选一据此保底 1 张新句（仅 lexiconVersion=1；缺省路径逐位不变）。
+ */
+export function freshLexiconSkills(pool: readonly Skill[], deck: readonly string[]): Skill[] {
+  return pool.filter((skill) => skill.id.startsWith("p17-") && !deck.includes(skill.id));
+}
+
 export { P17_QUIZ };

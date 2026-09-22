@@ -57,6 +57,7 @@ import {
 } from "./content";
 import { FORGE_RELICS } from "./content/forge";
 import { quizPoolFor } from "./content/listening";
+import { freshLexiconSkills } from "./content/p17";
 import { CHARACTERS, type CharacterId, lookupCharacter } from "./content/roster";
 import { ULTIMATE_FOR_CHARACTER } from "./content/ultimates";
 import { type CounterStance, counterEnabled, resolveCounterDamage } from "./counter";
@@ -776,6 +777,31 @@ export class GameEngine {
 
   hasRelic(id: string): boolean {
     return Boolean(this.state.player?.relics.includes(id));
+  }
+
+  /**
+   * P17 词海学习密度：奖励三选一保底 1 张本局未学过的词海句（放中位，不固定首位）。
+   * 仅 lexiconVersion=1 生效；词海句耗尽或非词海局走原 pickDistinct 路径（逐位不变）。
+   * 随机全部经引擎 rng——同种子同局（奖励确定性契约）。
+   */
+  private rewardSkillChoices(pool: Skill[]): string[] {
+    if (this.state.lexiconVersion === 1) {
+      const fresh = freshLexiconSkills(pool, this.state.player?.deck ?? []);
+      const [guaranteed] = fresh.length > 0 ? this.pickDistinct(fresh, 1) : [];
+      if (guaranteed) {
+        const rest = this.pickDistinct(pool, 2, [guaranteed.id]).map((skill) => skill.id);
+        const choices = [rest[0], guaranteed.id, rest[1]].filter(
+          (id): id is string => id !== undefined
+        );
+        if (choices.length < 3) {
+          for (const skill of this.pickDistinct(pool, 3 - choices.length, choices)) {
+            choices.push(skill.id);
+          }
+        }
+        return choices;
+      }
+    }
+    return this.pickDistinct(pool, 3).map((skill) => skill.id);
   }
 
   /** P15 锻造遗物「每场一次」消耗：本场首次生效返回 true，随后恒 false。 */
@@ -1813,7 +1839,7 @@ export class GameEngine {
       this.state.lexiconVersion
     );
     const relicPool = relicsUpToAct(this.state.campaign?.act ?? 1);
-    const choices = this.pickDistinct(skillPool, 3).map((skill) => skill.id);
+    const choices = this.rewardSkillChoices(skillPool);
     let bonus: RewardBonus | null = null;
 
     if (isElite) {
