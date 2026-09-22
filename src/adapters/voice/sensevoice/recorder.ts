@@ -3,6 +3,24 @@
  * 采样率取设备原生（Worker 内统一重采样至 16kHz），并给出音量（RMS）用于 UI 动效。
  */
 
+/**
+ * 移动端修复：共享 AudioContext 的"手势内解锁"。
+ * iOS/部分 Android 要求 AudioContext 的首次创建/恢复发生在用户手势同步段；
+ * 而录音管线要等模型就绪（异步）才启动，等到那时才建上下文必然处于 `suspended`，
+ * AudioWorklet 一帧不出 → VAD 收不到音频 → 自动收音永不触发、兜底 flush 也无料可判。
+ * 解法：点击「开始收音」的同步段先调用本函数预热，真正录音时复用同一上下文。
+ */
+let sharedContext: AudioContext | null = null;
+
+export function unlockAudioContext(): void {
+  if (!sharedContext || sharedContext.state === "closed") {
+    sharedContext = new AudioContext();
+  }
+  if (sharedContext.state === "suspended") {
+    void sharedContext.resume().catch(() => undefined);
+  }
+}
+
 export interface RecorderCallbacks {
   onFrame(samples: Int16Array, sampleRate: number): void;
   /** P3：原始 Float32 帧（F0 提取用；Int16 量化损失对基频检测不友好）。 */
@@ -25,6 +43,8 @@ registerProcessor("vd-pcm-capture", VdCaptureProcessor);
 
 export class MicRecorder {
   private context: AudioContext | null = null;
+  /** 上下文是否为本实例自建（自建才允许 teardown 时关闭；共享上下文留作复用）。 */
+  private ownsContext = false;
   private stream: MediaStream | null = null;
   private node: AudioWorkletNode | null = null;
   private active = false;
@@ -55,7 +75,18 @@ export class MicRecorder {
     }
 
     try {
-      this.context = new AudioContext();
+      // 优先复用手势内解锁的共享上下文（移动端必需；见 unlockAudioContext 注释）
+      const reusable = sharedContext && sharedContext.state !== "closed" ? sharedContext : null;
+      this.context = reusable ?? new AudioContext();
+      this.ownsContext = reusable === null;
+      if (this.context.state === "suspended") {
+        await this.context.resume().catch(() => undefined);
+      }
+      if (this.context.state !== "running") {
+        this.teardown();
+        callbacks.onError(new Error("音频管线被系统锁定：请再点一次「开始收音」（勿锁屏/切后台）"));
+        return;
+      }
       const workletUrl = URL.createObjectURL(
         new Blob([CAPTURE_WORKLET], { type: "application/javascript" })
       );
@@ -98,9 +129,13 @@ export class MicRecorder {
     this.node = null;
     for (const track of this.stream?.getTracks() ?? []) track.stop();
     this.stream = null;
-    if (this.context && this.context.state !== "closed") {
-      void this.context.close().catch(() => undefined);
-    }
+    const ctx = this.context;
     this.context = null;
+    if (!ctx) return;
+    if (this.ownsContext) {
+      if (ctx.state !== "closed") void ctx.close().catch(() => undefined);
+    } else if (ctx === sharedContext && ctx.state === "closed") {
+      sharedContext = null; // 共享上下文被外部关闭时清引用，下次解锁重建
+    }
   }
 }

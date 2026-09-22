@@ -18,7 +18,7 @@ import type {
 import { PitchTracker } from "../pitch-tracker";
 import { SENSEVOICE_MANIFEST, runtimeBaseUrl } from "./manifest";
 import { getModelHandles, isModelReady } from "./model-store";
-import { MicRecorder } from "./recorder";
+import { MicRecorder, unlockAudioContext } from "./recorder";
 import type { DownstreamMessage, UpstreamMessage } from "./sensevoice.worker";
 
 /** NOTE-confidence：SenseVoice 的 wasm JS API 不输出词级置信度，用中等偏上常量代理；
@@ -144,6 +144,11 @@ export class SenseVoiceAdapter implements VoiceAdapter {
         resolve(false);
       }
     });
+  }
+
+  /** 移动端：手势同步段预热音频上下文（iOS 要求解锁发生在手势内）。幂等。 */
+  unlockCapture(): void {
+    unlockAudioContext();
   }
 
   start(options: VoiceStartOptions): void {

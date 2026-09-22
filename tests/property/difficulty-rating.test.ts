@@ -72,7 +72,10 @@ describe("属性：难度评级任意序列下有界且纯净", () => {
         const boost = boostForRating(rating);
         expect(boost).toBeGreaterThanOrEqual(-DIFFICULTY_BOOST_CAP);
         expect(boost).toBeLessThanOrEqual(DIFFICULTY_BOOST_CAP);
-        expect(Math.round(boost * 10000)).toBe(boost * 10000);
+        // 4 位小数量化：不能用 `boost*10000` 恒等断言——二进制浮点下约 13% 的
+        // n/10000 值乘回后差一个 ulp（如 0.0003*10000=2.9999999999999996），
+        // 会让本属性测试随 fast-check 随机种子偶发红。toFixed 语义等价且稳定。
+        expect(Number(boost.toFixed(4))).toBe(boost);
       }),
       { numRuns: 300 }
     );

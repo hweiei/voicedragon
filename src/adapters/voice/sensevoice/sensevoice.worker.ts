@@ -7,6 +7,7 @@
  */
 
 import { EndpointPolicy } from "../../../core/endpoint";
+import { FLUSH_FALLBACK_RESULT, flushNeedsFallbackResult } from "../../../core/voice-flush";
 
 export type UpstreamMessage =
   | {
@@ -144,18 +145,24 @@ function decodeSegment(rec: OfflineRecognizerLike, samples: Float32Array): strin
   return stripCjkSpaces((result.text || "").trim());
 }
 
-function drainVadAndDecode(): void {
-  if (!vad || !recognizer) return;
+/** 排空 VAD 队列并逐段解码。返回实际回传了结果的段数（0 = 没有可识别内容）。 */
+function drainVadAndDecode(): number {
+  let decoded = 0;
+  if (!vad || !recognizer) return decoded;
   while (!vad.isEmpty()) {
     const segment = vad.front();
     const started = performance.now();
     const text = decodeSegment(recognizer, segment.samples);
     const recognitionTimeMs = Math.round(performance.now() - started);
     const durationMs = Math.round((segment.samples.length / EXPECTED_SAMPLE_RATE) * 1000);
-    if (text) post({ type: "result", text, durationMs, recognitionTimeMs });
+    if (text) {
+      post({ type: "result", text, durationMs, recognitionTimeMs });
+      decoded += 1;
+    }
     vad.pop();
     isSpeaking = false;
   }
+  return decoded;
 }
 
 function handleInit(msg: Extract<UpstreamMessage, { type: "init" }>): void {
@@ -246,12 +253,23 @@ function handleEndpoint(msg: Extract<UpstreamMessage, { type: "endpoint" }>): vo
 }
 
 function handleFlush(): void {
-  if (!isReady || !vad || !recognizer) return;
+  if (!isReady || !vad || !recognizer) {
+    // 移动端兜底：引擎未就绪也要终结本次判定，否则 UI 端 pending 永远悬挂
+    if (flushNeedsFallbackResult(false, 0)) {
+      post({ type: "result", ...FLUSH_FALLBACK_RESULT });
+    }
+    return;
+  }
   try {
     vad.flush();
-    drainVadAndDecode();
+    const decoded = drainVadAndDecode();
     endpoint?.reset();
     isSpeaking = false;
+    if (flushNeedsFallbackResult(true, decoded)) {
+      // 移动端兜底：整段没采到可识别语音（上下文被挂起 / 全程静音 / 解码为空）时，
+      // 回空结果让 UI 收口——此前该场景一帧 result 都不发，界面卡死在"收音中"。
+      post({ type: "result", ...FLUSH_FALLBACK_RESULT });
+    }
   } catch (error) {
     isSpeaking = false;
     post({ type: "error", error: `判定失败：${(error as Error).message || error}` });

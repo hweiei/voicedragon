@@ -350,6 +350,10 @@ void buildAdapter(settings.voiceMode).then((adapter) => {
       const next = recordDifficultyResult(loadDifficultyStore(), difficultyKeyFor(context), won);
       saveDifficultyStore(next);
       return difficultySummary(next);
+    },
+    /** P14-fix 调试口：注入 stub 适配器，E2E 无麦/无模型也能核对停止按钮接线；不参与真实判定。 */
+    injectAdapter: (adapter: VoiceAdapter): void => {
+      ui.setVoiceAdapter(adapter);
     }
   },
   voiceServices

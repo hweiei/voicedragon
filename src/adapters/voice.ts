@@ -42,6 +42,11 @@ export interface VoiceAdapter {
   readonly supported: boolean;
   /** 是否立即可用（模型已缓存且引擎可拉起）。 */
   readonly ready: boolean;
+  /**
+   * 移动端：在「开始收音」的用户手势同步段调用，预热音频上下文（iOS 解锁要求）。
+   * 非麦克风通道的适配器可不实现。
+   */
+  unlockCapture?(): void;
   start(options: VoiceStartOptions): void;
   stop(): void;
   cancel(): void;

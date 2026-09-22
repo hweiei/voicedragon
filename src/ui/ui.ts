@@ -1980,12 +1980,20 @@ export class GameUI {
     if (!this.pendingVoice || !this.adapter) return;
     const { skill } = this.pendingVoice;
     const adapter = this.adapter;
+    // 移动端：必须在点击手势的同步段预热音频上下文，否则 iOS 上管线静默（见 recorder 注释）
+    adapter.unlockCapture?.();
     const orb = this.modalRoot.querySelector<HTMLElement>("#voice-orb");
     const text = this.modalRoot.querySelector<HTMLElement>("#voice-live-text");
     const startButton = this.modalRoot.querySelector<HTMLButtonElement>(
       '[data-action="start-listening"]'
     );
     if (startButton) startButton.disabled = true;
+    const restoreStartButton = (): void => {
+      if (!startButton) return;
+      startButton.dataset.action = "start-listening";
+      startButton.disabled = false;
+      startButton.textContent = "开始收音";
+    };
     // P6-F2：升起龙吟环——音量驱动涨落，基频漂移六调域色相
     const auraCanvas = this.modalRoot.querySelector<HTMLCanvasElement>("#voice-aura-canvas");
     this.voiceAura?.stop();
@@ -2011,6 +2019,7 @@ export class GameUI {
       },
       onResult: (result) => {
         this.voiceAura?.stop();
+        restoreStartButton();
         this.showVoiceResult(result);
       },
       onError: (error: Error) => {
@@ -2020,9 +2029,17 @@ export class GameUI {
           orb.textContent = "未识别";
         }
         if (text) text.textContent = `${error.message}，请改用破阵拍。`;
-        if (startButton) startButton.disabled = false;
+        restoreStartButton();
       }
     });
+    // 移动端修复：收音中把主按钮变为「结束并判定」手动停止入口——
+    // 此前全仓库没有任何渲染 stop-listening 的按钮，手机既无"松手"语义、
+    // 音频管线又可能静默，用户完全没有结束手段。
+    if (startButton) {
+      startButton.dataset.action = "stop-listening";
+      startButton.disabled = false;
+      startButton.textContent = "结束并判定";
+    }
   }
 
   private toggleFallback(): void {
@@ -2952,6 +2969,8 @@ export class GameUI {
     const skill = this.currentPracticeSkill();
     const adapter = this.adapter;
     if (!skill || !adapter || this.practiceRecording) return;
+    // 移动端：手势同步段预热音频上下文（与主流程同理，见 recorder 注释）
+    adapter.unlockCapture?.();
     this.practiceResult = null;
     this.practiceLiveFrames = [];
     this.practiceRecording = true;
