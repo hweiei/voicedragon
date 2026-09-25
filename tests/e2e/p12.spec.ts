@@ -43,7 +43,10 @@ async function preset(page: Page, url = "/?mode=classic"): Promise<void> {
   });
   await page.goto(url);
   await page.waitForFunction(() =>
-    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+    Boolean(
+      (window as unknown as { __VOICE_TOWER__?: { voiceAdapter?: unknown } }).__VOICE_TOWER__
+        ?.voiceAdapter
+    )
   );
 }
 
@@ -107,7 +110,10 @@ test("坏码与跨版本码明确警告且不放行；标题屏照常可用", as
   // 跨版本前缀：明确说「码来自更新的版本」，仍不放行
   await page.goto("/?duel=future#c=VT2.AAAA.BBBB");
   await page.waitForFunction(() =>
-    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+    Boolean(
+      (window as unknown as { __VOICE_TOWER__?: { voiceAdapter?: unknown } }).__VOICE_TOWER__
+        ?.voiceAdapter
+    )
   );
   await expect(page.locator(".duel-warning")).toContainText("更新的版本");
   await expect(page.getByRole("button", { name: "以这个码开局 · 同码同局" })).toHaveCount(0);
@@ -171,6 +177,7 @@ test("切磋局结算写入本机战绩簿，并在结算屏显示同码最佳",
   const code = codeFor(BUNDLE);
   await preset(page, `/?duel=record#c=${code}`);
   await page.getByRole("button", { name: "以这个码开局 · 同码同局" }).click();
+  await expect(page.locator(".duel-banner")).toBeVisible();
   await page.evaluate(() => {
     const tower = (window as unknown as TowerWindow).__VOICE_TOWER__;
     tower.engine.state.floor = 9;

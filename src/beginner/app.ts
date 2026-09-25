@@ -1,5 +1,5 @@
 import "./style.css";
-import { SpeechTts } from "../adapters/tts";
+import { BOSS_STEPS, bossLesson, bossPrompt, bossView } from "./boss";
 import { aidsView, branchView, rewardView } from "./branch-view";
 import {
   CHUNKS,
@@ -11,6 +11,8 @@ import {
   rewardChoices
 } from "./branches";
 import { LESSONS, canAdvance, routeFor } from "./curriculum";
+import { BACKUP_LIMIT, exportJournal, importJournal } from "./journal-backup";
+import { LessonAudio } from "./lesson-audio";
 import { BEGINNER_KEY, freshProgress, restoreProgress } from "./progress";
 
 import {
@@ -25,7 +27,7 @@ import {
 } from "./journal";
 import { journalView } from "./journal-view";
 
-const tts = new SpeechTts();
+const tts = new LessonAudio((message) => toast(message));
 const KEY = BEGINNER_KEY;
 const fresh = () => freshProgress(Date.now() % 100000, crypto.randomUUID());
 let progress = fresh();
@@ -69,7 +71,9 @@ if (progress.completed.length) saveJournal();
 function currentLesson() {
   return reviewing
     ? LESSONS.find((l) => l.id === reviewIds[reviewIndex])!
-    : branchLesson(progress.floor, progress.routes[progress.floor] ?? "coach", progress.seed);
+    : progress.floor === 5
+      ? bossLesson(progress.bossRound)
+      : branchLesson(progress.floor, progress.routes[progress.floor] ?? "coach", progress.seed);
 }
 let started = false;
 let answered = false;
@@ -154,18 +158,42 @@ function render() {
             : !reviewing && !branchSelected(progress.routes, progress.floor)
               ? branchView(progress)
               : `<article class="lesson-card"><div class="card-top"><span class="tag">${reviewing ? "回忆房 · 先想再看" : progress.routes[progress.floor] === "challenge" ? "实战街 · 换个场景试一试" : progress.floor === 5 ? "终层 · 情境挑战" : "教学巷 · 学会再出发"}</span><span class="card-number">${reviewing ? `REVIEW ${reviewIndex + 1} / ${reviewIds.length}` : `FLOOR 0${progress.floor + 1}`}</span></div>
-  <h2 class="lesson-title">${lesson.title}</h2><div class="phrase ${hiddenRecall ? "hidden-phrase" : ""}">${hiddenRecall ? RECALL_PROMPTS[lesson.id] : lesson.phrase}</div><div class="jyutping">${hiddenRecall && (reviewing || !progress.relics.includes("粤拼灯牌")) ? "先试着回忆，再展开提示对照" : lesson.jyutping}</div><p class="meaning">${hiddenRecall ? "回忆练习不计发音分数；需要时可以听示范或查看提示。" : lesson.meaning}</p>
+  ${!reviewing && progress.floor === 5 ? bossView(progress.bossRound) : ""}
+  <h2 class="lesson-title">${lesson.title}</h2><div class="phrase ${hiddenRecall ? "hidden-phrase" : ""}">${hiddenRecall ? (!reviewing && progress.floor === 5 ? bossPrompt(progress.bossRound) : RECALL_PROMPTS[lesson.id]) : lesson.phrase}</div><div class="jyutping">${hiddenRecall && (reviewing || !progress.relics.includes("粤拼灯牌")) ? "先试着回忆，再展开提示对照" : lesson.jyutping}</div><p class="meaning">${hiddenRecall ? "回忆练习不计发音分数；需要时可以听示范或查看提示。" : lesson.meaning}</p>
   <div class="listen-actions"><button data-action="listen" class="soft-button">▷ 听示范</button><button data-action="slow" class="soft-button">◷ 慢速听</button><button data-action="hint" class="text-button">${showHint ? "收起提示" : "查看发音提示"} ↗</button></div>
   ${showHint ? `<div class="hint">${lesson.tip}</div>` : ""}
-  ${!reviewing ? aidsView(progress, lesson.id, progress.completed) : ""}
-  ${!tts.cantoneseAvailable ? '<div class="voice-warning">当前设备未检测到粤语音色，不会用普通话替代示范。可先阅读与录音，或在安装粤语音色后重试。</div>' : '<div class="voice-ready">● 设备粤语示范可用 · 浏览器系统朗读</div>'}
+  ${!reviewing ? aidsView(progress, progress.floor === 5 && progress.bossRound !== 1 ? "please" : lesson.id, progress.completed) : ""}
+  <div class="voice-ready">● 内置粤语合成示范 · 缓存后可离线听 · 尚待母语审校</div>
   <div class="practice"><div class="step-label"><b>01</b> 开口跟读 <span>先练习，不评分</span></div><button data-action="record" class="record-button ${recorder?.state === "recording" ? "recording" : ""}" ${requesting ? "disabled" : ""}><span>◉</span>${requesting ? "等待麦克风权限…" : recorder?.state === "recording" ? "录音中 · 点击结束" : recorded ? "再说一次" : "点击开始跟读"}<small>${recorder?.state === "recording" ? "最长 12 秒 · 音频仅本机暂存" : "麦克风录音 · 不上传"}</small></button>${audioUrl ? '<button data-action="play" class="soft-button playback">▷ 回听我的录音</button><span class="record-ok">✓ 已完成录音，未评测发音</span>' : ""}<button data-action="reading" class="reading-link">${readingOnly ? "✓ 当前为阅读模式（不计口语完成）" : "暂时不方便开口？切换阅读模式"}</button></div>
   ${(reviewing || progress.routes[progress.floor] === "challenge") && !showHint && !recorded && !readingOnly ? '<div class="recall-first">先尝试回忆并录音，再做场景选择。需要帮助时，可展开上方提示；暂时不方便开口也可以使用阅读模式。</div>' : `<div class="understanding"><div class="step-label"><b>02</b> ${progress.floor === 5 ? "完成最后的情境任务" : "听懂了，也用对了"}</div><h3>${lesson.question}</h3><div class="answers">${lesson.answers.map((a, i) => `<button data-answer="${i}" class="answer ${answered && i === lesson.correct ? "correct" : ""}" ${answered ? "disabled" : ""}><span>${["A", "B", "C"][i]}</span>${a}${answered && i === lesson.correct ? " ✓" : ""}</button>`).join("")}</div></div>`}
 
-  ${reviewing ? `<div class="recall-rating"><p>完成练习后，诚实告诉自己：这句话想起来了吗？</p><div><button data-rating="again" class="soft-button" ${canAdvance(answered, recorded, readingOnly) && !requesting && recorder?.state !== "recording" ? "" : "disabled"}>还要练 · 10 分钟后</button><button data-rating="remembered" class="primary" ${canAdvance(answered, recorded, readingOnly) && !requesting && recorder?.state !== "recording" ? "" : "disabled"}>记起来了 · 延后复习</button></div><small>这是回忆自评，不是系统对发音或掌握程度的判断。</small><button class="text-button" data-action="review-exit">退出复习，保留已完成记录</button></div>` : `<footer class="card-footer"><span>${answered ? "✓ 场景理解完成" : "完成跟读与场景选择，点亮下一层"}</span><button data-action="next" class="primary" ${canAdvance(answered, recorded, readingOnly) && !requesting && recorder?.state !== "recording" ? "" : "disabled"}>${progress.floor === 5 ? "完成登塔" : "收下奖励，继续登塔"} <span>↗</span></button></footer>`}</article>`
+  ${reviewing ? `<div class="recall-rating"><p>完成练习后，诚实告诉自己：这句话想起来了吗？</p><div><button data-rating="again" class="soft-button" ${canAdvance(answered, recorded, readingOnly) && !requesting && recorder?.state !== "recording" ? "" : "disabled"}>还要练 · 10 分钟后</button><button data-rating="remembered" class="primary" ${canAdvance(answered, recorded, readingOnly) && !requesting && recorder?.state !== "recording" ? "" : "disabled"}>记起来了 · 延后复习</button></div><small>这是回忆自评，不是系统对发音或掌握程度的判断。</small><button class="text-button" data-action="review-exit">退出复习，保留已完成记录</button></div>` : `<footer class="card-footer"><span>${answered ? "✓ 场景理解完成" : "完成跟读与场景选择，点亮下一层"}</span><button data-action="next" class="primary" ${canAdvance(answered, recorded, readingOnly) && !requesting && recorder?.state !== "recording" ? "" : "disabled"}>${progress.floor === 5 ? (progress.bossRound < 2 ? "继续对话" : "完成登塔") : "收下奖励，继续登塔"} <span>↗</span></button></footer>`}</article>`
   }
   <div id="notice" role="status" aria-live="polite">${esc(message)}</div><div class="bottom-note"><span>✧ 每一次开口，都算数。</span><span>学习原型 · 粤拼与内容待母语审校</span></div></section>
   <aside class="side"><div class="daily panel"><div class="eyebrow">TONIGHT’S QUEST</div><h3>今晚，迈出第一步</h3><p>完成六层练习，走进霓虹冰室，独立尝试一次点单。</p><div class="progress-track"><i style="width:${(progress.completed.length / 6) * 100}%"></i></div><small>${progress.completed.length} / 6 层已完成</small><div class="quest-icon">茶</div></div><div class="panel bag"><div class="eyebrow">YOUR INVENTORY</div><h3>随身锦囊 <span>${progress.relics.length.toString().padStart(2, "0")}</span></h3>${progress.relics.length ? progress.relics.map((r) => `<div class="bag-item">✧ <span>${esc(r)}<small>${RELIC_INFO[r]?.description ?? "旧版纪念奖励"}</small></span></div>`).join("") : '<div class="empty-bag">◇<p>每次过关，带走一份奖励。<br>让下一次开口更从容。</p></div>'}</div><div class="tip-panel"><span>街坊小贴士</span><p>「讲错唔紧要，<br>最紧要肯开口。」</p><small>说错没关系，愿意开口最重要。</small></div><button data-action="restart" class="text-button restart">↻ 重新开始一局</button></aside></main><footer class="site-footer"><span>声震龙楼 / VOICE DRAGON</span><span>用声音探索一座城，用一句话靠近一种生活。</span><span>粤语 · 普通话学习者入门</span></footer></div>`;
+  const importInput = root.querySelector<HTMLInputElement>("#journal-import");
+  if (importInput)
+    importInput.onchange = async () => {
+      const file = importInput.files?.[0];
+      if (!file) return;
+      try {
+        if (file.size > BACKUP_LIMIT) throw new Error("文件超过 1 MiB，不能导入。");
+        const candidate = importJournal(await file.text());
+        if (requesting || recorder?.state === "recording") throw new Error("请先结束录音再导入。");
+        if (
+          !confirm(
+            `备份包含 ${Object.keys(candidate.entries).length} 句练习记录。将覆盖当前学习手账，不改动本局路线或原版冒险存档。确定恢复？`
+          )
+        )
+          return;
+        journal = candidate;
+        saveJournal();
+        message = "学习手账已恢复。";
+        render();
+      } catch (error) {
+        toast(error instanceof Error ? error.message : "备份读取失败。");
+      }
+    };
   for (const el of root.querySelectorAll<HTMLElement>("[data-action]")) {
     el.onclick = () => void action(el.dataset.action!);
   }
@@ -242,10 +270,12 @@ function render() {
         return;
       }
       if (!tts.cantoneseAvailable) {
-        toast("未找到粤语音色，暂时不能播放分句示范。");
+        toast("分句示范暂时无法播放，请重试。");
         return;
       }
-      const text = CHUNKS[lesson.id]?.[Number(el.dataset.chunk)];
+      const text = (
+        progress.floor === 5 && progress.bossRound !== 1 ? ["唔该"] : CHUNKS[lesson.id]
+      )?.[Number(el.dataset.chunk)];
       if (text) {
         activeAudio?.pause();
         tts.speak(text, { rate: 0.7 });
@@ -296,6 +326,32 @@ function leaveReview() {
 }
 async function action(name: string) {
   started = true;
+  if (name === "journal-export") {
+    const blob = new Blob([exportJournal(journal, new Date().toISOString())], {
+      type: "application/json"
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `voice-dragon-journal-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast("手账备份已导出，不包含录音或识别文本。");
+    return;
+  }
+  if (name === "journal-import") {
+    root.querySelector<HTMLInputElement>("#journal-import")?.click();
+    return;
+  }
+  if (name === "npc-listen") {
+    if (requesting || recorder?.state === "recording") {
+      toast("请先结束录音，再听店员说话。");
+      return;
+    }
+    activeAudio?.pause();
+    void tts.speak("奶茶到喇，慢慢饮。");
+    return;
+  }
   if (["journal", "journal-close", "review-exit", "review-start"].includes(name)) {
     if (requesting || recorder?.state === "recording") {
       toast("请先结束录音，再切换页面。");
@@ -322,7 +378,7 @@ async function action(name: string) {
   }
   if (name === "help") {
     toast(
-      "每层：选教学巷或实战街 → 听示范 → 录音跟读或阅读 → 回答场景题 → 领取不重复锦囊。实战街先隐藏答案，并开放更广的奖励选择。录音只在当前页面暂存，不做自动发音评测。原版自由冒险有独立存档与语音设置。"
+      "每层：选教学巷或实战街 → 听示范 → 录音跟读或阅读 → 回答场景题 → 领取不重复锦囊。实战街先隐藏答案，并开放更广的奖励选择。示范为内置粤语合成音频，录音只在当前页面暂存，不做自动发音评测。终层需完成招呼、点单与回应三轮。原版自由冒险有独立存档与语音设置。"
     );
     return;
   }
@@ -332,7 +388,7 @@ async function action(name: string) {
     return;
   }
   if (name === "listen" || name === "slow") {
-    if (recorder?.state === "recording") {
+    if (requesting || recorder?.state === "recording") {
       toast("请先结束录音，再播放示范。");
       return;
     }
@@ -342,7 +398,7 @@ async function action(name: string) {
     }
     activeAudio?.pause();
     tts.speak(currentLesson().phrase, {
-      rate: name === "slow" ? (progress.relics.includes("慢声耳机") ? 0.55 : 0.7) : 0.9
+      rate: name === "slow" ? (progress.relics.includes("慢声耳机") ? 0.55 : 0.7) : 1
     });
     return;
   }
@@ -440,11 +496,27 @@ async function action(name: string) {
     recorder?.state !== "recording" &&
     canAdvance(answered, recorded, readingOnly)
   ) {
+    if (progress.floor === 5) {
+      if (recorded && !progress.bossSpoken.includes(progress.bossRound))
+        progress.bossSpoken.push(progress.bossRound);
+      if (progress.bossRound < 2) {
+        progress.bossRound++;
+        answered = false;
+        recorded = false;
+        showHint = progress.routes[progress.floor] === "coach";
+        clearAudio();
+        save();
+        message = `进入第 ${progress.bossRound + 1} 轮：${BOSS_STEPS[progress.bossRound]}`;
+        render();
+        return;
+      }
+    }
+    const taskSpoken = progress.floor === 5 ? progress.bossSpoken.length === 3 : recorded;
     const id = LESSONS[progress.floor].id;
-    journal = recordPractice(journal, `${progress.runId}:${id}`, id, recorded, Date.now());
+    journal = recordPractice(journal, `${progress.runId}:${id}`, id, taskSpoken, Date.now());
     saveJournal();
     if (!progress.completed.includes(id)) progress.completed.push(id);
-    if (recorded && !progress.spoken.includes(id)) progress.spoken.push(id);
+    if (taskSpoken && !progress.spoken.includes(id)) progress.spoken.push(id);
     clearAudio();
     if (progress.floor === 5) progress.done = true;
     else stage = "reward";

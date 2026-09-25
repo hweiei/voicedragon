@@ -47,8 +47,14 @@ test("混合路线六层通关，五件奖励各不重复，手机选路无溢�
       BEGINNER_KEY
     );
     const lesson = branchLesson(floor, floor % 2 ? "challenge" : "coach", state?.seed ?? 0);
-    await page.locator(`[data-answer="${lesson.correct}"]`).click();
+    await page.locator(`[data-answer="${floor === 5 ? 0 : lesson.correct}"]`).click();
     await page.locator('[data-action="next"]').click();
+    if (floor === 5) {
+      for (const answer of [1, 2]) {
+        await page.locator(`[data-answer="${answer}"]`).click();
+        await page.locator('[data-action="next"]').click();
+      }
+    }
     if (floor < 5) await page.locator("[data-relic]").first().click();
   }
   await expect(page.locator(".summary")).toBeVisible();

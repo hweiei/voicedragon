@@ -73,6 +73,30 @@ const serviceWorker = text("sw.js");
 const headers = text("_headers");
 const allFiles = filesBelow(distDir);
 
+// P21: first-chapter demonstrations must ship and be available to the offline shell.
+const chapterAudio = [
+  "greeting",
+  "please",
+  "order",
+  "price",
+  "thanks",
+  "boss",
+  "want",
+  "cup",
+  "milk-tea",
+  "served"
+];
+for (const clip of chapterAudio) {
+  const path = `audio/yue/${clip}.mp3`;
+  check(
+    `粤语示范与离线缓存 ${clip}`,
+    existsSync(join(distDir, path)) &&
+      statSync(join(distDir, path)).size > 1000 &&
+      serviceWorker.includes(path)
+  );
+}
+check("粤语合成示范来源说明", existsSync(join(distDir, "audio/yue/provenance.json")));
+
 check(
   "HTML 标题与描述存在",
   index.includes("<title>声震龙楼") && index.includes('name="description"')

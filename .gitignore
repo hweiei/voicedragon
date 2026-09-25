@@ -33,3 +33,7 @@ public/models/
 *.onnx
 *.data
 test-results/
+
+# Local release packages (build output, not source)
+releases/*.zip
+releases/*.sha256

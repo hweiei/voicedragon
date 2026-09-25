@@ -1434,3 +1434,67 @@ a:focus-visible {
     min-width: 0;
   }
 }
+
+.boss-dialogue {
+  margin: 22px 0 25px;
+}
+.boss-rounds {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.boss-rounds span {
+  border-bottom: 2px solid #485369;
+  padding: 12px 3px;
+  font-size: 10px;
+  color: #a8b2c6;
+  text-align: center;
+}
+.boss-rounds .current {
+  color: #f4b8ce;
+  border-color: #f4b8ce;
+}
+.boss-rounds .done {
+  color: #a5e3cb;
+  border-color: #80bca8;
+}
+.npc-line {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  background: #101924b3;
+  border: 1px solid #425667;
+  border-radius: 10px;
+  padding: 15px;
+}
+.npc-line > span {
+  border: 1px solid #b5867e;
+  border-radius: 8px;
+  color: #e2b8a4;
+  font: 28px serif;
+  padding: 7px 10px;
+}
+.npc-line p {
+  margin: 0;
+  color: #c5d3dc;
+  font-size: 12px;
+  line-height: 1.9;
+}
+.npc-line small {
+  display: block;
+  color: #b69887;
+  font-size: 9px;
+  margin-bottom: 5px;
+}
+.npc-line button {
+  display: block;
+  color: #bbe0d3;
+}
+.boss-credit {
+  display: block;
+  font-size: 9px;
+  color: #b4bdcf;
+  line-height: 1.8;
+  margin-top: 11px;
+}

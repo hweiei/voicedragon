@@ -12,8 +12,14 @@ await page.locator('[data-answer="1"]').click();
 assert.equal(await page.locator("[data-action=next]").isDisabled(), true);
 await page.locator("[data-action=reading]").click();
 for (let i = 0; i < 6; i++) {
-  await page.locator(`[data-answer="${[0, 1, 2, 0, 1, 2][i]}"]`).click();
+  await page.locator(`[data-answer="${[0, 1, 2, 0, 1, 0][i]}"]`).click();
   await page.locator("[data-action=next]").click();
+  if (i === 5) {
+    for (const answer of [1, 2]) {
+      await page.locator(`[data-answer="${answer}"]`).click();
+      await page.locator('[data-action="next"]').click();
+    }
+  }
   if (i < 5) {
     await page.locator("[data-relic]").first().click();
     await page.locator('[data-route="coach"]').click();

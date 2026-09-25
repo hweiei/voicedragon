@@ -15,7 +15,7 @@ export default defineConfig({
   },
   build: {
     target: "es2022",
-    sourcemap: true
+    sourcemap: false
   },
   worker: {
     // Classic Worker（iife）：sherpa-onnx importScripts 需要非 module 语义
@@ -79,7 +79,7 @@ export default defineConfig({
       workbox: {
         // vendored sherpa wasm ~11.7MB，放宽预算以便离线可用
         maximumFileSizeToCacheInBytes: 25 * 1024 * 1024,
-        globPatterns: ["**/*.{js,css,html,svg,woff2,wasm}"],
+        globPatterns: ["**/*.{js,css,html,svg,woff2,wasm,mp3}"],
         globIgnores: ["**/*.data"],
         navigateFallbackDenylist: [/^\/__/, /manifest\.webmanifest/]
       }

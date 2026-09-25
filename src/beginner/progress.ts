@@ -6,6 +6,8 @@ export const RELICS = Object.keys(RELIC_INFO);
 export interface Progress {
   runId: string;
   routes: RouteKind[];
+  bossRound: number;
+  bossSpoken: number[];
   floor: number;
   completed: string[];
   spoken: string[];
@@ -17,6 +19,8 @@ export function freshProgress(seed: number, runId = `legacy-${seed}`): Progress 
   return {
     runId,
     routes: ["coach"],
+    bossRound: 0,
+    bossSpoken: [],
     floor: 0,
     completed: [],
     spoken: [],
@@ -67,7 +71,25 @@ export function restoreProgress(raw: unknown, seed: number): Progress {
     (count > floor && routes.length !== floor + 1)
   )
     return fallback;
+  const bossRound = value.bossRound ?? (value.done ? 2 : 0);
+  const bossSpoken =
+    value.bossSpoken ?? (value.done && value.spoken.includes("boss") ? [0, 1, 2] : []);
+  if (
+    !Number.isInteger(bossRound) ||
+    bossRound < 0 ||
+    bossRound > 2 ||
+    !Array.isArray(bossSpoken) ||
+    bossSpoken.some(
+      (round) =>
+        !Number.isInteger(round) || round < 0 || round > 2 || (!value.done && round >= bossRound)
+    ) ||
+    (floor < 5 && (bossRound !== 0 || bossSpoken.length !== 0)) ||
+    (value.done && bossRound !== 2)
+  )
+    return fallback;
   return {
+    bossRound,
+    bossSpoken: [...new Set(bossSpoken)],
     routes: [...routes],
     runId:
       typeof value.runId === "string" && /^[\w-]{1,80}$/.test(value.runId)

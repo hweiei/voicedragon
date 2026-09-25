@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "language": "yue",
+  "kind": "AI-generated spoken demonstration",
+  "created": "2026-09-25",
+  "selection": "User-selected feminine educational voice in this session",
+  "review": "Not yet independently reviewed by a Cantonese native speaker",
+  "files": [
+    {
+      "file": "boss.mp3",
+      "bytes": 23632,
+      "sha256": "2843ed9d17ac9d65fccd317e2af32c66bc2ffa6240f89701a078576a8cf28abf"
+    },
+    {
+      "file": "cup.mp3",
+      "bytes": 6914,
+      "sha256": "751ed5a30223b766c79aac843e922b063959e9efd9306309cac1819de9da3df9"
+    },
+    {
+      "file": "greeting.mp3",
+      "bytes": 7750,
+      "sha256": "709ab848becb2aafabad2aec9191de3a276e4e426a712bb1f56fd861815d4140"
+    },
+    {
+      "file": "milk-tea.mp3",
+      "bytes": 9422,
+      "sha256": "8f1ae0d41536a9f51932e57c1a9788789b1b4a5811f4e11ed0b670386bfd83c3"
+    },
+    {
+      "file": "order.mp3",
+      "bytes": 10467,
+      "sha256": "b79c3ac2628df9831eeb5abc3845ce6fe0d10fe409c2a57aa3f2cce40e5de7b4"
+    },
+    {
+      "file": "please.mp3",
+      "bytes": 6287,
+      "sha256": "a8401d43fb49a84807a87e88b87b327ec68d2ee1fe09bfd3a2d81d2c7e31af11"
+    },
+    {
+      "file": "price.mp3",
+      "bytes": 6914,
+      "sha256": "04a6bceae670c32483b34723c892fbb29bc0ea2536922702b6b7e91c76730695"
+    },
+    {
+      "file": "served.mp3",
+      "bytes": 15900,
+      "sha256": "356e13da72657a46ef0f3576b71fc41748308e24c663dcff530ea25bcbc75962"
+    },
+    {
+      "file": "thanks.mp3",
+      "bytes": 7750,
+      "sha256": "c2a09d7113e5f7c06917141b0433b23d4aabecb936d109648bd0e50738baf7a9"
+    },
+    {
+      "file": "want.mp3",
+      "bytes": 8377,
+      "sha256": "0efe9ff2fa462152df2e0e5aac41eb306a6c8429adc09a7838ab31ed4c30edcd"
+    }
+  ]
+}

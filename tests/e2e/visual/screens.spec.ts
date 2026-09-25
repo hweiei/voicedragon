@@ -79,7 +79,11 @@ for (const reduceMotion of MOTION) {
     await page.locator('[data-action="choose-floor"]').first().click();
     await expect(page.locator(".battle-screen")).toBeVisible();
     await settle(page, reduceMotion);
-    await expect(page).toHaveScreenshot(`battle-${tag}.png`);
+    await expect(page.locator("#toast")).toBeHidden({ timeout: 5000 });
+    // Capture the complete battle from a fixed origin, never a crop inherited from map scrolling.
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+    await expect(page).toHaveScreenshot(`battle-${tag}.png`, { fullPage: true });
   });
 
   test(`学习报告（${tag}）`, async ({ page }) => {

@@ -3,6 +3,10 @@
 > 首选 Cloudflare Pages（纯静态 `dist/`、可下发安全头）；GitHub Pages 为零密钥备选。
 > P8-E 自动门见 `docs/RELEASE-READINESS-PLAN.md`，必须依赖真机/线上域名的项目见 `docs/DEVICE-TEST-MATRIX.md`。
 
+## v0.3.0 首章发布说明
+
+首章已包含固定粤语合成音频与离线缓存、三轮点单、手账备份。Pages现在会在main的CI成功后自动部署；首次仍需管理员设置Pages Source为GitHub Actions。SSH deploy key不能配置Pages。完整新验收记录见 `P21-FIRST-CHAPTER-RELEASE.md`，下文早期期次数量仅为历史说明。
+
 ## 1. 发布前一键验收
 
 新环境先安装三种 Playwright 浏览器：

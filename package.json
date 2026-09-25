@@ -1,6 +1,6 @@
 {
   "name": "voice-tower-cantonese-roguelike",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "粤语语音驱动的 Web 爬塔闯关 Roguelike（《声震龙楼》v2）",
@@ -20,7 +20,7 @@
     "test:visual": "vite build && playwright test --config=playwright.visual.config.ts",
     "test:release": "vite build && playwright test --config=playwright.release.config.ts",
     "test:lighthouse": "vite build && vite-node scripts/lighthouse-budget.ts",
-    "release:check": "npm run ci && npm run test:e2e && npm run test:release && npm run test:lighthouse && npm run sim:p8b",
+    "release:check": "npm run ci && npm run test:e2e && npm run test:release && npm run test:lighthouse && npm run test:visual && npm run sim:p8b",
     "codegraph": "codegraph init --yes . || codegraph sync .",
     "codegraph:sync": "codegraph sync .",
     "codegraph:status": "codegraph status .",

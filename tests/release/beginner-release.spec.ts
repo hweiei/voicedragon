@@ -45,6 +45,11 @@ test("新手首页安装壳可离线重载", async ({ browserName, page, context
     await context.setOffline(true);
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.locator(".phrase")).toHaveText("你好");
+    const audioBytes = await page.evaluate(async () => {
+      const response = await fetch("./audio/yue/greeting.mp3");
+      return response.ok ? (await response.arrayBuffer()).byteLength : 0;
+    });
+    expect(audioBytes).toBeGreaterThan(1000);
     await page.locator('[data-action="reading"]').click();
     await expect(page.locator('[data-action="reading"]')).toContainText("当前为阅读模式");
   } finally {

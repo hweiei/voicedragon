@@ -6,7 +6,7 @@ export function journalView(journal: Journal, now: number): string {
   const due = dueCount(journal, now);
   return `<article class="lesson-card journal-view"><div class="tag">LEARNING JOURNAL / 学习手账</div><h2>学过的话，不留在上一局。</h2><p class="journal-intro">重开冒险不会清空这本手账。先回想，再看提示；今天只复习三句，也很好。</p>
     <div class="journal-metrics"><div><strong>${entries.length}</strong><span>已练表达 · 不代表掌握</span></div><div><strong>${due}</strong><span>当前到期复习</span></div><div><strong>${entries.reduce((sum, e) => sum + e.recording, 0)}</strong><span>累计录音尝试</span></div></div>
-    <div class="journal-actions"><button class="primary" data-action="review-start" ${entries.length ? "" : "disabled"}>${due ? "开始到期复习" : "主动回顾三句"} ↗</button><button class="soft-button" data-action="journal-close">返回本局</button></div>
+    <div class="journal-actions"><button class="primary" data-action="review-start" ${entries.length ? "" : "disabled"}>${due ? "开始到期复习" : "主动回顾三句"} ↗</button><button class="soft-button" data-action="journal-close">返回本局</button><button class="soft-button" data-action="journal-export">导出备份 ↓</button><button class="soft-button" data-action="journal-import">恢复备份 ↑</button><input id="journal-import" type="file" accept="application/json,.json" aria-label="选择学习手账备份" hidden></div>
     ${
       entries.length
         ? `<div class="journal-entries">${LESSONS.filter((l) => journal.entries[l.id])
@@ -21,5 +21,5 @@ export function journalView(journal: Journal, now: number): string {
             .join("")}</div>`
         : '<div class="journal-empty">手账还是空的。<br>完成任意一层后，第一句就会自动记在这里。</div>'
     }
-    <p class="journal-disclaimer">仅保存本浏览器的练习次数、复习时间和自评。清除网站数据会丢失记录；不保存音频，不提供发音评分，也不会与原版学习档案自动合并。</p></article>`;
+    <p class="journal-disclaimer">仅保存本浏览器的练习次数、复习时间和自评。可导出 JSON 备份并在另一浏览器恢复。清除网站数据会丢失未备份记录；不保存音频，不提供发音评分，也不会与原版学习档案自动合并。</p></article>`;
 }

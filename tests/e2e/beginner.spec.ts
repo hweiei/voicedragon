@@ -8,7 +8,7 @@ test.use({
   }
 });
 
-const answerIndices = [0, 1, 2, 0, 1, 2];
+const answerIndices = [0, 1, 2, 0, 1, 0];
 test("六层阅读通关、奖励与刷新恢复，不伪造口语次数", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator(".phrase")).toHaveText("你好");
@@ -19,6 +19,12 @@ test("六层阅读通关、奖励与刷新恢复，不伪造口语次数", async
   for (let index = 0; index < 6; index++) {
     await page.locator(`[data-answer="${answerIndices[index]}"]`).click();
     await page.locator('[data-action="next"]').click();
+    if (index === 5) {
+      for (const answer of [1, 2]) {
+        await page.locator(`[data-answer="${answer}"]`).click();
+        await page.locator('[data-action="next"]').click();
+      }
+    }
     if (index < 5) {
       await page.locator("[data-relic]").first().click();
       await page.locator('[data-route="coach"]').click();
@@ -80,7 +86,7 @@ test("麦克风拒绝后可切阅读模式，无假录音记录", async ({ page 
   await expect(page.locator('[data-action="next"]')).toBeEnabled();
 });
 
-test("没有粤语声音时拒绝普通话示范", async ({ page }) => {
+test("没有系统粤语声音时仍播放内置粤语示范", async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(speechSynthesis, "getVoices", {
       value: () => [{ name: "Mandarin", lang: "zh-CN" }]
@@ -95,7 +101,7 @@ test("没有粤语声音时拒绝普通话示范", async ({ page }) => {
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
   await page.locator('[data-action="listen"]').click();
-  await expect(page.locator("#notice")).toContainText("未找到粤语音色");
+  await expect(page.locator("#notice")).toContainText("正在播放内置粤语合成示范");
   expect(errors).toEqual([]);
 });
 
