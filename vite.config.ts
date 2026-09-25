@@ -22,6 +22,9 @@ export default defineConfig({
     format: "iife"
   },
   test: {
+    // Bound simulation workers on shared runners; preserve all assertions and timeouts.
+    maxWorkers: 1,
+    minWorkers: 1,
     environment: "node",
     include: ["tests/**/*.test.ts"]
   },

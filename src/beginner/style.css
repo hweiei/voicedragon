@@ -996,3 +996,183 @@ a:focus-visible {
 .lesson-title {
   font-weight: 400;
 }
+
+/* Learning journal: local aggregates and recall, separate from a single run. */
+.journal-nav {
+  color: #b8ddd1;
+  border: 1px solid #49665f;
+  background: #172b2b;
+  padding: 9px 12px;
+  border-radius: 7px;
+  font-size: 11px;
+}
+.review-invitation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 17px;
+  padding: 10px 14px;
+  border: 1px solid #354941;
+  background: #16272380;
+  border-radius: 8px;
+  color: #a4c9bd;
+  font-size: 10px;
+}
+.review-invitation .text-button {
+  color: #b6dfd1;
+  white-space: nowrap;
+}
+.journal-view h2 {
+  margin: 25px 0 12px;
+  font-size: 24px;
+  font-weight: 550;
+  line-height: 1.6;
+}
+.journal-intro,
+.review-summary p {
+  color: #a5b1c5;
+  font-size: 12px;
+  line-height: 2;
+}
+.journal-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 28px 0;
+  gap: 10px;
+}
+.journal-metrics > div {
+  padding: 16px 10px;
+  border-radius: 8px;
+  border: 1px solid #384456;
+  background: #121a2580;
+}
+.journal-metrics strong {
+  display: block;
+  font-family: monospace;
+  font-size: 28px;
+  font-weight: 500;
+  color: #addfcb;
+}
+.journal-metrics span {
+  display: block;
+  font-size: 10px;
+  color: #a5b1c5;
+  line-height: 1.8;
+  margin-top: 8px;
+}
+.journal-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+.journal-entry {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 19px 0;
+  border-top: 1px solid #ffffff14;
+}
+.journal-entry strong {
+  font-size: 16px;
+  font-weight: 500;
+}
+.journal-entry small {
+  display: block;
+  color: #a3b0c3;
+  font-size: 10px;
+  line-height: 1.8;
+  margin-top: 5px;
+}
+.journal-entry > div:last-child {
+  text-align: right;
+}
+.journal-entry span {
+  font-size: 11px;
+  color: #b4c2d4;
+}
+.journal-empty {
+  padding: 45px 12px;
+  text-align: center;
+  color: #acb9cb;
+  line-height: 2;
+  font-size: 13px;
+}
+.journal-disclaimer {
+  border-top: 1px solid #ffffff14;
+  padding-top: 18px;
+  margin: 18px 0 0;
+  color: #a2aec3;
+  font-size: 10px;
+  line-height: 1.9;
+}
+.recall-rating {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid #ffffff14;
+}
+.recall-rating p {
+  font-size: 12px;
+  color: #c0cbdc;
+  line-height: 1.8;
+}
+.recall-rating > div {
+  display: flex;
+  gap: 10px;
+  margin: 16px 0;
+}
+.recall-rating small {
+  color: #a2aec3;
+  font-size: 10px;
+  display: block;
+  line-height: 1.8;
+}
+.recall-rating > button {
+  margin-top: 14px;
+  color: #adb9ce;
+}
+.review-summary {
+  text-align: center;
+  padding-bottom: 40px;
+}
+.review-summary h2 {
+  font-size: 25px;
+}
+.review-summary .soft-button {
+  margin: 12px;
+}
+@media (max-width: 760px) {
+  .header nav .journal-nav {
+    display: none;
+  }
+  .review-invitation {
+    padding: 8px 10px;
+    font-size: 9px;
+  }
+  .journal-view h2 {
+    font-size: 20px;
+  }
+  .journal-entry {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .journal-entry > div:last-child {
+    text-align: left;
+  }
+  .recall-rating > div {
+    flex-direction: column;
+  }
+  .recall-rating button {
+    min-height: 44px;
+  }
+}
+.recall-first {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px dashed #52726b;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.9;
+  color: #b2d4c9;
+}

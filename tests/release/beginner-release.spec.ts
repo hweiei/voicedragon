@@ -51,3 +51,23 @@ test("新手首页安装壳可离线重载", async ({ browserName, page, context
     await context.setOffline(false);
   }
 });
+
+test("学习手账与回忆自评在浏览器矩阵中可用", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('[data-action="reading"]').click();
+  await page.locator('[data-answer="0"]').click();
+  await page.locator('[data-action="next"]').click();
+  await page.locator('.review-invitation [data-action="journal"]').click();
+  await expect(page.locator(".journal-entry")).toContainText("阅读 1 次");
+  await page.locator('[data-action="review-start"]').click();
+  await expect(page.locator(".recall-first")).toBeVisible();
+  await expect(page.locator(".answers")).toHaveCount(0);
+  await page.locator('[data-action="reading"]').click();
+  await page.locator('[data-answer="0"]').click();
+  await page.locator('[data-rating="again"]').click();
+  await expect(page.locator(".review-summary")).toContainText("本次完成 1 句回顾");
+  await page.reload();
+  await expect(page.locator(".reward")).toBeVisible();
+  await page.locator('.review-invitation [data-action="journal"]').click();
+  await expect(page.locator(".journal-entry")).toContainText("阅读 2 次");
+});

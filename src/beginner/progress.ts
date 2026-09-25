@@ -3,6 +3,7 @@ import { LESSONS } from "./curriculum";
 export const BEGINNER_KEY = "voice-dragon-beginner-v1";
 export const RELICS = ["慢声耳机", "粤拼灯牌", "回声纪念章"];
 export interface Progress {
+  runId: string;
   floor: number;
   completed: string[];
   spoken: string[];
@@ -10,8 +11,8 @@ export interface Progress {
   seed: number;
   done: boolean;
 }
-export function freshProgress(seed: number): Progress {
-  return { floor: 0, completed: [], spoken: [], relics: [], seed, done: false };
+export function freshProgress(seed: number, runId = `legacy-${seed}`): Progress {
+  return { runId, floor: 0, completed: [], spoken: [], relics: [], seed, done: false };
 }
 /** White-list a coherent sequential save; never trust imported UI values or unbounded arrays. */
 export function restoreProgress(raw: unknown, seed: number): Progress {
@@ -42,6 +43,10 @@ export function restoreProgress(raw: unknown, seed: number): Progress {
   )
     return fallback;
   return {
+    runId:
+      typeof value.runId === "string" && /^[\w-]{1,80}$/.test(value.runId)
+        ? value.runId
+        : `legacy-${value.seed}`,
     floor,
     seed: value.seed!,
     done: value.done,
