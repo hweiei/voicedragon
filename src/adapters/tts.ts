@@ -21,6 +21,7 @@ export function pickCantoneseVoice(voices: VoiceLike[]): VoiceLike | null {
     voices.find((voice) => voice.name.toLowerCase().includes(kw.toLowerCase()));
   return (
     voices.find((voice) => norm(voice.lang) === "zh-hk") ??
+    voices.find((voice) => /^yue(?:-|$)/.test(norm(voice.lang))) ??
     byName("cantonese") ??
     byName("yue") ??
     voices.find((voice) => norm(voice.lang).includes("hant-hk")) ??
@@ -40,6 +41,7 @@ export function hasCantoneseVoice(voices: VoiceLike[]): boolean {
     const name = voice.name.toLowerCase();
     return (
       lang === "zh-hk" ||
+      /^yue(?:-|$)/.test(lang) ||
       lang.includes("hant-hk") ||
       name.includes("cantonese") ||
       name.includes("yue")
@@ -75,9 +77,9 @@ export class SpeechTts {
 
   /** 朗读短语（默认 0.9 倍速，跟读更清晰）。重复调用会先掐断上一条。 */
   speak(text: string, options: { rate?: number; pitch?: number } = {}): void {
-    if (!this.synth || !text) return;
+    if (!this.synth || !text || !this.cantoneseAvailable) return;
     this.synth.cancel();
-    if (!this.voice) this.refreshVoices();
+    this.refreshVoices();
     const utterance = new SpeechSynthesisUtterance(text);
     if (this.voice) {
       utterance.voice = this.voice;
