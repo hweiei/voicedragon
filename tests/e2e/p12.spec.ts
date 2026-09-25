@@ -34,7 +34,7 @@ function codeFor(bundle: ChallengeBundle): string {
   return encoded.code;
 }
 
-async function preset(page: Page, url = "/"): Promise<void> {
+async function preset(page: Page, url = "/?mode=classic"): Promise<void> {
   await page.addInitScript(() => {
     localStorage.setItem(
       "voice-tower-settings-v1",
@@ -42,6 +42,9 @@ async function preset(page: Page, url = "/"): Promise<void> {
     );
   });
   await page.goto(url);
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
 }
 
 async function readState(page: Page): Promise<GameState> {
@@ -103,6 +106,9 @@ test("坏码与跨版本码明确警告且不放行；标题屏照常可用", as
 
   // 跨版本前缀：明确说「码来自更新的版本」，仍不放行
   await page.goto("/?duel=future#c=VT2.AAAA.BBBB");
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   await expect(page.locator(".duel-warning")).toContainText("更新的版本");
   await expect(page.getByRole("button", { name: "以这个码开局 · 同码同局" })).toHaveCount(0);
   // 从未开局：没有切磋身份落进存档

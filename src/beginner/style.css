@@ -154,7 +154,7 @@ a:focus-visible {
   position: relative;
   align-items: center;
   height: 83px;
-  color: #6f7890;
+  color: #939fb6;
   font-size: 12px;
 }
 .node {
@@ -990,4 +990,9 @@ a:focus-visible {
   .reward-options button:hover {
     transform: none;
   }
+}
+
+/* P18: keep lesson headings semantic without changing visual hierarchy. */
+.lesson-title {
+  font-weight: 400;
 }

@@ -111,7 +111,10 @@ async function preset(
       codexSkills: options.codexSkills ?? null
     }
   );
-  await page.goto("/");
+  await page.goto("/?mode=classic");
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
 }
 
 async function readSrs(page: Page): Promise<{

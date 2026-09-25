@@ -13,7 +13,10 @@ async function preset(page: Page, state?: GameState): Promise<void> {
         JSON.stringify({ version: 2, savedAt: new Date().toISOString(), state: saved })
       );
   }, state ?? null);
-  await page.goto("/");
+  await page.goto("/?mode=classic");
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   if (state) await page.getByRole("button", { name: "继续登楼" }).click();
 }
 async function readState(page: Page): Promise<GameState> {
@@ -73,6 +76,9 @@ test("夜市删牌二次确认：取消不消费，确定只扣一次，升级�
   expect(state.player!.deck).toHaveLength(5);
   expect(state.player!.upgradedSlots).toEqual([0, 2, 4]);
   await page.reload();
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   await page.getByRole("button", { name: "继续登楼" }).click();
   await expect(page.getByRole("button", { name: "本店已删牌" })).toBeDisabled();
 });
@@ -92,6 +98,9 @@ test("歇脚升级预览对应一张牌；结束节点、刷新仍保持", async
   expect(state.player!.upgradedSlots).toEqual([1]);
   expect(state.player!.hp).toBe(20);
   await page.reload();
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   await page.getByRole("button", { name: "继续登楼" }).click();
   await page.getByRole("button", { name: "查看行囊" }).click();
   await page.getByRole("button", { name: /查看构筑/ }).click();

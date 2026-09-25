@@ -14,7 +14,10 @@ async function preset(page: Page, state?: GameState): Promise<void> {
         JSON.stringify({ version: 2, savedAt: new Date().toISOString(), state: saved })
       );
   }, state ?? null);
-  await page.goto("/");
+  await page.goto("/?mode=classic");
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   if (state) await page.getByRole("button", { name: "继续登楼" }).click();
 }
 async function readState(page: Page): Promise<GameState> {
@@ -61,6 +64,9 @@ test("真实QTE跨半血不偷换意图；pending及二阶段刷新保持，实�
   await expect(page.locator(".intent-heading strong")).toHaveText(oldLabel);
   expect((await readState(page)).combat!.bossPhase!.phase).toBe(1);
   await page.reload();
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   await page.getByRole("button", { name: "继续登楼" }).click();
   await expect(page.locator('.boss-phase-info[data-phase="pending"]')).toBeVisible();
   const hp = (await readState(page)).player!.hp;
@@ -70,6 +76,9 @@ test("真实QTE跨半血不偷换意图；pending及二阶段刷新保持，实�
   expect(hp - (await readState(page)).player!.hp).toBe(predicted);
   await expect(page.locator(".intent-details")).toContainText("蓄势，不造成伤害");
   await page.reload();
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   await page.getByRole("button", { name: "继续登楼" }).click();
   await expect(page.locator(".intent-heading strong")).toHaveText("裂鳞蓄势");
   const hp2 = (await readState(page)).player!.hp;

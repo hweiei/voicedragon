@@ -18,7 +18,10 @@ async function preset(page: Page, reduceMotion: boolean): Promise<void> {
 
 /** 从标题屏开一局战役并走进第一场战斗。 */
 async function enterFirstBattle(page: Page): Promise<void> {
-  await page.goto("/");
+  await page.goto("/?mode=classic");
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   await page.getByRole("button", { name: /战役 · 第一幕/ }).click();
   await page
     .locator(".roster-card", { hasText: "文武生" })

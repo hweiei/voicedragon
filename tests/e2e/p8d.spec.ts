@@ -66,7 +66,10 @@ test("P8-D 标题显示今日三个不同短句目标与连续练习", async ({ 
       })
     );
   }, settings());
-  await page.goto("/");
+  await page.goto("/?mode=classic");
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   const goal = page.getByLabel("今日开口目标");
   await expect(goal).toContainText("今日开口 2/3");
   await expect(goal).toContainText("连续练习 2 天");
@@ -139,7 +142,10 @@ test("P8-D 报告展示14日空档/变化并导出白名单化JSON", async ({ pa
       })
     );
   }, settings());
-  await page.goto("/");
+  await page.goto("/?mode=classic");
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   await page.getByRole("button", { name: "学习报告" }).click();
   const trend = page.locator(".learning-trend-panel");
   await expect(trend).toContainText("较前半段 +18 分");
@@ -176,7 +182,10 @@ test("P8-D 导入先预览；取消零副作用，确认后只覆盖学习档案
     },
     { savedSettings: settings(), currentStats: stats(1, ["ding-ngang-soeng"]) }
   );
-  await page.goto("/");
+  await page.goto("/?mode=classic");
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   await page.getByRole("button", { name: "学习报告" }).click();
 
   const archive = {

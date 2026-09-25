@@ -44,7 +44,10 @@ async function preset(page: Page, settings: Record<string, unknown> = {}): Promi
       })
     );
   }, settings);
-  await page.goto("/");
+  await page.goto("/?mode=classic");
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
 }
 
 function debugVoice(page: Page) {
@@ -81,6 +84,9 @@ test("设置页「自动收音」：默认开、可关、刷新后仍关，调�
 
   // 刷新：设置持久化（旧档缺省 = 开，这里显式关了就该一直是关）
   await page.reload();
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   const voiceAfter = await debugVoice(page);
   expect(
     await page.evaluate(

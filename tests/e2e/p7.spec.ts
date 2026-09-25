@@ -22,7 +22,10 @@ async function readState(page: Page): Promise<GameState> {
 
 test("新战役启用扩展池；标题内容数量由注册表生成", async ({ page }) => {
   await preset(page);
-  await page.goto("/");
+  await page.goto("/?mode=classic");
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   await expect(page.locator(".title-screen .content-version")).toContainText(
     "269 招式 · 38 奇遇 · 8 道具"
   );
@@ -39,7 +42,10 @@ test("新战役启用扩展池；标题内容数量由注册表生成", async ({
 
 test("每日词缀在减弱动效下可读，刷新继续保留种子与身份", async ({ page }) => {
   await preset(page);
-  await page.goto("/");
+  await page.goto("/?mode=classic");
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   await page.getByRole("button", { name: /每日挑战/ }).click();
   await expect(page.getByLabel("本局变异词缀")).toBeVisible();
   await expect(page.locator(".mutation-rule")).toHaveCount(2);
@@ -47,6 +53,9 @@ test("每日词缀在减弱动效下可读，刷新继续保留种子与身份",
   expect(saved.adaptiveBoost).toBe(0);
   const banner = await page.getByLabel("本局变异词缀").innerText();
   await page.reload();
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   await page.getByRole("button", { name: "继续登楼" }).click();
   await expect(page.getByLabel("本局变异词缀")).toHaveText(banner, { useInnerText: true });
   expect((await readState(page)).challenge).toEqual(saved.challenge);
@@ -54,7 +63,10 @@ test("每日词缀在减弱动效下可读，刷新继续保留种子与身份",
 
 test("无尽新局展示本组词缀范围", async ({ page }) => {
   await preset(page);
-  await page.goto("/");
+  await page.goto("/?mode=classic");
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   await page.getByRole("button", { name: /无尽塔/ }).click();
   await expect(page.getByLabel("本局变异词缀")).toContainText("第 1–5 层");
   expect((await readState(page)).challenge?.mode).toBe("endless");
@@ -67,7 +79,10 @@ test("新道具在行囊正确渲染并真实改变战斗与存档", async ({ pa
   e.state.player!.items = ["p7-bamboo-shield", "p7-ginger-shot"];
   e.state.combat!.energy = 1;
   await preset(page, e.state);
-  await page.goto("/");
+  await page.goto("/?mode=classic");
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   await page.getByRole("button", { name: "继续登楼" }).click();
   await page.getByRole("button", { name: "查看行囊" }).click();
   await page
@@ -91,7 +106,10 @@ test("旧存档继续时不静默升级扩展版本", async ({ page }) => {
   const e = new GameEngine();
   e.startCampaign(1, 77);
   await preset(page, e.state);
-  await page.goto("/");
+  await page.goto("/?mode=classic");
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   await page.getByRole("button", { name: "继续登楼" }).click();
   await expect(page.locator(".map-screen")).toBeVisible();
   await expect(page.locator(".content-version")).toHaveCount(0);
@@ -108,7 +126,10 @@ test("每日读档后败北仍记入P7日榜，不覆盖旧规则榜", async ({ 
   e.state.combat!.enemy.baseAttack = 999;
   e.state.combat!.enemy.pattern = [{ type: "attack", amount: 1, label: "测试终结" }];
   await preset(page, e.state);
-  await page.goto("/");
+  await page.goto("/?mode=classic");
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   await page.getByRole("button", { name: "继续登楼" }).click();
   await page.locator('[data-action="end-turn"]').click();
   await expect
@@ -128,7 +149,10 @@ test("P7 问义事件作答前不泄露释义，作答后揭晓", async ({ page 
   e.state.phase = "event";
   e.state.event = { ...event, resolved: false, outcome: "" };
   await preset(page, e.state);
-  await page.goto("/");
+  await page.goto("/?mode=classic");
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   await page.getByRole("button", { name: "继续登楼" }).click();
   await expect(page.locator(".phrase-ribbon small")).toHaveText("选择后揭晓释义");
   const hints = await page.locator(".choice-button small").allTextContents();

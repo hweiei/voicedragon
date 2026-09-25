@@ -10,6 +10,7 @@ export default defineConfig({
   testIgnore: ["visual/**"], // P15 视觉门独立配置 playwright.visual.config.ts
   timeout: 30_000,
   fullyParallel: true,
+  workers: 1, // Bounded browser memory; CLI --workers may override for larger runners.
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? "github" : "list",
   use: {

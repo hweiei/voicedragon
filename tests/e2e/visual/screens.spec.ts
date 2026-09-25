@@ -44,7 +44,10 @@ for (const reduceMotion of MOTION) {
 
   test(`标题屏（${tag}）`, async ({ page }) => {
     await preset(page, reduceMotion);
-    await page.goto("/");
+    await page.goto("/?mode=classic");
+    await page.waitForFunction(() =>
+      Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+    );
     await expect(page.locator(".title-screen")).toBeVisible();
     await settle(page, reduceMotion);
     await expect(page).toHaveScreenshot(`title-${tag}.png`);
@@ -52,7 +55,10 @@ for (const reduceMotion of MOTION) {
 
   test(`战斗屏（${tag}）`, async ({ page }) => {
     await preset(page, reduceMotion);
-    await page.goto("/");
+    await page.goto("/?mode=classic");
+    await page.waitForFunction(() =>
+      Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+    );
     await expect(page.locator(".title-screen")).toBeVisible();
     // 固定种子 + 全版本束直入战役，跳过选角弹窗，保证敌人/手牌可复现
     await page.evaluate(() => {
@@ -78,7 +84,10 @@ for (const reduceMotion of MOTION) {
 
   test(`学习报告（${tag}）`, async ({ page }) => {
     await preset(page, reduceMotion);
-    await page.goto("/");
+    await page.goto("/?mode=classic");
+    await page.waitForFunction(() =>
+      Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+    );
     await expect(page.locator(".title-screen")).toBeVisible();
     await page.locator('[data-action="open-report"]').click();
     await expect(page.locator(".report-screen")).toBeVisible();
@@ -88,7 +97,10 @@ for (const reduceMotion of MOTION) {
 
   test(`词林图鉴（${tag}）`, async ({ page }) => {
     await preset(page, reduceMotion);
-    await page.goto("/");
+    await page.goto("/?mode=classic");
+    await page.waitForFunction(() =>
+      Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+    );
     await expect(page.locator(".title-screen")).toBeVisible();
     await page.locator('[data-action="open-codex"]').click();
     await expect(page.locator(".codex-screen")).toBeVisible();

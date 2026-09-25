@@ -37,7 +37,10 @@ async function preset(page: Page): Promise<void> {
       JSON.stringify({ sound: false, music: false, tutorialSeen: true, reduceMotion: true })
     );
   });
-  await page.goto("/");
+  await page.goto("/?mode=classic");
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
 }
 
 /** 注入 stub 适配器：ready 恒真让「开始收音」可用；start/stop 记录调用供断言。 */

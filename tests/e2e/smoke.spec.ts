@@ -20,7 +20,10 @@ async function presetSeen(page: Page): Promise<void> {
 
 /** 从标题屏开一局战役并走进第一场战斗。 */
 async function enterFirstBattle(page: Page): Promise<void> {
-  await page.goto("/");
+  await page.goto("/?mode=classic");
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   await page.getByRole("button", { name: /战役 · 第一幕/ }).click();
   await page
     .locator(".roster-card", { hasText: "文武生" })
@@ -34,7 +37,10 @@ async function enterFirstBattle(page: Page): Promise<void> {
 test("campaign flow reaches battle and the tutorial walks through three steps", async ({
   page
 }) => {
-  await page.goto("/");
+  await page.goto("/?mode=classic");
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   await page.getByRole("button", { name: /战役 · 第一幕/ }).click();
   await page
     .locator(".roster-card", { hasText: "文武生" })
@@ -101,6 +107,9 @@ test("reload restores the run from the title screen", async ({ page }) => {
   await enterFirstBattle(page);
 
   await page.reload();
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   const resume = page.getByRole("button", { name: "继续登楼" });
   await expect(resume).toBeVisible();
   await resume.click();

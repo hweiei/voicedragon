@@ -1,39 +1,14 @@
 import "./style.css";
 import { SpeechTts } from "../adapters/tts";
 import { LESSONS, canAdvance, routeFor } from "./curriculum";
+import { BEGINNER_KEY, freshProgress, restoreProgress } from "./progress";
 
 const tts = new SpeechTts();
-const KEY = "voice-dragon-beginner-v1";
-type Progress = {
-  floor: number;
-  completed: string[];
-  spoken: string[];
-  relics: string[];
-  seed: number;
-  done: boolean;
-};
-const fresh = (): Progress => ({
-  floor: 0,
-  completed: [],
-  spoken: [],
-  relics: [],
-  seed: Date.now() % 100000,
-  done: false
-});
+const KEY = BEGINNER_KEY;
+const fresh = () => freshProgress(Date.now() % 100000);
 let progress = fresh();
 try {
-  const saved = JSON.parse(localStorage.getItem(KEY) || "null");
-  if (
-    saved &&
-    Number.isInteger(saved.floor) &&
-    saved.floor >= 0 &&
-    saved.floor < 6 &&
-    ["completed", "spoken", "relics"].every(
-      (k) => Array.isArray(saved[k]) && saved[k].every((x: unknown) => typeof x === "string")
-    ) &&
-    Number.isFinite(saved.seed)
-  )
-    progress = saved;
+  progress = restoreProgress(JSON.parse(localStorage.getItem(KEY) || "null"), progress.seed);
 } catch {
   /* Storage unavailable: session still works. */
 }
@@ -41,8 +16,9 @@ let started = false;
 let answered = false;
 let recorded = false;
 let readingOnly = false;
-let showHint = false;
-let stage: "lesson" | "reward" = "lesson";
+let showHint = progress.relics.includes("粤拼灯牌");
+let stage: "lesson" | "reward" =
+  !progress.done && progress.completed.includes(LESSONS[progress.floor].id) ? "reward" : "lesson";
 let recorder: MediaRecorder | null = null;
 let stream: MediaStream | null = null;
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -108,13 +84,13 @@ function render() {
       : stage === "reward"
         ? reward()
         : `<article class="lesson-card"><div class="card-top"><span class="tag">${progress.floor === 5 ? "终层 · 情境挑战" : "教学房 · 学会再出发"}</span><span class="card-number">FLOOR 0${progress.floor + 1}</span></div>
-  <div class="lesson-title">${lesson.title}</div><div class="phrase ${progress.floor === 5 && !showHint ? "hidden-phrase" : ""}">${progress.floor === 5 && !showHint ? "试着向店员点一杯冰奶茶" : lesson.phrase}</div><div class="jyutping">${progress.floor === 5 && !showHint ? "用上本局学过的礼貌表达" : lesson.jyutping}</div><p class="meaning">${lesson.meaning}</p>
+  <h2 class="lesson-title">${lesson.title}</h2><div class="phrase ${progress.floor === 5 && !showHint ? "hidden-phrase" : ""}">${progress.floor === 5 && !showHint ? "试着向店员点一杯冰奶茶" : lesson.phrase}</div><div class="jyutping">${progress.floor === 5 && !showHint ? "用上本局学过的礼貌表达" : lesson.jyutping}</div><p class="meaning">${lesson.meaning}</p>
   <div class="listen-actions"><button data-action="listen" class="soft-button">▷ 听示范</button><button data-action="slow" class="soft-button">◷ 慢速听</button><button data-action="hint" class="text-button">${showHint ? "收起提示" : "查看发音提示"} ↗</button></div>
   ${showHint ? `<div class="hint">${lesson.tip}</div>` : ""}
   ${!tts.cantoneseAvailable ? '<div class="voice-warning">当前设备未检测到粤语音色，不会用普通话替代示范。可先阅读与录音，或在安装粤语音色后重试。</div>' : '<div class="voice-ready">● 设备粤语示范可用 · 浏览器系统朗读</div>'}
   <div class="practice"><div class="step-label"><b>01</b> 开口跟读 <span>先练习，不评分</span></div><button data-action="record" class="record-button ${recorder?.state === "recording" ? "recording" : ""}" ${requesting ? "disabled" : ""}><span>◉</span>${requesting ? "等待麦克风权限…" : recorder?.state === "recording" ? "录音中 · 点击结束" : recorded ? "再说一次" : "点击开始跟读"}<small>${recorder?.state === "recording" ? "最长 12 秒 · 音频仅本机暂存" : "麦克风录音 · 不上传"}</small></button>${audioUrl ? '<button data-action="play" class="soft-button playback">▷ 回听我的录音</button><span class="record-ok">✓ 已完成录音，未评测发音</span>' : ""}<button data-action="reading" class="reading-link">${readingOnly ? "✓ 当前为阅读模式（不计口语完成）" : "暂时不方便开口？切换阅读模式"}</button></div>
   <div class="understanding"><div class="step-label"><b>02</b> ${progress.floor === 5 ? "完成最后的情境任务" : "听懂了，也用对了"}</div><h3>${lesson.question}</h3><div class="answers">${lesson.answers.map((a, i) => `<button data-answer="${i}" class="answer ${answered && i === lesson.correct ? "correct" : ""}" ${answered ? "disabled" : ""}><span>${["A", "B", "C"][i]}</span>${a}${answered && i === lesson.correct ? " ✓" : ""}</button>`).join("")}</div></div>
-  <footer class="card-footer"><span>${answered ? "✓ 场景理解完成" : "完成跟读与场景选择，点亮下一层"}</span><button data-action="next" class="primary" ${canAdvance(answered, recorded, readingOnly) ? "" : "disabled"}>${progress.floor === 5 ? "完成登塔" : "收下奖励，继续登塔"} <span>↗</span></button></footer></article>`
+  <footer class="card-footer"><span>${answered ? "✓ 场景理解完成" : "完成跟读与场景选择，点亮下一层"}</span><button data-action="next" class="primary" ${canAdvance(answered, recorded, readingOnly) && !requesting && recorder?.state !== "recording" ? "" : "disabled"}>${progress.floor === 5 ? "完成登塔" : "收下奖励，继续登塔"} <span>↗</span></button></footer></article>`
   }
   <div id="notice" role="status" aria-live="polite">${esc(message)}</div><div class="bottom-note"><span>✧ 每一次开口，都算数。</span><span>学习原型 · 粤拼与内容待母语审校</span></div></section>
   <aside class="side"><div class="daily panel"><div class="eyebrow">TONIGHT’S QUEST</div><h3>今晚，迈出第一步</h3><p>完成六层练习，走进霓虹冰室，独立尝试一次点单。</p><div class="progress-track"><i style="width:${(progress.completed.length / 6) * 100}%"></i></div><small>${progress.completed.length} / 6 层已完成</small><div class="quest-icon">茶</div></div><div class="panel bag"><div class="eyebrow">YOUR INVENTORY</div><h3>随身锦囊 <span>${progress.relics.length.toString().padStart(2, "0")}</span></h3>${progress.relics.length ? progress.relics.map((r) => `<div class="bag-item">✧ <span>${esc(r)}<small>${r === "慢声耳机" ? "慢速示范调至更慢语速" : r === "粤拼灯牌" ? "后续关卡默认展开提示" : "记录奖励 · 可随时回听本层录音"}</small></span></div>`).join("") : '<div class="empty-bag">◇<p>每次过关，带走一份奖励。<br>让下一次开口更从容。</p></div>'}</div><div class="tip-panel"><span>街坊小贴士</span><p>「讲错唔紧要，<br>最紧要肯开口。」</p><small>说错没关系，愿意开口最重要。</small></div><button data-action="restart" class="text-button restart">↻ 重新开始一局</button></aside></main><footer class="site-footer"><span>声震龙楼 / VOICE DRAGON</span><span>用声音探索一座城，用一句话靠近一种生活。</span><span>粤语 · 普通话学习者入门</span></footer></div>`;
@@ -223,6 +199,7 @@ async function action(name: string) {
       return;
     }
     clearAudio();
+    recorded = false;
     const token = generation;
     requesting = true;
     render();
@@ -275,7 +252,12 @@ async function action(name: string) {
     }
     return;
   }
-  if (name === "next" && canAdvance(answered, recorded, readingOnly)) {
+  if (
+    name === "next" &&
+    !requesting &&
+    recorder?.state !== "recording" &&
+    canAdvance(answered, recorded, readingOnly)
+  ) {
     const id = LESSONS[progress.floor].id;
     if (!progress.completed.includes(id)) progress.completed.push(id);
     if (recorded && !progress.spoken.includes(id)) progress.spoken.push(id);

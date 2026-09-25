@@ -20,7 +20,10 @@ async function preset(page: Page, state?: GameState): Promise<void> {
         JSON.stringify({ version: 2, savedAt: new Date().toISOString(), state: saved })
       );
   }, state ?? null);
-  await page.goto("/");
+  await page.goto("/?mode=classic");
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   if (state) await page.getByRole("button", { name: "继续登楼" }).click();
 }
 

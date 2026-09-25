@@ -18,7 +18,10 @@ async function preset(
     }
     if (data.srs) localStorage.setItem("voice-tower-srs-v1", JSON.stringify(data.srs));
   }, options);
-  await page.goto("/");
+  await page.goto("/?mode=classic");
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   if (options.state) await page.getByRole("button", { name: "继续登楼" }).click();
 }
 

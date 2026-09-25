@@ -12,6 +12,7 @@ export default defineConfig({
   testDir: "tests/e2e/visual",
   timeout: 30_000,
   fullyParallel: true,
+  workers: 1, // Bounded browser memory; CLI --workers may override for larger runners.
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? "github" : "list",
   expect: {

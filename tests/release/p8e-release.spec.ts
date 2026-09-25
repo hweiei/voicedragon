@@ -54,7 +54,10 @@ test("发布壳在浏览器矩阵中可达，manifest 与关键入口完整", as
     }
   });
 
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.goto("/?mode=classic", { waitUntil: "networkidle" });
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   await expect(page.locator(".title-screen")).toBeVisible();
   await expect(page.getByRole("heading", { name: "声震龙楼" })).toBeVisible();
   await expect(page.getByRole("button", { name: /战役 · 第一幕/ })).toBeVisible();
@@ -96,7 +99,10 @@ test("Cloudflare CSP 下发布壳仍可启动且无策略拒绝", async ({ conte
       headers: { ...response.headers(), "content-security-policy": CSP! }
     });
   });
-  await page.goto("/");
+  await page.goto("/?mode=classic");
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   await expect(page.locator(".title-screen")).toBeVisible();
   await expect(page.getByRole("button", { name: /设置 · 语音引擎/ })).toBeVisible();
   expect(violations).toEqual([]);
@@ -105,7 +111,10 @@ test("Cloudflare CSP 下发布壳仍可启动且无策略拒绝", async ({ conte
 test("320px 极窄视口可打开设置与学习报告，关键触点仍可操作", async ({ page }) => {
   await seedLocalState(page);
   await page.setViewportSize({ width: 320, height: 568 });
-  await page.goto("/");
+  await page.goto("/?mode=classic");
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   await expectNoHorizontalOverflow(page);
 
   const campaign = page.getByRole("button", { name: /战役 · 第一幕/ });
@@ -126,7 +135,10 @@ test("320px 极窄视口可打开设置与学习报告，关键触点仍可操�
 
 test("非法、未知版本与超限学习档案均零副作用", async ({ page }) => {
   await seedLocalState(page);
-  await page.goto("/");
+  await page.goto("/?mode=classic");
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   await page.getByRole("button", { name: "学习报告" }).click();
   const input = page.locator("#learning-import-input");
   const before = await page.evaluate(() => ({
@@ -178,12 +190,18 @@ test("安装壳受 Service Worker 控制后可断网重载", async ({ browserNam
     "Playwright WebKit 的离线网络模拟会绕过已控制页面的 Service Worker；保留真机 Safari 项"
   );
   await seedLocalState(page);
-  await page.goto("/");
+  await page.goto("/?mode=classic");
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   await page.evaluate(async () => {
     if (!("serviceWorker" in navigator)) throw new Error("Service Worker 不可用");
     await navigator.serviceWorker.ready;
   });
   await page.reload();
+  await page.waitForFunction(() =>
+    Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+  );
   await expect
     .poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller)))
     .toBe(true);
@@ -191,6 +209,9 @@ test("安装壳受 Service Worker 控制后可断网重载", async ({ browserNam
   try {
     await context.setOffline(true);
     await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() =>
+      Boolean((window as unknown as { __VOICE_TOWER__?: unknown }).__VOICE_TOWER__)
+    );
     await expect(page.locator(".title-screen")).toBeVisible();
     await page.getByRole("button", { name: /设置 · 语音引擎/ }).click();
     await expect(page.getByRole("heading", { name: "设置" })).toBeVisible();
