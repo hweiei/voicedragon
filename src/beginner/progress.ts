@@ -1,9 +1,11 @@
+import { RELIC_INFO, type RouteKind } from "./branches";
 import { LESSONS } from "./curriculum";
 
 export const BEGINNER_KEY = "voice-dragon-beginner-v1";
-export const RELICS = ["慢声耳机", "粤拼灯牌", "回声纪念章"];
+export const RELICS = Object.keys(RELIC_INFO);
 export interface Progress {
   runId: string;
+  routes: RouteKind[];
   floor: number;
   completed: string[];
   spoken: string[];
@@ -12,7 +14,16 @@ export interface Progress {
   done: boolean;
 }
 export function freshProgress(seed: number, runId = `legacy-${seed}`): Progress {
-  return { runId, floor: 0, completed: [], spoken: [], relics: [], seed, done: false };
+  return {
+    runId,
+    routes: ["coach"],
+    floor: 0,
+    completed: [],
+    spoken: [],
+    relics: [],
+    seed,
+    done: false
+  };
 }
 /** White-list a coherent sequential save; never trust imported UI values or unbounded arrays. */
 export function restoreProgress(raw: unknown, seed: number): Progress {
@@ -42,7 +53,22 @@ export function restoreProgress(raw: unknown, seed: number): Progress {
     value.done !== (count === LESSONS.length)
   )
     return fallback;
+  const routes: RouteKind[] =
+    value.routes === undefined
+      ? Array.from({ length: floor + 1 }, () => "coach")
+      : Array.isArray(value.routes)
+        ? value.routes
+        : [];
+  if (
+    routes.length < Math.max(1, floor) ||
+    routes.length > floor + 1 ||
+    routes[0] !== "coach" ||
+    routes.some((kind) => kind !== "coach" && kind !== "challenge") ||
+    (count > floor && routes.length !== floor + 1)
+  )
+    return fallback;
   return {
+    routes: [...routes],
     runId:
       typeof value.runId === "string" && /^[\w-]{1,80}$/.test(value.runId)
         ? value.runId

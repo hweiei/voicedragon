@@ -14,7 +14,10 @@ await page.locator("[data-action=reading]").click();
 for (let i = 0; i < 6; i++) {
   await page.locator(`[data-answer="${[0, 1, 2, 0, 1, 2][i]}"]`).click();
   await page.locator("[data-action=next]").click();
-  if (i < 5) await page.locator("[data-relic]").first().click();
+  if (i < 5) {
+    await page.locator("[data-relic]").first().click();
+    await page.locator('[data-route="coach"]').click();
+  }
 }
 await page.locator(".summary").waitFor();
 assert.match(await page.locator(".summary").innerText(), /其中 0 句完成录音/);

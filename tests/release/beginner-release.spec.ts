@@ -71,3 +71,21 @@ test("学习手账与回忆自评在浏览器矩阵中可用", async ({ page }) 
   await page.locator('.review-invitation [data-action="journal"]').click();
   await expect(page.locator(".journal-entry")).toContainText("阅读 2 次");
 });
+
+test("选路与实战提示在浏览器矩阵中可恢复", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('[data-action="reading"]').click();
+  await page.locator('[data-answer="0"]').click();
+  await page.locator('[data-action="next"]').click();
+  await page.locator('[data-relic="粤拼灯牌"]').click();
+  await expect(page.locator(".branch-picker")).toBeVisible();
+  await page.reload();
+  await expect(page.locator(".branch-picker")).toBeVisible();
+  await page.locator('[data-route="challenge"]').click();
+  await expect(page.locator(".phrase")).not.toHaveText("唔该");
+  await expect(page.locator(".jyutping")).toHaveText("m4 goi1");
+  await page.locator('[data-action="hint"]').click();
+  await expect(page.locator(".phrase")).toHaveText("唔该");
+  await page.reload();
+  await expect(page.locator(".tag").first()).toContainText("实战街");
+});

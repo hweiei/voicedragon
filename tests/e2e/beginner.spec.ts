@@ -19,7 +19,10 @@ test("六层阅读通关、奖励与刷新恢复，不伪造口语次数", async
   for (let index = 0; index < 6; index++) {
     await page.locator(`[data-answer="${answerIndices[index]}"]`).click();
     await page.locator('[data-action="next"]').click();
-    if (index < 5) await page.locator('[data-relic="粤拼灯牌"]').click();
+    if (index < 5) {
+      await page.locator("[data-relic]").first().click();
+      await page.locator('[data-route="coach"]').click();
+    }
   }
   await expect(page.locator(".summary")).toContainText("其中 0 句完成录音尝试");
   await page.reload();
@@ -38,6 +41,10 @@ test("领取奖励前刷新仍在奖励页，领取后进入下一层并保留�
   await page.reload();
   await expect(page.locator(".reward")).toBeVisible();
   await page.locator('[data-relic="粤拼灯牌"]').click();
+  await expect(page.locator(".branch-picker")).toBeVisible();
+  await page.reload();
+  await expect(page.locator(".branch-picker")).toBeVisible();
+  await page.locator('[data-route="coach"]').click();
   await page.reload();
   await expect(page.locator(".phrase")).toHaveText("唔该");
   await expect(page.locator(".hint")).toBeVisible();

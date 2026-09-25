@@ -1,5 +1,15 @@
 import "./style.css";
 import { SpeechTts } from "../adapters/tts";
+import { aidsView, branchView, rewardView } from "./branch-view";
+import {
+  CHUNKS,
+  RELIC_INFO,
+  ROUTE_INFO,
+  type RouteKind,
+  branchLesson,
+  branchSelected,
+  rewardChoices
+} from "./branches";
 import { LESSONS, canAdvance, routeFor } from "./curriculum";
 import { BEGINNER_KEY, freshProgress, restoreProgress } from "./progress";
 
@@ -59,13 +69,13 @@ if (progress.completed.length) saveJournal();
 function currentLesson() {
   return reviewing
     ? LESSONS.find((l) => l.id === reviewIds[reviewIndex])!
-    : LESSONS[progress.floor];
+    : branchLesson(progress.floor, progress.routes[progress.floor] ?? "coach", progress.seed);
 }
 let started = false;
 let answered = false;
 let recorded = false;
 let readingOnly = false;
-let showHint = progress.relics.includes("粤拼灯牌");
+let showHint = progress.floor > 0 && progress.routes[progress.floor] === "coach";
 let stage: "lesson" | "reward" =
   !progress.done && progress.completed.includes(LESSONS[progress.floor].id) ? "reward" : "lesson";
 let recorder: MediaRecorder | null = null;
@@ -111,7 +121,9 @@ function skyline() {
 }
 function render() {
   const lesson = currentLesson();
-  const hiddenRecall = (reviewing || progress.floor === 5) && !showHint;
+  const hiddenRecall =
+    (reviewing || progress.routes[progress.floor] === "challenge" || progress.floor === 5) &&
+    !showHint;
   const routes = routeFor(progress.seed);
   root.innerHTML = `<div class="world">${skyline()}<header class="header"><a class="brand" href="./"><span class="seal">龍</span><span>声震龙楼<small>VOICE DRAGON / 粤语冒险</small></span></a><nav><span class="active">新手教学塔</span><a href="?mode=classic">自由冒险 ↗</a><button data-action="journal" class="journal-nav">学习手账</button><button data-action="help" class="text-button">玩法说明</button></nav><div class="local"><span></span>本地练习 · 无需登录</div></header>
   <main class="layout"><aside class="rail"><div class="eyebrow">YOUR FIRST ASCENT</div><h2>一层一句，<br>粤讲粤有底气。</h2><p>第一章 / 霓虹初声</p><div class="route">${[
@@ -120,7 +132,7 @@ function render() {
     .reverse()
     .map((l, j) => {
       const i = 5 - j;
-      return `<div class="route-item ${i === progress.floor && !progress.done ? "current" : ""} ${progress.completed.includes(l.id) ? "cleared" : ""}"><span class="node">${progress.completed.includes(l.id) ? "✓" : i === 5 ? "♜" : `0${i + 1}`}</span><span>${routes[i]}<small>${i === 5 ? "BOSS · 综合表达" : ["问候 · 初次开口", "礼貌 · 请求帮助", "点单 · 完整短句", "问价 · 日常应用", "感谢 · 分清场景"][i]}</small></span>${i === progress.floor && !progress.done ? "<b>←</b>" : ""}</div>`;
+      return `<div class="route-item ${i === progress.floor && !progress.done ? "current" : ""} ${progress.completed.includes(l.id) ? "cleared" : ""}"><span class="node">${progress.completed.includes(l.id) ? "✓" : i === 5 ? "♜" : `0${i + 1}`}</span><span>${routes[i]}${progress.routes[i] ? `<em class="route-kind ${progress.routes[i]}">${ROUTE_INFO[progress.routes[i]].name}</em>` : ""}<small>${i === 5 ? "BOSS · 综合表达" : ["问候 · 初次开口", "礼貌 · 请求帮助", "点单 · 完整短句", "问价 · 日常应用", "感谢 · 分清场景"][i]}</small></span>${i === progress.floor && !progress.done ? "<b>←</b>" : ""}</div>`;
     })
     .join(
       ""
@@ -138,19 +150,22 @@ function render() {
         : !reviewing && progress.done
           ? summary()
           : !reviewing && stage === "reward"
-            ? reward()
-            : `<article class="lesson-card"><div class="card-top"><span class="tag">${reviewing ? "回忆房 · 先想再看" : progress.floor === 5 ? "终层 · 情境挑战" : "教学房 · 学会再出发"}</span><span class="card-number">${reviewing ? `REVIEW ${reviewIndex + 1} / ${reviewIds.length}` : `FLOOR 0${progress.floor + 1}`}</span></div>
-  <h2 class="lesson-title">${lesson.title}</h2><div class="phrase ${hiddenRecall ? "hidden-phrase" : ""}">${hiddenRecall ? RECALL_PROMPTS[lesson.id] : lesson.phrase}</div><div class="jyutping">${hiddenRecall ? "先试着回忆，再展开提示对照" : lesson.jyutping}</div><p class="meaning">${hiddenRecall ? "回忆练习不计发音分数；需要时可以听示范或查看提示。" : lesson.meaning}</p>
+            ? rewardView(progress)
+            : !reviewing && !branchSelected(progress.routes, progress.floor)
+              ? branchView(progress)
+              : `<article class="lesson-card"><div class="card-top"><span class="tag">${reviewing ? "回忆房 · 先想再看" : progress.routes[progress.floor] === "challenge" ? "实战街 · 换个场景试一试" : progress.floor === 5 ? "终层 · 情境挑战" : "教学巷 · 学会再出发"}</span><span class="card-number">${reviewing ? `REVIEW ${reviewIndex + 1} / ${reviewIds.length}` : `FLOOR 0${progress.floor + 1}`}</span></div>
+  <h2 class="lesson-title">${lesson.title}</h2><div class="phrase ${hiddenRecall ? "hidden-phrase" : ""}">${hiddenRecall ? RECALL_PROMPTS[lesson.id] : lesson.phrase}</div><div class="jyutping">${hiddenRecall && (reviewing || !progress.relics.includes("粤拼灯牌")) ? "先试着回忆，再展开提示对照" : lesson.jyutping}</div><p class="meaning">${hiddenRecall ? "回忆练习不计发音分数；需要时可以听示范或查看提示。" : lesson.meaning}</p>
   <div class="listen-actions"><button data-action="listen" class="soft-button">▷ 听示范</button><button data-action="slow" class="soft-button">◷ 慢速听</button><button data-action="hint" class="text-button">${showHint ? "收起提示" : "查看发音提示"} ↗</button></div>
   ${showHint ? `<div class="hint">${lesson.tip}</div>` : ""}
+  ${!reviewing ? aidsView(progress, lesson.id, progress.completed) : ""}
   ${!tts.cantoneseAvailable ? '<div class="voice-warning">当前设备未检测到粤语音色，不会用普通话替代示范。可先阅读与录音，或在安装粤语音色后重试。</div>' : '<div class="voice-ready">● 设备粤语示范可用 · 浏览器系统朗读</div>'}
   <div class="practice"><div class="step-label"><b>01</b> 开口跟读 <span>先练习，不评分</span></div><button data-action="record" class="record-button ${recorder?.state === "recording" ? "recording" : ""}" ${requesting ? "disabled" : ""}><span>◉</span>${requesting ? "等待麦克风权限…" : recorder?.state === "recording" ? "录音中 · 点击结束" : recorded ? "再说一次" : "点击开始跟读"}<small>${recorder?.state === "recording" ? "最长 12 秒 · 音频仅本机暂存" : "麦克风录音 · 不上传"}</small></button>${audioUrl ? '<button data-action="play" class="soft-button playback">▷ 回听我的录音</button><span class="record-ok">✓ 已完成录音，未评测发音</span>' : ""}<button data-action="reading" class="reading-link">${readingOnly ? "✓ 当前为阅读模式（不计口语完成）" : "暂时不方便开口？切换阅读模式"}</button></div>
-  ${reviewing && !showHint && !recorded && !readingOnly ? '<div class="recall-first">先尝试回忆并录音，再做场景选择。需要帮助时，可展开上方提示；暂时不方便开口也可以使用阅读模式。</div>' : `<div class="understanding"><div class="step-label"><b>02</b> ${progress.floor === 5 ? "完成最后的情境任务" : "听懂了，也用对了"}</div><h3>${lesson.question}</h3><div class="answers">${lesson.answers.map((a, i) => `<button data-answer="${i}" class="answer ${answered && i === lesson.correct ? "correct" : ""}" ${answered ? "disabled" : ""}><span>${["A", "B", "C"][i]}</span>${a}${answered && i === lesson.correct ? " ✓" : ""}</button>`).join("")}</div></div>`}
+  ${(reviewing || progress.routes[progress.floor] === "challenge") && !showHint && !recorded && !readingOnly ? '<div class="recall-first">先尝试回忆并录音，再做场景选择。需要帮助时，可展开上方提示；暂时不方便开口也可以使用阅读模式。</div>' : `<div class="understanding"><div class="step-label"><b>02</b> ${progress.floor === 5 ? "完成最后的情境任务" : "听懂了，也用对了"}</div><h3>${lesson.question}</h3><div class="answers">${lesson.answers.map((a, i) => `<button data-answer="${i}" class="answer ${answered && i === lesson.correct ? "correct" : ""}" ${answered ? "disabled" : ""}><span>${["A", "B", "C"][i]}</span>${a}${answered && i === lesson.correct ? " ✓" : ""}</button>`).join("")}</div></div>`}
 
   ${reviewing ? `<div class="recall-rating"><p>完成练习后，诚实告诉自己：这句话想起来了吗？</p><div><button data-rating="again" class="soft-button" ${canAdvance(answered, recorded, readingOnly) && !requesting && recorder?.state !== "recording" ? "" : "disabled"}>还要练 · 10 分钟后</button><button data-rating="remembered" class="primary" ${canAdvance(answered, recorded, readingOnly) && !requesting && recorder?.state !== "recording" ? "" : "disabled"}>记起来了 · 延后复习</button></div><small>这是回忆自评，不是系统对发音或掌握程度的判断。</small><button class="text-button" data-action="review-exit">退出复习，保留已完成记录</button></div>` : `<footer class="card-footer"><span>${answered ? "✓ 场景理解完成" : "完成跟读与场景选择，点亮下一层"}</span><button data-action="next" class="primary" ${canAdvance(answered, recorded, readingOnly) && !requesting && recorder?.state !== "recording" ? "" : "disabled"}>${progress.floor === 5 ? "完成登塔" : "收下奖励，继续登塔"} <span>↗</span></button></footer>`}</article>`
   }
   <div id="notice" role="status" aria-live="polite">${esc(message)}</div><div class="bottom-note"><span>✧ 每一次开口，都算数。</span><span>学习原型 · 粤拼与内容待母语审校</span></div></section>
-  <aside class="side"><div class="daily panel"><div class="eyebrow">TONIGHT’S QUEST</div><h3>今晚，迈出第一步</h3><p>完成六层练习，走进霓虹冰室，独立尝试一次点单。</p><div class="progress-track"><i style="width:${(progress.completed.length / 6) * 100}%"></i></div><small>${progress.completed.length} / 6 层已完成</small><div class="quest-icon">茶</div></div><div class="panel bag"><div class="eyebrow">YOUR INVENTORY</div><h3>随身锦囊 <span>${progress.relics.length.toString().padStart(2, "0")}</span></h3>${progress.relics.length ? progress.relics.map((r) => `<div class="bag-item">✧ <span>${esc(r)}<small>${r === "慢声耳机" ? "慢速示范调至更慢语速" : r === "粤拼灯牌" ? "后续关卡默认展开提示" : "记录奖励 · 可随时回听本层录音"}</small></span></div>`).join("") : '<div class="empty-bag">◇<p>每次过关，带走一份奖励。<br>让下一次开口更从容。</p></div>'}</div><div class="tip-panel"><span>街坊小贴士</span><p>「讲错唔紧要，<br>最紧要肯开口。」</p><small>说错没关系，愿意开口最重要。</small></div><button data-action="restart" class="text-button restart">↻ 重新开始一局</button></aside></main><footer class="site-footer"><span>声震龙楼 / VOICE DRAGON</span><span>用声音探索一座城，用一句话靠近一种生活。</span><span>粤语 · 普通话学习者入门</span></footer></div>`;
+  <aside class="side"><div class="daily panel"><div class="eyebrow">TONIGHT’S QUEST</div><h3>今晚，迈出第一步</h3><p>完成六层练习，走进霓虹冰室，独立尝试一次点单。</p><div class="progress-track"><i style="width:${(progress.completed.length / 6) * 100}%"></i></div><small>${progress.completed.length} / 6 层已完成</small><div class="quest-icon">茶</div></div><div class="panel bag"><div class="eyebrow">YOUR INVENTORY</div><h3>随身锦囊 <span>${progress.relics.length.toString().padStart(2, "0")}</span></h3>${progress.relics.length ? progress.relics.map((r) => `<div class="bag-item">✧ <span>${esc(r)}<small>${RELIC_INFO[r]?.description ?? "旧版纪念奖励"}</small></span></div>`).join("") : '<div class="empty-bag">◇<p>每次过关，带走一份奖励。<br>让下一次开口更从容。</p></div>'}</div><div class="tip-panel"><span>街坊小贴士</span><p>「讲错唔紧要，<br>最紧要肯开口。」</p><small>说错没关系，愿意开口最重要。</small></div><button data-action="restart" class="text-button restart">↻ 重新开始一局</button></aside></main><footer class="site-footer"><span>声震龙楼 / VOICE DRAGON</span><span>用声音探索一座城，用一句话靠近一种生活。</span><span>粤语 · 普通话学习者入门</span></footer></div>`;
   for (const el of root.querySelectorAll<HTMLElement>("[data-action]")) {
     el.onclick = () => void action(el.dataset.action!);
   }
@@ -199,35 +214,73 @@ function render() {
       render();
     };
   }
+  for (const el of root.querySelectorAll<HTMLButtonElement>("[data-route]")) {
+    el.onclick = () => {
+      const kind = el.dataset.route as RouteKind;
+      if (
+        reviewing ||
+        journalOpen ||
+        stage === "reward" ||
+        branchSelected(progress.routes, progress.floor) ||
+        !["coach", "challenge"].includes(kind)
+      )
+        return;
+      progress.routes.push(kind);
+      answered = false;
+      recorded = false;
+      showHint = kind === "coach";
+      clearAudio();
+      save();
+      message = `${ROUTE_INFO[kind].name}已选定。需要时随时查看提示，不扣血。`;
+      render();
+    };
+  }
+  for (const el of root.querySelectorAll<HTMLButtonElement>("[data-chunk]")) {
+    el.onclick = () => {
+      if (requesting || recorder?.state === "recording") {
+        toast("请先结束录音。");
+        return;
+      }
+      if (!tts.cantoneseAvailable) {
+        toast("未找到粤语音色，暂时不能播放分句示范。");
+        return;
+      }
+      const text = CHUNKS[lesson.id]?.[Number(el.dataset.chunk)];
+      if (text) {
+        activeAudio?.pause();
+        tts.speak(text, { rate: 0.7 });
+      }
+    };
+  }
   for (const el of root.querySelectorAll<HTMLElement>("[data-relic]")) {
     el.onclick = () => {
+      if (
+        stage !== "reward" ||
+        reviewing ||
+        journalOpen ||
+        !rewardChoices(
+          progress.relics,
+          progress.routes[progress.floor] ?? "coach",
+          progress.seed,
+          progress.floor
+        ).includes(el.dataset.relic!)
+      )
+        return;
       progress.relics.push(el.dataset.relic!);
       progress.floor++;
       stage = "lesson";
       answered = false;
       recorded = false;
-      showHint = progress.relics.includes("粤拼灯牌");
+      showHint = false;
       clearAudio();
       save();
-      message = "奖励已收下，下一句继续！";
+      message = "奖励已收下。下一层，选择你的练习路线。";
       render();
     };
   }
 }
-function reward() {
-  return `<article class="lesson-card reward"><div class="tag">楼层完成 / CHOOSE YOUR REWARD</div><div class="reward-symbol">✦</div><h2>一句入袋，一步向上。</h2><p>选一个锦囊，带进下一层。奖励不改变学习评分。</p><div class="reward-options">${[
-    ["慢声耳机", "◷", "更慢一点，听清每个音节。"],
-    ["粤拼灯牌", "灯", "后续自动展开发音提示。"],
-    ["回声纪念章", "↺", "记录这次尝试，回听无需消耗。"]
-  ]
-    .map(
-      ([name, icon, desc]) =>
-        `<button data-relic="${name}"><b>${icon}</b><strong>${name}</strong><span>${desc}</span></button>`
-    )
-    .join("")}</div></article>`;
-}
 function summary() {
-  return `<article class="lesson-card summary"><div class="tag">CHAPTER COMPLETE / 今夜成功登顶</div><div class="reward-symbol">♜</div><h2>这座城，听见你了。</h2><p>接触了 ${progress.completed.length} 句表达，其中 ${progress.spoken.length} 句完成录音尝试。<br>完成练习不代表已掌握；明天记得再说一遍。</p><div class="summary-phrases">${LESSONS.map((l) => `<div><strong>${l.phrase}</strong><small>${progress.spoken.includes(l.id) ? "已录音练习" : "阅读练习"}</small></div>`).join("")}</div><button data-action="journal" class="soft-button">查看学习手账 ↗</button><button data-action="restart" class="primary">再练一局 ↗</button><a class="soft-button" href="?mode=classic">探索原版自由冒险 ↗</a></article>`;
+  return `<article class="lesson-card summary"><div class="tag">CHAPTER COMPLETE / 今夜成功登顶</div><div class="reward-symbol">♜</div><h2>这座城，听见你了。</h2><p>接触了 ${progress.completed.length} 句表达，其中 ${progress.spoken.length} 句完成录音尝试。<br>完成练习不代表已掌握；明天记得再说一遍。</p><div class="run-route-summary">${progress.routes.map((kind, i) => `<span>${i + 1}F · ${ROUTE_INFO[kind].name}</span>`).join(" → ")}</div><div class="summary-phrases">${LESSONS.map((l) => `<div><strong>${l.phrase}</strong><small>${progress.spoken.includes(l.id) ? "已录音练习" : "阅读练习"}</small></div>`).join("")}</div><button data-action="journal" class="soft-button">查看学习手账 ↗</button><button data-action="restart" class="primary">再练一局 ↗</button><a class="soft-button" href="?mode=classic">探索原版自由冒险 ↗</a></article>`;
 }
 function reviewSummary() {
   return `<article class="lesson-card review-summary"><div class="tag">REVIEW COMPLETE / 今日回顾</div><div class="reward-symbol">✧</div><h2>再遇见，已经不陌生。</h2><p>本次完成 ${reviewIds.length} 句回顾，记录已写入学习手账。<br>“还要练”的句子约 10 分钟后到期，其余按自评安排下一次。</p><p>阅读与录音分开记录，自评不等于发音合格。</p><button class="primary" data-action="journal">查看手账 ↗</button><button class="soft-button" data-action="journal-close">回到本局</button></article>`;
@@ -239,7 +292,7 @@ function leaveReview() {
   answered = false;
   recorded = false;
   readingOnly = false;
-  showHint = progress.relics.includes("粤拼灯牌");
+  showHint = progress.floor > 0 && progress.routes[progress.floor] === "coach";
 }
 async function action(name: string) {
   started = true;
@@ -269,7 +322,7 @@ async function action(name: string) {
   }
   if (name === "help") {
     toast(
-      "每层：听示范 → 录音跟读或选择阅读模式 → 回答场景题 → 领取锦囊。录音只在当前页面暂存，不做自动发音评测。原版自由冒险有独立存档与语音设置。"
+      "每层：选教学巷或实战街 → 听示范 → 录音跟读或阅读 → 回答场景题 → 领取不重复锦囊。实战街先隐藏答案，并开放更广的奖励选择。录音只在当前页面暂存，不做自动发音评测。原版自由冒险有独立存档与语音设置。"
     );
     return;
   }
