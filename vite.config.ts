@@ -15,7 +15,10 @@ export default defineConfig({
   },
   build: {
     target: "es2022",
-    sourcemap: false
+    sourcemap: false,
+    rollupOptions: {
+      input: { main: "index.html", street: "street.html" }
+    }
   },
   worker: {
     // Classic Worker（iife）：sherpa-onnx importScripts 需要非 module 语义
