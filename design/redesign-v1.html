@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>声震龙楼 · 界面重构原型 v1</title>
+<style>
+:root{--bg:#0b0d1a;--card:#151a2e;--card2:#1c2340;--pink:#ff4f8b;--cyan:#27e1d6;--amber:#ffb627;--text:#eef1ff;--dim:#8a91b4;--ok:#3ddc84;--bad:#ff5a5a}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#05060d;color:var(--text);font-family:-apple-system,"PingFang SC","Noto Sans SC",sans-serif;padding:32px 16px}
+h1{text-align:center;font-size:22px;letter-spacing:2px}
+.sub{text-align:center;color:var(--dim);font-size:13px;margin:8px 0 28px}
+.row{display:flex;gap:28px;justify-content:center;flex-wrap:wrap}
+.col{display:flex;flex-direction:column;align-items:center;gap:10px}
+.cap{font-size:13px;color:var(--dim)}.cap b{color:var(--text)}
+.phone{width:320px;height:660px;border-radius:40px;background:var(--bg);border:8px solid #22263a;overflow:hidden;position:relative;display:flex;flex-direction:column;
+ background-image:radial-gradient(circle at 80% -10%,rgba(255,79,139,.18),transparent 45%),radial-gradient(circle at 0% 110%,rgba(39,225,214,.14),transparent 45%)}
+.status{height:26px;font-size:11px;display:flex;justify-content:space-between;padding:6px 22px 0;color:var(--dim)}
+/* 顶栏 */
+.top{display:flex;align-items:center;justify-content:space-between;padding:8px 16px}
+.chip{display:flex;align-items:center;gap:4px;font-weight:700;font-size:14px}
+.fire{color:var(--amber)}.gem{color:var(--cyan)}.heart{color:var(--pink)}
+/* 路径 */
+.scroll{flex:1;overflow:hidden;position:relative}
+.unit{margin:6px 14px 4px;border-radius:16px;padding:12px 14px;background:linear-gradient(135deg,#ff4f8b,#b0357a);box-shadow:0 0 24px rgba(255,79,139,.35)}
+.unit small{font-size:11px;opacity:.85;letter-spacing:1px}.unit div{font-size:17px;font-weight:800;margin-top:2px}
+.path{position:relative;height:470px}
+.node{position:absolute;width:64px;height:64px;border-radius:50%;display:grid;place-items:center;font-size:22px;font-weight:900;font-family:"Songti SC",serif}
+.done{background:#1c2340;border:3px solid var(--cyan);color:var(--cyan);box-shadow:0 0 14px rgba(39,225,214,.5)}
+.now{background:var(--pink);color:#fff;border:4px solid #ffd1e1;box-shadow:0 0 0 8px rgba(255,79,139,.18),0 0 28px var(--pink);animation:pulse 1.6s infinite}
+.lock{background:#161a2c;border:3px dashed #343a5a;color:#3d4468}
+.boss{width:78px;height:78px;border-radius:18px;background:#1a1530;border:3px solid var(--amber);color:var(--amber);box-shadow:0 0 18px rgba(255,182,39,.35)}
+.tag{position:absolute;font-size:11px;color:var(--dim);white-space:nowrap}
+.start{position:absolute;background:#fff;color:var(--pink);font-weight:800;font-size:12px;padding:5px 10px;border-radius:10px;box-shadow:0 4px 0 #d9d9e6}
+.start:after{content:"";position:absolute;left:50%;bottom:-6px;margin-left:-6px;border:6px solid transparent;border-top-color:#fff;border-bottom:0}
+@keyframes pulse{50%{box-shadow:0 0 0 14px rgba(255,79,139,.05),0 0 34px var(--pink)}}
+.sign{position:absolute;font-family:"Songti SC",serif;font-weight:900;writing-mode:vertical-rl;padding:8px 5px;border-radius:6px;font-size:15px;letter-spacing:3px}
+.tab{height:62px;display:flex;justify-content:space-around;align-items:center;border-top:1px solid #20263f;background:#0d1020;font-size:10px;color:var(--dim)}
+.tab div{display:flex;flex-direction:column;align-items:center;gap:3px}.tab .on{color:var(--pink)}
+.tab i{font-style:normal;font-size:20px}
+/* 课堂 */
+.bar{display:flex;align-items:center;gap:10px;padding:10px 16px}
+.x{color:var(--dim);font-size:20px}
+.prog{flex:1;height:12px;border-radius:8px;background:#20263f;overflow:hidden}
+.prog span{display:block;height:100%;width:45%;border-radius:8px;background:linear-gradient(90deg,var(--cyan),#8af5ee)}
+.qtitle{padding:6px 20px 0;font-size:13px;color:var(--cyan);font-weight:700;letter-spacing:1px}
+.qhead{padding:4px 20px 10px;font-size:19px;font-weight:800}
+.say{margin:0 18px;border-radius:22px;padding:18px;background:var(--card);border:1px solid #262d4d;position:relative}
+.bubble{display:flex;gap:12px;align-items:flex-start}
+.mascot{flex:none}
+.speech{background:var(--card2);border-radius:4px 16px 16px 16px;padding:12px 14px;flex:1}
+.hanzi{font-size:28px;font-weight:900;letter-spacing:2px}
+.jp{font-family:ui-monospace,Menlo,monospace;color:var(--pink);font-size:14px;margin-top:4px}
+.jp b{color:var(--amber);font-weight:700}
+.mean{color:var(--dim);font-size:12px;margin-top:6px}
+.plays{display:flex;gap:10px;margin-top:14px}
+.pbtn{flex:1;border-radius:14px;padding:10px 0;text-align:center;font-weight:800;font-size:13px;background:#20284a;border-bottom:4px solid #141a33}
+.pbtn.c{color:var(--cyan)}.pbtn.a{color:var(--amber)}
+.wave{display:flex;align-items:center;justify-content:center;gap:3px;height:54px;margin:16px 18px 0}
+.wave i{width:4px;border-radius:3px;background:var(--pink);opacity:.85}
+.mic{margin:14px auto 0;width:92px;height:92px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ff86b0,var(--pink));display:grid;place-items:center;box-shadow:0 6px 0 #b0305e,0 0 34px rgba(255,79,139,.55)}
+.hint{text-align:center;font-size:12px;color:var(--dim);margin-top:12px}
+.skip{text-align:center;font-size:12px;color:var(--dim);margin-top:auto;padding:14px;text-decoration:underline}
+/* 结果 */
+.sheet{margin-top:auto;background:#10261e;border-top:2px solid var(--ok);padding:16px 18px 20px;border-radius:22px 22px 0 0}
+.sheet h3{color:var(--ok);font-size:18px;display:flex;gap:8px;align-items:center}
+.sheet p{font-size:13px;color:#b6e8cc;margin:6px 0 14px}
+.btn{border-radius:16px;padding:14px 0;text-align:center;font-weight:900;font-size:15px}
+.btn.ok{background:var(--ok);color:#06301a;box-shadow:0 5px 0 #25a560}
+.btn.ghost{margin-top:12px;border:2px solid #2d6b4f;color:#9ce3bd;font-size:13px;padding:10px 0}
+.opts{display:flex;flex-direction:column;gap:10px;margin:0 18px}
+.opt{border-radius:16px;padding:13px 16px;font-size:16px;font-weight:700;background:var(--card);border:2px solid #262d4d;border-bottom-width:5px;display:flex;gap:12px;align-items:center}
+.opt.right{border-color:var(--ok);background:#12301f;color:#bff5d6}
+.opt .k{width:26px;height:26px;border-radius:8px;border:2px solid #343c63;display:grid;place-items:center;font-size:12px;color:var(--dim)}
+.opt.right .k{border-color:var(--ok);color:var(--ok)}
+/* 结算 */
+.center{flex:1;display:flex;flex-direction:column;align-items:center;padding:18px}
+.big{font-size:24px;font-weight:900;margin-top:10px;color:var(--amber);text-shadow:0 0 16px rgba(255,182,39,.5)}
+.stats{display:flex;gap:10px;width:100%;margin-top:18px}
+.stat{flex:1;border-radius:16px;border:2px solid;padding:10px 0;text-align:center}
+.stat small{display:block;font-size:11px;font-weight:800;padding-bottom:6px}
+.stat b{font-size:20px}
+.s1{border-color:var(--amber);color:var(--amber)}.s2{border-color:var(--cyan);color:var(--cyan)}.s3{border-color:var(--pink);color:var(--pink)}
+.ad{width:100%;margin-top:18px;border-radius:18px;padding:14px;background:linear-gradient(135deg,#2a1f48,#1c2340);border:1px dashed #6d5cc2;display:flex;gap:12px;align-items:center}
+.ad .tv{width:44px;height:44px;border-radius:12px;background:#6d5cc2;display:grid;place-items:center;font-size:22px}
+.ad div{font-size:13px}.ad small{display:block;color:var(--dim);font-size:11px;margin-top:2px}
+.notes{max-width:1060px;margin:34px auto 0;background:#0d1020;border:1px solid #20263f;border-radius:16px;padding:20px 24px;font-size:13px;line-height:1.9;color:#c5cae6}
+.notes h2{font-size:15px;margin-bottom:6px;color:var(--text)}
+.notes b{color:var(--pink)}
+</style></head><body>
+<h1>声震龙楼 · 界面重构原型 v1</h1>
+<p class="sub">港风霓虹 × 闯关学习　|　借鉴：路径图 / 连续打卡（行业通用）· 大按钮跟读（Speak、ELSA）· 即时反馈底栏 · 激励视频位</p>
+
+<div class="row">
+<!-- 1 首页 -->
+<div class="col"><div class="phone">
+ <div class="status"><span>9:41</span><span>●●● 5G</span></div>
+ <div class="top">
+  <div class="chip" style="font-family:'Songti SC',serif;font-size:17px"><span style="color:var(--pink)">龍</span>&nbsp;声震龙楼</div>
+  <div style="display:flex;gap:12px"><span class="chip fire">🔥 3</span><span class="chip gem">◆ 120</span><span class="chip heart">♥ 5</span></div>
+ </div>
+ <div class="unit"><small>第一章 · 霓虹初声</small><div>油麻地一条街：开口第一句</div></div>
+ <div class="scroll"><div class="path">
+  <svg width="304" height="470" style="position:absolute;left:0;top:0"><path d="M150 40 C 60 90, 60 120, 95 150 S 230 200, 205 250 S 70 310, 110 350 S 180 400, 150 430" stroke="#262d4d" stroke-width="10" fill="none" stroke-linecap="round" stroke-dasharray="2 16"/></svg>
+  <div class="node done" style="left:118px;top:10px">✓</div><span class="tag" style="left:190px;top:32px">街口 · 你好</span>
+  <div class="node done" style="left:60px;top:118px">✓</div><span class="tag" style="left:134px;top:140px">茶档 · 唔该</span>
+  <div class="start" style="left:160px;top:176px">开始!</div>
+  <div class="node now" style="left:172px;top:216px">冻</div><span class="tag" style="left:70px;top:238px;color:var(--pink)">冰室 · 点饮品</span>
+  <div class="node lock" style="left:78px;top:318px">钱</div><span class="tag" style="left:152px;top:340px">夜市 · 几多钱</span>
+  <div class="node boss" style="left:112px;top:392px">茶</div><span class="tag" style="left:198px;top:420px;color:var(--amber)">茶餐厅三轮点单</span>
+  <div class="sign" style="right:6px;top:70px;border:2px solid var(--pink);color:var(--pink);box-shadow:0 0 12px rgba(255,79,139,.5)">冰室</div>
+  <div class="sign" style="left:6px;top:250px;border:2px solid var(--cyan);color:var(--cyan);box-shadow:0 0 12px rgba(39,225,214,.5)">押</div>
+ </div></div>
+ <div class="tab"><div class="on"><i>⌂</i>闯关</div><div><i>✎</i>手账</div><div><i>◎</i>每日回忆</div><div><i>☺</i>我的</div></div>
+</div><div class="cap"><b>① 首页 · 街道路径图</b>　每层 = 一个招牌路口</div></div>
+
+<!-- 2 跟读 -->
+<div class="col"><div class="phone">
+ <div class="status"><span>9:41</span><span>●●● 5G</span></div>
+ <div class="bar"><span class="x">✕</span><div class="prog"><span></span></div><span class="chip heart">♥ 5</span></div>
+ <div class="qtitle">开口跟读</div>
+ <div class="qhead">跟住龙仔讲一次</div>
+ <div class="say">
+  <div class="bubble">
+   <svg class="mascot" width="58" height="64" viewBox="0 0 58 64"><ellipse cx="29" cy="40" rx="22" ry="20" fill="#27e1d6"/><path d="M12 26 L8 10 L20 20Z M46 26 L50 10 L38 20Z" fill="#ffb627"/><circle cx="29" cy="30" r="18" fill="#27e1d6"/><circle cx="22" cy="28" r="5" fill="#fff"/><circle cx="36" cy="28" r="5" fill="#fff"/><circle cx="23" cy="29" r="2.4" fill="#0b0d1a"/><circle cx="37" cy="29" r="2.4" fill="#0b0d1a"/><path d="M22 38 Q29 43 36 38" stroke="#0b0d1a" stroke-width="2.4" fill="none" stroke-linecap="round"/><ellipse cx="29" cy="47" rx="10" ry="7" fill="#9af3ec"/><circle cx="15" cy="36" r="3" fill="#ff4f8b" opacity=".5"/><circle cx="43" cy="36" r="3" fill="#ff4f8b" opacity=".5"/></svg>
+   <div class="speech"><div class="hanzi">我要一杯冻奶茶</div><div class="jp">ngo5 jiu3 jat1 bui1 <b>dung3</b> naai5 caa4</div><div class="mean">我要一杯冰奶茶　·　“冻”＝冰的</div></div>
+  </div>
+  <div class="plays"><div class="pbtn c">▶ 听示范</div><div class="pbtn a">🐢 慢速</div></div>
+ </div>
+ <div class="wave"><i style="height:10px"></i><i style="height:18px"></i><i style="height:30px"></i><i style="height:44px"></i><i style="height:26px"></i><i style="height:38px"></i><i style="height:50px"></i><i style="height:34px"></i><i style="height:20px"></i><i style="height:42px"></i><i style="height:28px"></i><i style="height:14px"></i><i style="height:36px"></i><i style="height:22px"></i><i style="height:12px"></i></div>
+ <div class="mic"><svg width="34" height="44" viewBox="0 0 34 44"><rect x="9" y="2" width="16" height="26" rx="8" fill="#fff"/><path d="M3 20 a14 14 0 0 0 28 0" stroke="#fff" stroke-width="3.4" fill="none"/><path d="M17 34v8" stroke="#fff" stroke-width="3.4"/></svg></div>
+ <div class="hint">按住讲 · 松开回放　|　录音只留喺手机，唔上传</div>
+ <div class="skip">而家唔方便开口，跳过</div>
+</div><div class="cap"><b>② 跟读页</b>　吉祥物“龙仔” + 大麦克风</div></div>
+
+<!-- 3 答题反馈 -->
+<div class="col"><div class="phone">
+ <div class="status"><span>9:41</span><span>●●● 5G</span></div>
+ <div class="bar"><span class="x">✕</span><div class="prog"><span style="width:70%"></span></div><span class="chip heart">♥ 5</span></div>
+ <div class="qtitle">听懂了，也用对了</div>
+ <div class="qhead">菜单上的“冻奶茶”系乜意思？</div>
+ <div class="opts">
+  <div class="opt"><span class="k">1</span>热奶茶</div>
+  <div class="opt"><span class="k">2</span>不加奶的茶</div>
+  <div class="opt right"><span class="k">3</span>冰奶茶</div>
+ </div>
+ <div class="sheet">
+  <h3>✓ 啱晒！</h3>
+  <p>“冻”喺茶餐厅＝加冰。热饮就讲“热”。</p>
+  <div class="btn ok">继续</div>
+ </div>
+</div><div class="cap"><b>③ 答题 · 即时反馈底栏</b></div></div>
+
+<!-- 4 结算 -->
+<div class="col"><div class="phone">
+ <div class="status"><span>9:41</span><span>●●● 5G</span></div>
+ <div class="center">
+  <svg width="150" height="130" viewBox="0 0 150 130"><rect x="20" y="8" width="110" height="46" rx="8" fill="none" stroke="#ff4f8b" stroke-width="3"/><text x="75" y="42" text-anchor="middle" font-size="28" font-weight="900" fill="#ff4f8b" font-family="Songti SC,serif">冰室</text><g transform="translate(46 58)"><ellipse cx="29" cy="40" rx="22" ry="20" fill="#27e1d6"/><path d="M12 26 L8 10 L20 20Z M46 26 L50 10 L38 20Z" fill="#ffb627"/><circle cx="29" cy="30" r="18" fill="#27e1d6"/><path d="M18 28 q4 -5 8 0 M32 28 q4 -5 8 0" stroke="#0b0d1a" stroke-width="2.6" fill="none"/><path d="M20 36 Q29 46 38 36" fill="#0b0d1a"/></g></svg>
+  <div class="big">冰室层 · 通关！</div>
+  <div style="color:var(--dim);font-size:13px;margin-top:4px">你今晚讲咗 3 句粤语</div>
+  <div class="stats">
+   <div class="stat s1"><small>经验</small><b>+30</b></div>
+   <div class="stat s2"><small>开口</small><b>3 句</b></div>
+   <div class="stat s3"><small>连续</small><b>🔥 3 日</b></div>
+  </div>
+  <div class="ad"><div class="tv">▶</div><div><b>睇段广告，领一个锦囊</b><small>激励视频 · 自愿观看 · 唔睇都照样继续</small></div></div>
+  <div style="flex:1"></div>
+  <div class="btn ok" style="width:100%">收下，去下一条街</div>
+ </div>
+</div><div class="cap"><b>④ 结算 · 激励视频位</b></div></div>
+</div>
+
+<div class="notes">
+<h2>设计说明</h2>
+① <b>整体结构</b>借鉴主流学习 App 通用模式：路径闯关、连续打卡、底部即时反馈、结算奖励。交互模式不受版权保护，但<b>不用</b>多邻国的猫头鹰、绿色配色、插画风、音效和名字。<br>
+② <b>自己的识别度</b>：深夜霓虹底 + 粉/青/琥珀三色霓虹招牌 + 宋体招牌字（冰室、押、茶）；原创吉祥物“龙仔”（青色小龙，最终形象可以再请人画）。<br>
+③ <b>广告位</b>只放在结算页和“要提示时”，用户自愿看。不强制、不打断学习，也符合微信对诱导的要求。<br>
+④ <b>定位是学习工具</b>：全程没有血量战斗和怪物；♥ 只用于答题容错，可以考虑去掉，避免被审核认为是游戏。<br>
+⑤ 这是静态原型，只用来确认视觉方向。确认后用 Taro 在小程序里实现。
+</div>
+</body></html>

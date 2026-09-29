@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>声震龙楼 · 街坊卡牌 设计稿 v1</title>
+<style>
+:root{--bg:#0b0d1a;--card:#151a2e;--pink:#ff4f8b;--cyan:#27e1d6;--amber:#ffb627;--violet:#9b7bff;--text:#eef1ff;--dim:#8a91b4;--ok:#3ddc84}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#05060d;color:var(--text);font-family:-apple-system,"PingFang SC","Noto Sans SC",sans-serif;padding:32px 16px}
+h1{text-align:center;font-size:22px;letter-spacing:2px}
+.sub{text-align:center;color:var(--dim);font-size:13px;margin:8px 0 28px}
+.row{display:flex;gap:28px;justify-content:center;flex-wrap:wrap}
+.col{display:flex;flex-direction:column;align-items:center;gap:10px}
+.cap{font-size:13px;color:var(--dim);max-width:320px;text-align:center}.cap b{color:var(--text)}
+.phone{width:330px;height:690px;border-radius:40px;background:var(--bg);border:8px solid #22263a;overflow:hidden;position:relative;display:flex;flex-direction:column;
+ background-image:radial-gradient(circle at 80% -10%,rgba(255,79,139,.16),transparent 45%),radial-gradient(circle at 0% 110%,rgba(39,225,214,.12),transparent 45%)}
+.status{height:24px;font-size:11px;display:flex;justify-content:space-between;padding:6px 22px 0;color:var(--dim)}
+.hud{display:flex;justify-content:space-between;align-items:center;padding:6px 14px;font-size:13px;font-weight:800}
+.hud span{display:flex;gap:4px;align-items:center}
+.relics{display:flex;gap:6px;padding:0 14px 6px}
+.relic{width:30px;height:30px;border-radius:8px;border:1.5px solid var(--violet);color:var(--violet);display:grid;place-items:center;font-size:12px;font-weight:900;font-family:"Songti SC",serif;background:#171431}
+.song{font-family:"Songti SC","STSong",serif}
+/* 地图 */
+.maptitle{margin:0 14px;padding:10px 12px;border-radius:14px;background:linear-gradient(135deg,#1b2140,#141830);border:1px solid #29305a}
+.maptitle small{color:var(--cyan);font-size:11px;letter-spacing:1px}.maptitle div{font-weight:800;margin-top:2px}
+.map{flex:1;position:relative}
+.mn{position:absolute;width:46px;height:46px;border-radius:12px;display:grid;place-items:center;font-size:19px;font-weight:900;background:#141830;border:2px solid #2b3258;color:#5d6591}
+.mn.fight{border-color:var(--pink);color:var(--pink)}
+.mn.evt{border-color:var(--cyan);color:var(--cyan)}
+.mn.shop{border-color:var(--amber);color:var(--amber)}
+.mn.rest{border-color:var(--ok);color:var(--ok)}
+.mn.past{opacity:.35}
+.mn.here{box-shadow:0 0 0 6px rgba(255,79,139,.18),0 0 24px var(--pink);background:#2a1430;animation:p 1.6s infinite}
+.mn.boss{width:84px;height:62px;border-color:var(--amber);color:var(--amber);font-size:22px;box-shadow:0 0 22px rgba(255,182,39,.35)}
+.ml{position:absolute;font-size:10px;color:var(--dim);white-space:nowrap}
+@keyframes p{50%{box-shadow:0 0 0 12px rgba(255,79,139,.04),0 0 30px var(--pink)}}
+.legend{display:flex;justify-content:space-around;padding:10px 8px 14px;font-size:11px;color:var(--dim);border-top:1px solid #1d2340}
+.legend b{font-family:"Songti SC",serif;margin-right:3px}
+/* 战斗 */
+.scene{margin:4px 12px 0;height:250px;border-radius:18px;position:relative;overflow:hidden;
+ background:linear-gradient(180deg,#1a1233 0%,#23183d 55%,#120f22 100%);border:1px solid #2b2350}
+.neon{position:absolute;top:12px;left:14px;border:2px solid var(--pink);color:var(--pink);padding:3px 8px;border-radius:6px;font-weight:900;font-size:15px;box-shadow:0 0 14px rgba(255,79,139,.6);text-shadow:0 0 8px var(--pink)}
+.neon2{position:absolute;top:14px;right:14px;writing-mode:vertical-rl;border:2px solid var(--cyan);color:var(--cyan);padding:6px 3px;border-radius:6px;font-weight:900;font-size:13px;letter-spacing:3px;box-shadow:0 0 12px rgba(39,225,214,.5)}
+.npc{position:absolute;left:50%;bottom:58px;transform:translateX(-50%)}
+.intent{position:absolute;left:50%;top:44px;transform:translateX(-50%);background:#fff;color:#1a1233;border-radius:14px;padding:8px 12px;min-width:196px;text-align:center;box-shadow:0 6px 18px rgba(0,0,0,.4)}
+.intent:after{content:"";position:absolute;left:50%;bottom:-7px;margin-left:-7px;border:7px solid transparent;border-top-color:#fff;border-bottom:0}
+.intent b{font-size:18px}.intent small{display:block;font-size:10px;color:#6b6f8f;margin-top:2px}
+.intent .play{position:absolute;right:-10px;top:-10px;width:26px;height:26px;border-radius:50%;background:var(--pink);color:#fff;font-size:11px;display:grid;place-items:center}
+.meters{position:absolute;left:10px;right:10px;bottom:10px;display:flex;flex-direction:column;gap:5px}
+.meter{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--dim)}
+.meter .t{width:44px}
+.meter .b{flex:1;height:9px;border-radius:6px;background:#2a2346;overflow:hidden}
+.meter .b i{display:block;height:100%;border-radius:6px}
+.meter .v{width:38px;text-align:right;font-weight:800;color:var(--text)}
+.hint{margin:8px 14px 0;font-size:11px;color:var(--cyan);display:flex;gap:6px;align-items:center}
+.me{display:flex;align-items:center;justify-content:space-between;margin:6px 14px 0}
+.mana{width:44px;height:44px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ffd37a,var(--amber));color:#3a2600;display:grid;place-items:center;font-weight:900;font-size:15px;box-shadow:0 0 16px rgba(255,182,39,.5)}
+.pat{flex:1;margin-left:10px}
+.hand{position:relative;height:190px;margin-top:6px}
+.c{position:absolute;bottom:14px;width:96px;height:146px;border-radius:12px;background:linear-gradient(180deg,#1f2544,#161a30);border:2px solid #394170;padding:7px;display:flex;flex-direction:column;transform-origin:50% 140%;box-shadow:0 6px 14px rgba(0,0,0,.5)}
+.c .cost{position:absolute;top:-8px;left:-8px;width:24px;height:24px;border-radius:50%;background:var(--amber);color:#3a2600;font-size:12px;font-weight:900;display:grid;place-items:center}
+.c .ty{font-size:9px;letter-spacing:1px;font-weight:800}
+.c .ph{font-size:17px;font-weight:900;margin-top:6px;line-height:1.2}
+.c .jp{font-family:ui-monospace,Menlo,monospace;font-size:9px;color:var(--pink);margin-top:3px}
+.c .ef{margin-top:auto;font-size:10px;color:#c7cbe8;line-height:1.35;border-top:1px solid #2d345c;padding-top:5px}
+.c.sel{border-color:var(--ok);box-shadow:0 0 0 3px rgba(61,220,132,.25),0 0 22px rgba(61,220,132,.5);transform:translateY(-26px)!important}
+.c.persuade .ty{color:var(--pink)}.c.calm .ty{color:var(--cyan)}.c.skill .ty{color:var(--violet)}
+.end{position:absolute;right:14px;bottom:192px;background:#232a4d;border:2px solid #3a4378;border-radius:12px;padding:6px 10px;font-size:11px;font-weight:800}
+.micbar{margin:0 14px 12px;border-radius:16px;background:linear-gradient(135deg,#ff4f8b,#c23a78);padding:10px 12px;display:flex;align-items:center;gap:10px;box-shadow:0 5px 0 #8e2757}
+.micbar small{display:block;font-size:10px;opacity:.85}
+.micbar b{font-size:14px}
+/* 奖励 */
+.center{flex:1;display:flex;flex-direction:column;align-items:center;padding:14px}
+.win{font-size:22px;font-weight:900;color:var(--amber);text-shadow:0 0 16px rgba(255,182,39,.5);margin-top:6px}
+.loot{display:flex;gap:10px;margin-top:10px;font-size:12px}
+.loot span{border:1px solid #2b3258;border-radius:10px;padding:5px 9px}
+.pick{display:flex;gap:8px;margin-top:18px}
+.pick .c{position:relative;bottom:auto;transform:none}
+.adpick{width:96px;height:146px;border-radius:12px;border:2px dashed #6d5cc2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:#b9a9ff;font-size:11px;text-align:center;background:#171431}
+.adpick .tv{width:36px;height:36px;border-radius:10px;background:#6d5cc2;color:#fff;display:grid;place-items:center}
+.grad{width:100%;margin-top:18px;border-radius:14px;border:1px solid #2d6b4f;background:#10261e;padding:10px 12px;font-size:12px;color:#b6e8cc}
+.grad b{color:var(--ok)}
+.btn{width:100%;margin-top:auto;border-radius:16px;padding:14px 0;text-align:center;font-weight:900;font-size:15px;background:var(--ok);color:#06301a;box-shadow:0 5px 0 #25a560}
+.notes{max-width:1060px;margin:34px auto 0;background:#0d1020;border:1px solid #20263f;border-radius:16px;padding:20px 24px;font-size:13px;line-height:1.9;color:#c5cae6}
+.notes h2{font-size:15px;margin:10px 0 4px;color:var(--text)}
+.notes b{color:var(--pink)}
+table{border-collapse:collapse;width:100%;font-size:12px;margin-top:4px}td,th{border:1px solid #232a48;padding:5px 8px;text-align:left}th{color:var(--cyan)}
+</style></head><body>
+<h1>声震龙楼 · 街坊卡牌 设计稿 v1</h1>
+<p class="sub">类杀戮尖塔的粤语情景对话练习　|　卡牌 = 粤语句子 · 对手 = 街坊 · 意图 = 听力题 · 开口读对 = 暴击</p>
+
+<div class="row">
+<!-- 地图 -->
+<div class="col"><div class="phone">
+ <div class="status"><span>9:41</span><span>●●● 5G</span></div>
+ <div class="hud"><span style="color:var(--pink)">♥ 耐心 32/40</span><span style="color:var(--amber)">$ 港纸 58</span><span style="color:var(--cyan)">卡组 14</span></div>
+ <div class="relics"><div class="relic">入</div><div class="relic">冻</div><div class="relic">m</div></div>
+ <div class="maptitle"><small>第一章 · 茶餐厅一条街</small><div>午市前，搞掂成条街嘅街坊</div></div>
+ <div class="map">
+  <svg width="314" height="440" style="position:absolute;left:0;top:0" stroke="#2b3258" stroke-width="2" stroke-dasharray="4 5" fill="none">
+   <path d="M157 408 L90 340 M157 408 L224 340 M90 340 L60 268 M90 340 L150 268 M224 340 L150 268 M224 340 L250 268 M60 268 L95 196 M150 268 L95 196 M150 268 L210 196 M250 268 L210 196 M95 196 L157 118 M210 196 L157 118 M157 118 L157 46"/>
+  </svg>
+  <div class="mn fight past" style="left:134px;top:385px">街</div><span class="ml" style="left:190px;top:400px">起点</span>
+  <div class="mn fight past" style="left:67px;top:317px">伙</div>
+  <div class="mn evt" style="left:201px;top:317px">?</div>
+  <div class="mn shop" style="left:37px;top:245px">士</div>
+  <div class="mn fight here" style="left:127px;top:245px">婶</div><span class="ml" style="left:112px;top:296px;color:var(--pink)">街市阿婶 · 讲价</span>
+  <div class="mn fight" style="left:227px;top:245px">的</div>
+  <div class="mn rest" style="left:72px;top:173px">糖</div>
+  <div class="mn evt" style="left:187px;top:173px">?</div>
+  <div class="mn fight" style="left:134px;top:95px">婆</div><span class="ml" style="left:190px;top:110px">包租婆</span>
+  <div class="mn boss" style="left:115px;top:10px"><span class="song">午市</span></div><span class="ml" style="left:206px;top:30px;color:var(--amber)">BOSS · 午市高峰</span>
+ </div>
+ <div class="legend"><span><b style="color:var(--pink)">婶</b>街坊</span><span><b style="color:var(--cyan)">?</b>奇遇</span><span><b style="color:var(--amber)">士</b>士多</span><span><b style="color:var(--ok)">糖</b>糖水铺</span></div>
+</div><div class="cap"><b>① 分岔街道地图</b>　每局随机生成；每个节点是一个街坊、奇遇、士多（商店）或糖水铺（休息）</div></div>
+
+<!-- 战斗 -->
+<div class="col"><div class="phone">
+ <div class="status"><span>9:41</span><span>●●● 5G</span></div>
+ <div class="relics" style="padding-top:4px"><div class="relic">入</div><div class="relic">冻</div><div class="relic">m</div><span style="margin-left:auto;font-size:11px;color:var(--dim);align-self:center">第 2 回合</span></div>
+ <div class="scene">
+  <div class="neon song">街市</div><div class="neon2 song">生果</div>
+  <div class="intent"><span class="play">▶</span><b>靓仔，呢啲十蚊一斤㗎！</b><small>意图：抬价　→　下回合你耐心 −6</small></div>
+  <svg class="npc" width="110" height="120" viewBox="0 0 110 120"><ellipse cx="55" cy="112" rx="40" ry="6" fill="#000" opacity=".35"/><path d="M20 118 Q22 70 55 68 Q88 70 90 118Z" fill="#c2507a"/><path d="M30 80 L80 80 L78 112 L32 112Z" fill="#f4e3c1"/><text x="55" y="102" text-anchor="middle" font-size="12" font-weight="900" fill="#c2507a" font-family="Songti SC,serif">生果</text><circle cx="55" cy="46" r="24" fill="#f2c9a0"/><path d="M31 42 Q34 18 55 18 Q78 18 80 42 Q72 30 55 31 Q40 30 31 42Z" fill="#3a2b3f"/><circle cx="47" cy="47" r="2.6" fill="#1a1233"/><circle cx="63" cy="47" r="2.6" fill="#1a1233"/><path d="M47 58 Q55 63 63 58" stroke="#1a1233" stroke-width="2.4" fill="none" stroke-linecap="round"/><circle cx="40" cy="54" r="3.5" fill="#ff7a9c" opacity=".55"/><circle cx="70" cy="54" r="3.5" fill="#ff7a9c" opacity=".55"/></svg>
+  <div class="meters">
+   <div class="meter"><span class="t">说服度</span><span class="b"><i style="width:55%;background:linear-gradient(90deg,var(--pink),#ff9bbd)"></i></span><span class="v">22/40</span></div>
+  </div>
+ </div>
+ <div class="hint">💡 佢抬价 → 出「讲价」卡可以抵消</div>
+ <div class="me"><div class="mana">3/3</div><div class="pat meter"><span class="t" style="color:var(--pink)">我的耐心</span><span class="b"><i style="width:80%;background:linear-gradient(90deg,var(--cyan),#9af3ec)"></i></span><span class="v">32/40</span></div></div>
+ <div class="hand">
+  <div class="c calm" style="left:4px;transform:rotate(-12deg)"><span class="cost">1</span><span class="ty">稳住</span><span class="ph">唔该晒</span><span class="jp">m4 goi1 saai3</span><span class="ef">耐心 +5<br>礼貌句</span></div>
+  <div class="c persuade sel" style="left:78px;transform:rotate(-4deg)"><span class="cost">1</span><span class="ty">讲价</span><span class="ph">平啲啦</span><span class="jp">peng4 di1 laa1</span><span class="ef">说服 +8<br>抵消「抬价」</span></div>
+  <div class="c persuade" style="left:152px;transform:rotate(4deg)"><span class="cost">2</span><span class="ty">说服</span><span class="ph">我成日嚟㗎</span><span class="jp">ngo5 seng4 jat6 lai4 gaa3</span><span class="ef">说服 +14</span></div>
+  <div class="c skill" style="left:226px;transform:rotate(12deg)"><span class="cost">0</span><span class="ty">技巧</span><span class="ph">几多钱？</span><span class="jp">gei2 do1 cin2</span><span class="ef">抽 2 张卡</span></div>
+  <div class="end">结束回合</div>
+ </div>
+ <div class="micbar"><svg width="22" height="28" viewBox="0 0 34 44"><rect x="9" y="2" width="16" height="26" rx="8" fill="#fff"/><path d="M3 20 a14 14 0 0 0 28 0" stroke="#fff" stroke-width="3.4" fill="none"/><path d="M17 34v8" stroke="#fff" stroke-width="3.4"/></svg><div><b>按住读「平啲啦」出牌</b><small>声调贴合 → 暴击 ×2　|　唔方便开口：点卡直接出（效果普通）</small></div></div>
+</div><div class="cap"><b>② 对话战斗</b>　头顶是街坊下一句（可点 ▶ 听）；你要听懂意图再出对的句子；开口读对声调就暴击</div></div>
+
+<!-- 奖励 -->
+<div class="col"><div class="phone">
+ <div class="status"><span>9:41</span><span>●●● 5G</span></div>
+ <div class="center">
+  <svg width="120" height="92" viewBox="0 0 120 92"><rect x="10" y="6" width="100" height="40" rx="8" fill="none" stroke="#ffb627" stroke-width="3"/><text x="60" y="35" text-anchor="middle" font-size="22" font-weight="900" fill="#ffb627" font-family="Songti SC,serif">搞掂！</text><text x="60" y="72" text-anchor="middle" font-size="12" fill="#8a91b4">阿婶：「好啦好啦，八蚊俾你！」</text></svg>
+  <div class="win">街市阿婶 · 被你说服</div>
+  <div class="loot"><span style="color:var(--amber)">$ +18</span><span style="color:var(--cyan)">开口 5 句</span><span style="color:var(--pink)">暴击 2 次</span></div>
+  <div style="margin-top:16px;font-size:13px;font-weight:800">选一张句子卡加入卡组</div>
+  <div class="pick">
+   <div class="c persuade"><span class="cost">1</span><span class="ty">说服</span><span class="ph">算便宜啲啦</span><span class="jp">syun3 pin4 ji4 di1 laa1</span><span class="ef">说服 +10</span></div>
+   <div class="c calm"><span class="cost">1</span><span class="ty">稳住</span><span class="ph">唔紧要</span><span class="jp">m4 gan2 jiu3</span><span class="ef">耐心 +7</span></div>
+   <div class="adpick"><div class="tv">▶</div>看段广告<br>多开 1 张<small style="color:var(--dim)">自愿</small></div>
+  </div>
+  <div class="grad">🎓 <b>「几多钱」毕业！</b>你已经连续 3 局读准，佢会离开卡组，之后只喺每日回忆出现。</div>
+  <div class="btn">继续行街</div>
+ </div>
+</div><div class="cap"><b>③ 战后奖励</b>　三选一加卡；激励视频多开一张；掌握嘅句子“毕业”离开卡组</div></div>
+</div>
+
+<div class="notes">
+<h2>核心循环</h2>
+选路线 → 遇到街坊 → <b>听懂佢讲乜（意图）</b> → 出句子卡回应（<b>开口读，或者点卡</b>）→ 说服对方 → 选新句子卡 / 买密码卡 → 午市 Boss。一局 12–15 分钟，每局按你的弱项自动配卡组。
+<h2>和杀戮尖塔的对应</h2>
+<table><tr><th>杀戮尖塔</th><th>声震龙楼</th><th>学习作用</th></tr>
+<tr><td>怪物 / 血量</td><td>街坊 / 说服度</td><td>情景代入，没有暴力和怪物</td></tr>
+<tr><td>敌人意图</td><td>街坊下一句粤语</td><td>听力理解</td></tr>
+<tr><td>攻击 / 防御牌</td><td>说服句 / 稳住句 / 技巧句</td><td>学会什么场合讲什么话</td></tr>
+<tr><td>我的血量</td><td>耐心</td><td>答非所问会扣耐心</td></tr>
+<tr><td>遗物</td><td>普粤密码卡（入声、m 尾、冻＝冰……）</td><td>用普通话规律一次学会一批字</td></tr>
+<tr><td>删卡</td><td>句子毕业</td><td>和记忆曲线（SRS）打通</td></tr></table>
+<h2>合规</h2>
+通篇用“说服、耐心、街坊、行街”，不出现攻击、伤害、怪物、血。广告只在：战后多开一张卡、耐心用完时“深呼吸再嚟过”、士多刷新，全部自愿观看。
+<h2>需要确认</h2>
+① 视觉风格和街坊画风　② 耐心和说服度这套数值叫法　③ 第一章 NPC 名单：茶餐厅伙计、街市阿婶、的士司机、包租婆，Boss 是午市高峰
+</div>
+</body></html>
