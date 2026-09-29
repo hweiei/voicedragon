@@ -17,7 +17,7 @@ export default defineConfig({
     target: "es2022",
     sourcemap: false,
     rollupOptions: {
-      input: { main: "index.html", street: "street.html" }
+      input: { index: "index.html", street: "street.html" }
     }
   },
   worker: {
