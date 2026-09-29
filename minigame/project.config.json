@@ -1,0 +1,16 @@
+{
+  "description": "街坊卡牌（粤语学习卡牌小游戏）",
+  "compileType": "game",
+  "miniprogramRoot": "",
+  "appid": "touristappid",
+  "projectname": "jiefang-kapai",
+  "setting": {
+    "es6": true,
+    "minified": true,
+    "urlCheck": true,
+    "postcss": false,
+    "enhance": true
+  },
+  "libVersion": "3.6.0",
+  "packOptions": { "ignore": [] }
+}

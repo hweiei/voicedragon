@@ -38,3 +38,7 @@ test-results/
 releases/*.zip
 releases/*.sha256
 /.shots/
+
+# 小游戏构建产物
+/minigame/dist/
+/minigame/preview/

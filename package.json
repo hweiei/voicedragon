@@ -12,7 +12,7 @@
     "test:watch": "vitest",
     "check": "biome check .",
     "check:fix": "biome check --write .",
-    "ci": "biome ci . && tsc --noEmit && vitest run && vite build && vite-node scripts/perf-budget.ts && vite-node scripts/release-readiness.ts",
+    "ci": "biome ci . && tsc --noEmit && vitest run && vite build && vite-node scripts/perf-budget.ts && vite-node scripts/release-readiness.ts && node minigame/build.mjs",
     "sim": "vite-node scripts/balance-sim.ts",
     "perf": "vite build && vite-node scripts/perf-budget.ts",
     "release:artifact": "vite build && vite-node scripts/release-readiness.ts",
@@ -31,7 +31,9 @@
     "sim:p10": "vite-node scripts/p10-balance.ts",
     "sim:p11": "vite-node scripts/p11-balance.ts",
     "sim:p13": "vite-node scripts/p13-balance.ts",
-    "sim:p15": "vite-node scripts/p15-balance.ts"
+    "sim:p15": "vite-node scripts/p15-balance.ts",
+    "minigame": "node minigame/build.mjs",
+    "minigame:preview": "node minigame/build.mjs --web && python3 -m http.server 4190 --bind 0.0.0.0 --directory minigame/preview"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
