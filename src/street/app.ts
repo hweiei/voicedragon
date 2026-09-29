@@ -15,10 +15,30 @@ import {
   rewardChoices,
   startCombat
 } from "./engine";
+import {
+  type Profile,
+  loadProfile,
+  freshProfile as loadProfileFresh,
+  noteCards,
+  noteScore,
+  saveProfile
+} from "./profile";
 import { MicSession, speakCantonese } from "./voice";
 import "./style.css";
 
-type Screen = "title" | "map" | "battle" | "reward" | "shop" | "rest" | "event" | "lose" | "win";
+type Screen =
+  | "title"
+  | "codex"
+  | "npcs"
+  | "settings"
+  | "map"
+  | "battle"
+  | "reward"
+  | "shop"
+  | "rest"
+  | "event"
+  | "lose"
+  | "win";
 interface Ui {
   screen: Screen;
   run: Run | null;
@@ -33,9 +53,15 @@ interface Ui {
   recording: boolean;
   lastTake: { score: number | null; user: number[]; tpl: number[] } | null;
   revived: boolean;
+  /** 听力挑战模式下，本回合台词是否已揭开 */
+  revealed: boolean;
 }
 
 const SAVE = "street-run-v1";
+if (document.getElementById("game-shell")) {
+  document.body.innerHTML = '<div id="app"></div>';
+  document.body.className = "street-body";
+}
 const root = document.getElementById("app") as HTMLElement;
 const ui: Ui = {
   screen: "title",
@@ -50,8 +76,13 @@ const ui: Ui = {
   event: { idx: 0, done: false },
   recording: false,
   lastTake: null,
-  revived: false
+  revived: false,
+  revealed: false
 };
+const prof: Profile = loadProfile();
+function saveProf(): void {
+  saveProfile(prof);
+}
 const mic = new MicSession();
 const art = (f: string) => `${import.meta.env.BASE_URL}street/${f}`;
 const esc = (s: string) =>
@@ -80,7 +111,7 @@ function toast(msg: string): void {
     render();
   }, 2200);
 }
-function say(text: string, rate = 0.9): void {
+function say(text: string, rate = prof.settings.rate): void {
   if (!speakCantonese(text, rate)) toast("呢部设备冇粤语语音，可以先睇粤拼跟读");
 }
 
@@ -137,18 +168,89 @@ function curveSvg(user: number[], tpl: number[]): string {
 /* ---------- 各屏 ---------- */
 function titleScreen(): string {
   const saved = load();
-  return `<div class="screen title">
-    <div class="logo"><span class="neon pink">龍</span></div>
-    <h1>声震龙楼</h1><p class="tag">街坊卡牌 · 用粤语搞掂成条街</p>
-    <div class="cast">${["auntie", "waiter", "taxi", "landlady"].map((n) => `<img src="${art(NPCS[n].img)}" alt="">`).join("")}</div>
-    <div class="howto">
-      <div><b>① 听</b>街坊头顶系佢下一句，点 ▶ 听</div>
-      <div><b>② 出</b>揀一张粤语句子卡回应</div>
-      <div><b>③ 讲</b>按住咪读出嚟，声调贴合就暴击 ×2</div>
+  const known = prof.seen.length;
+  const total = Object.keys(CARDS).length;
+  return `<div class="screen home">
+    <div class="hero" style="background-image:linear-gradient(180deg,rgba(11,13,26,.15),rgba(11,13,26,.35) 55%,var(--bg)),url(${art("sm/cafe.webp")})">
+      <div class="brand"><span class="seal">龍</span><div><b>声震龙楼</b><small>街坊卡牌 · 第一章</small></div></div>
+      <div class="cast">${["auntie", "boss", "waiter"].map((n, i) => `<img class="h${i}" src="${art(`sm/${n}.webp`)}" alt="">`).join("")}</div>
     </div>
-    ${saved ? `<button class="btn ok" data-act="resume">继续上一局</button>` : ""}
-    <button class="btn ${saved ? "ghost" : "ok"}" data-act="new">开始行街</button>
-    <p class="fine">原型版 · 录音只喺本机分析，唔上传 · 声调评分只睇音高走势，唔等于发音考试</p>
+    <div class="homebody">
+      <h1>用粤语，搞掂成条街</h1>
+      <p class="tag">听懂街坊讲乜 → 出啱句子 → 开口讲出嚟</p>
+      <div class="stats">
+        <div><b>${prof.runs}</b><small>行街</small></div>
+        <div><b>${prof.wins}</b><small>通关</small></div>
+        <div><b>${prof.spoken}</b><small>开口</small></div>
+        <div><b>${known}/${total}</b><small>识得</small></div>
+      </div>
+      ${saved ? `<button class="btn ok" data-act="resume">继续上一局</button>` : ""}
+      <button class="btn ${saved ? "ghost" : "ok"}" data-act="new">${saved ? "重新开一局" : "开始行街"}</button>
+      <div class="menu">
+        <button data-act="codex"><span class="ico pink">卡</span><b>句子图鉴</b><small>${known} / ${total}</small></button>
+        <button data-act="npcs"><span class="ico cyan">坊</span><b>街坊录</b><small>${prof.met.length} / ${Object.keys(NPCS).length}</small></button>
+        <button data-act="settings"><span class="ico amber">设</span><b>设置</b><small>${prof.settings.listen ? "听力挑战开" : `语速 ${prof.settings.rate}`}</small></button>
+      </div>
+      <details class="howto"><summary>点玩？</summary>
+        <div><b>① 听</b>街坊头顶系佢下一句，点 ▶ 听</div>
+        <div><b>② 接</b>带 ✓ 嘅句子卡啱晒回应，唔扣耐心、说服 ×1.5</div>
+        <div><b>③ 讲</b>揀卡后按住咪读出嚟，声调贴合就暴击 ×2</div>
+        <div><b>④ 行</b>士多买卡同密码卡，糖水铺回气或者令一句毕业</div>
+      </details>
+      <div class="older"><a href="?mode=beginner">新手教学塔</a>·<a href="?mode=classic">原版冒险</a></div>
+      <p class="fine">录音只喺本机分析，唔上传 · 声调评分只睇音高走势，唔等于发音考试</p>
+    </div>
+  </div>`;
+}
+
+function backBar(title: string): string {
+  return `<div class="backbar"><button data-act="home">‹ 返回</button><b>${title}</b><span></span></div>`;
+}
+
+function codexScreen(): string {
+  const groups: [string, string][] = [
+    ["persuade", "说服"],
+    ["calm", "稳住"],
+    ["skill", "技巧"]
+  ];
+  const body = groups
+    .map(([k, name]) => {
+      const cards = Object.values(CARDS).filter((c) => c.kind === k);
+      return `<h3 class="grp">${name}</h3><div class="codex">${cards
+        .map((c) => {
+          const seen = prof.seen.includes(c.id);
+          const best = prof.best[c.id];
+          return seen
+            ? `<button class="entry" data-act="hear" data-id="${c.id}"><b>${esc(c.phrase)}</b><span class="jp">${c.jp}</span><small>${esc(c.meaning)}</small>${best !== undefined ? `<em class="${best >= 70 ? "good" : ""}">最佳声调 ${best}</em>` : "<em>未开口</em>"}<span class="play">▶</span></button>`
+            : `<div class="entry locked"><b>？？？</b><small>行街时遇到先解锁</small></div>`;
+        })
+        .join("")}</div>`;
+    })
+    .join("");
+  return `<div class="screen list">${backBar("句子图鉴")}<p class="sub">点句子听示范 · 最佳声调分只计开口出牌</p>${body}</div>`;
+}
+
+function npcsScreen(): string {
+  const body = Object.values(NPCS)
+    .map((n) => {
+      const met = prof.met.includes(n.id);
+      const beat = prof.beaten[n.id] ?? 0;
+      return met
+        ? `<div class="npccard" style="background-image:linear-gradient(90deg,rgba(11,13,26,.92) 35%,rgba(11,13,26,.35)),url(${art(n.bg)})"><div class="info"><b>${n.name}${n.boss ? ' <em class="amber">BOSS</em>' : ""}</b><small>${esc(n.intro)}</small><div class="lines">${n.intents.map((it) => `<button data-act="sayLine" data-line="${esc(it.line)}">▶ ${esc(it.line)}</button>`).join("")}</div><span class="beat">说服咗 ${beat} 次</span></div><img src="${art(n.img)}" alt=""></div>`
+        : `<div class="npccard locked"><div class="info"><b>？？？</b><small>喺街上遇到先会记低</small></div><img src="${art(n.img)}" alt=""></div>`;
+    })
+    .join("");
+  return `<div class="screen list">${backBar("街坊录")}${body}</div>`;
+}
+
+function settingsScreen(): string {
+  const st = prof.settings;
+  const rates = [0.7, 0.8, 0.9, 1];
+  return `<div class="screen list">${backBar("设置")}
+    <div class="set"><div><b>听力挑战</b><small>街坊台词同意思先收埋，要听 ▶ 或者点一下气泡先睇到</small></div><button class="tog ${st.listen ? "on" : ""}" data-act="togListen"><i></i></button></div>
+    <div class="set"><div><b>揀卡自动读</b><small>揀卡时读一次句子示范</small></div><button class="tog ${st.autoSpeak ? "on" : ""}" data-act="togAuto"><i></i></button></div>
+    <div class="set col"><div><b>示范语速</b><small>系统粤语语音嘅朗读速度</small></div><div class="seg">${rates.map((r) => `<button class="${st.rate === r ? "on" : ""}" data-act="rate" data-id="${r}">${r === 1 ? "正常" : `${r}×`}</button>`).join("")}</div><button class="mini" data-act="sayLine" data-line="唔该，我要一杯冻奶茶">▶ 试听</button></div>
+    <div class="set danger"><div><b>清除档案</b><small>图鉴、街坊录同统计会清零</small></div><button class="mini" data-act="wipe">清除</button></div>
   </div>`;
 }
 
@@ -211,6 +313,7 @@ function battleScreen(run: Run): string {
   if (!c) return "";
   const npc = NPCS[c.npc];
   const intent = currentIntent(run);
+  const hidden = prof.settings.listen && !ui.revealed;
   const pct = Math.round((c.progress / c.target) * 100);
   const patPct = Math.round((run.patience / run.maxPatience) * 100);
   const selCard = ui.sel !== null ? CARDS[c.hand[ui.sel]] : null;
@@ -221,7 +324,7 @@ function battleScreen(run: Run): string {
   const n = c.hand.length;
   const hand = c.hand
     .map((id, i) => {
-      const room = Math.min(430, window.innerWidth) - 110;
+      const room = Math.min(430, window.innerWidth) - 170;
       const gap = n > 1 ? Math.min(74, room / (n - 1)) : 0;
       const rot = (i - (n - 1) / 2) * (n > 4 ? 4 : 6);
       const x = (i - (n - 1) / 2) * gap;
@@ -243,9 +346,9 @@ function battleScreen(run: Run): string {
     : `<div class="microw idle">揀一张卡 → 按住咪读出嚟</div>`;
   return `<div class="screen battle">
     <div class="relics top">${run.relics.map((r) => `<button class="relic" data-act="relic" data-id="${r}">${RELICS[r].glyph}</button>`).join("")}<span class="turn">第 ${c.turn} 回合</span></div>
-    <div class="scene${npc.boss ? " boss" : ""}${c.enraged ? " rage" : ""}">
+    <div class="scene${npc.boss ? " boss" : ""}${c.enraged ? " rage" : ""}" style="background-image:linear-gradient(180deg,rgba(11,13,26,.1),rgba(11,13,26,.05) 50%,rgba(11,13,26,.75)),url(${art(npc.bg)})">
       <div class="neon sign">${npc.sign}</div>
-      <div class="intent"><button class="play" data-act="hearIntent">▶</button><b>${esc(intent?.line ?? "")}</b><small class="gloss" data-act="gloss">${esc(intent?.gloss ?? "")}</small><small>意图：${intent?.label}　<span class="loss">耐心 −${intent?.loss}</span></small></div>
+      <div class="intent${hidden ? " hidden" : ""}" data-act="reveal"><button class="play" data-act="hearIntent">▶</button><b>${hidden ? "🎧 听下佢讲乜？" : esc(intent?.line ?? "")}</b><small class="gloss">${hidden ? "点 ▶ 听，或者点气泡睇字幕" : esc(intent?.gloss ?? "")}</small><small>意图：${intent?.label}　<span class="loss">耐心 −${intent?.loss}</span></small></div>
       <img class="npc" src="${art(npc.img)}" alt="${npc.name}">
       ${answeredBadge}
       ${ui.float ? `<div class="float ${ui.float.cls}">${ui.float.text}</div>` : ""}
@@ -326,6 +429,7 @@ function endScreen(win: boolean, run: Run): string {
     <div class="loot"><span class="cyan">卡组 ${run.deck.length} 张</span><span class="green">毕业 ${run.graduated.length} 句</span></div>
     ${!win && !ui.revived ? `<button class="btn ad" data-act="revive">▶ 看段广告 · 深呼吸再嚟过<small>原型：唔会真播</small></button>` : ""}
     <button class="btn ok" data-act="new">再行一次</button>
+    <button class="btn ghost" data-act="home">返回主页</button>
   </div>`;
 }
 
@@ -341,6 +445,9 @@ function goNode(id: string): void {
   ui.lastTake = null;
   if (node.type === "fight" || node.type === "boss") {
     startCombat(run, node.npc ?? "auntie");
+    ui.revealed = false;
+    if (node.npc && !prof.met.includes(node.npc)) prof.met.push(node.npc);
+    saveProf();
     ui.screen = "battle";
   } else if (node.type === "shop") {
     ui.shop = { cards: rewardChoices(run, 4), relic: relicOffer(run), bought: [] };
@@ -362,6 +469,9 @@ function afterWin(): void {
   const run = ui.run;
   if (!run?.combat) return;
   const boss = NPCS[run.combat.npc].boss;
+  prof.beaten[run.combat.npc] = (prof.beaten[run.combat.npc] ?? 0) + 1;
+  if (boss) prof.wins += 1;
+  saveProf();
   if (boss) {
     ui.screen = "win";
     return;
@@ -437,6 +547,8 @@ async function micUp(): Promise<void> {
   }
   const score = take.detail?.score ?? null;
   ui.lastTake = { score, user: take.detail?.userCurve ?? [], tpl: take.detail?.template ?? [] };
+  noteScore(prof, card.id, score);
+  saveProf();
   doPlay(score !== null && score >= 70, true);
   render();
 }
@@ -451,6 +563,9 @@ function onClick(e: Event): void {
     case "new":
       ui.run = newRun();
       ui.revived = false;
+      prof.runs += 1;
+      noteCards(prof, ui.run.deck);
+      saveProf();
       ui.screen = "map";
       break;
     case "resume": {
@@ -462,6 +577,40 @@ function onClick(e: Event): void {
       }
       break;
     }
+    case "home":
+      ui.screen = "title";
+      break;
+    case "codex":
+    case "npcs":
+    case "settings":
+      ui.screen = act;
+      break;
+    case "reveal":
+      if (!prof.settings.listen || ui.revealed) return;
+      ui.revealed = true;
+      break;
+    case "sayLine":
+      say(el.dataset.line ?? "");
+      return;
+    case "togListen":
+      prof.settings.listen = !prof.settings.listen;
+      saveProf();
+      break;
+    case "togAuto":
+      prof.settings.autoSpeak = !prof.settings.autoSpeak;
+      saveProf();
+      break;
+    case "rate":
+      prof.settings.rate = Number(id);
+      saveProf();
+      say("唔该", prof.settings.rate);
+      break;
+    case "wipe":
+      if (!confirm("确定清除图鉴、街坊录同统计？")) return;
+      Object.assign(prof, loadProfileFresh());
+      saveProf();
+      toast("档案已清除");
+      break;
     case "go":
       goNode(id);
       break;
@@ -475,7 +624,8 @@ function onClick(e: Event): void {
       const idx = Number(el.dataset.idx);
       if (ui.screen !== "battle") break;
       ui.sel = ui.sel === idx ? null : idx;
-      if (ui.sel !== null && run?.combat) say(CARDS[run.combat.hand[idx]].phrase);
+      if (ui.sel !== null && run?.combat && prof.settings.autoSpeak)
+        say(CARDS[run.combat.hand[idx]].phrase);
       break;
     }
     case "hear":
@@ -484,6 +634,10 @@ function onClick(e: Event): void {
     case "hearIntent": {
       const it = run ? currentIntent(run) : null;
       if (it) say(it.line);
+      if (prof.settings.listen && !ui.revealed) {
+        ui.revealed = true;
+        break;
+      }
       return;
     }
     case "tap":
@@ -491,6 +645,7 @@ function onClick(e: Event): void {
       break;
     case "end": {
       if (!run?.combat) break;
+      ui.revealed = false;
       ui.sel = null;
       ui.lastTake = null;
       const r = endTurn(run);
@@ -506,6 +661,8 @@ function onClick(e: Event): void {
     }
     case "pick":
       if (run) run.deck.push(id);
+      noteCards(prof, [id]);
+      saveProf();
       ui.screen = "map";
       toast(`「${CARDS[id].phrase}」加入卡组`);
       break;
@@ -537,6 +694,8 @@ function onClick(e: Event): void {
       }
       run.gold -= price;
       run.deck.push(id);
+      noteCards(prof, [id]);
+      saveProf();
       ui.shop.bought.push(id);
       break;
     }
@@ -567,6 +726,8 @@ function onClick(e: Event): void {
       break;
     case "evCard":
       if (run) run.deck.push(id);
+      noteCards(prof, [id]);
+      saveProf();
       ui.screen = "map";
       break;
     case "evOk": {
@@ -587,7 +748,10 @@ function onClick(e: Event): void {
 function render(): void {
   const run = ui.run;
   let html = "";
-  if (ui.screen === "title" || !run) html = titleScreen();
+  if (ui.screen === "codex") html = codexScreen();
+  else if (ui.screen === "npcs") html = npcsScreen();
+  else if (ui.screen === "settings") html = settingsScreen();
+  else if (ui.screen === "title" || !run) html = titleScreen();
   else if (ui.screen === "map") html = mapScreen(run);
   else if (ui.screen === "battle") html = battleScreen(run);
   else if (ui.screen === "reward") html = rewardScreen(run);

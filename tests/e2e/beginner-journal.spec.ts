@@ -3,7 +3,7 @@ import { JOURNAL_KEY } from "../../src/beginner/journal";
 import { BEGINNER_KEY } from "../../src/beginner/progress";
 
 async function finishFirstLesson(page: import("@playwright/test").Page) {
-  await page.goto("/");
+  await page.goto("/?mode=beginner");
   await page.locator('[data-action="reading"]').click();
   await page.locator('[data-answer="0"]').click();
   await page.locator('[data-action="next"]').click();
@@ -50,7 +50,7 @@ test("新局不清空手账，刷新不重复计数，复习不推进爬塔", as
 
 test("手账仅呈现练过内容，移动端可查看与复习", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
+  await page.goto("/?mode=beginner");
   await page.locator('.review-invitation [data-action="journal"]').click();
   await expect(page.locator(".journal-empty")).toBeVisible();
   await expect(page.locator('[data-action="review-start"]')).toBeDisabled();
@@ -88,7 +88,7 @@ test("旧新手存档迁移只记一次，不假造历史练习次数", async ({
       })
     );
   }, BEGINNER_KEY);
-  await page.goto("/");
+  await page.goto("/?mode=beginner");
   await expect(page.locator(".reward")).toBeVisible();
   await page.reload();
   await page.locator('.review-invitation [data-action="journal"]').click();

@@ -3,7 +3,7 @@ import { branchLesson } from "../../src/beginner/branches";
 import { BEGINNER_KEY } from "../../src/beginner/progress";
 
 test("实战分支先藏答案、换场景，保留路线且奖励不重复", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?mode=beginner");
   await page.locator('[data-action="reading"]').click();
   await page.locator('[data-answer="0"]').click();
   await page.locator('[data-action="next"]').click();
@@ -32,7 +32,7 @@ test("实战分支先藏答案、换场景，保留路线且奖励不重复", as
 
 test("混合路线六层通关，五件奖励各不重复，手机选路无溢出", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
+  await page.goto("/?mode=beginner");
   await page.locator('[data-action="reading"]').click();
   for (let floor = 0; floor < 6; floor++) {
     if (floor > 0) {

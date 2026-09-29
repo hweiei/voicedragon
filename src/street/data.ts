@@ -268,6 +268,8 @@ export interface NpcDef {
   id: string;
   name: string;
   img: string;
+  /** 场景背景（public/street/bg/*.jpg） */
+  bg: string;
   sign: string;
   target: number;
   intro: string;
@@ -281,6 +283,7 @@ export const NPCS: Record<string, NpcDef> = {
     id: "auntie",
     name: "街市阿婶",
     img: "auntie.png",
+    bg: "bg/market.jpg",
     sign: "街市",
     target: 30,
     intro: "生果档阿婶笑眯眯望住你……个价好似有啲贵。",
@@ -315,6 +318,7 @@ export const NPCS: Record<string, NpcDef> = {
     id: "waiter",
     name: "茶餐厅伙计",
     img: "waiter.png",
+    bg: "bg/cafe.jpg",
     sign: "冰室",
     target: 28,
     intro: "伙计拎住张单，眼都唔抬：「几位？」",
@@ -350,6 +354,7 @@ export const NPCS: Record<string, NpcDef> = {
     id: "taxi",
     name: "的士司机",
     img: "taxi.png",
+    bg: "bg/taxi.jpg",
     sign: "的士",
     target: 32,
     intro: "司机回头望你：「去边？」",
@@ -385,6 +390,7 @@ export const NPCS: Record<string, NpcDef> = {
     id: "landlady",
     name: "包租婆",
     img: "landlady.png",
+    bg: "bg/tonglau.jpg",
     sign: "唐楼",
     target: 36,
     intro: "包租婆揸住一大串锁匙，企喺门口。",
@@ -413,6 +419,7 @@ export const NPCS: Record<string, NpcDef> = {
     id: "boss",
     name: "午市高峰",
     img: "boss.png",
+    bg: "bg/rush.jpg",
     sign: "茶餐厅",
     target: 55,
     boss: true,

@@ -129,7 +129,7 @@ function render() {
     (reviewing || progress.routes[progress.floor] === "challenge" || progress.floor === 5) &&
     !showHint;
   const routes = routeFor(progress.seed);
-  root.innerHTML = `<div class="world">${skyline()}<header class="header"><a class="brand" href="./"><span class="seal">龍</span><span>声震龙楼<small>VOICE DRAGON / 粤语冒险</small></span></a><nav><span class="active">新手教学塔</span><a href="?mode=classic">自由冒险 ↗</a><button data-action="journal" class="journal-nav">学习手账</button><button data-action="help" class="text-button">玩法说明</button></nav><div class="local"><span></span>本地练习 · 无需登录</div></header>
+  root.innerHTML = `<div class="world">${skyline()}<header class="header"><a class="brand" href="?mode=beginner"><span class="seal">龍</span><span>声震龙楼<small>VOICE DRAGON / 粤语冒险</small></span></a><nav><a href="./">街坊卡牌</a><span class="active">新手教学塔</span><a href="?mode=classic">自由冒险 ↗</a><button data-action="journal" class="journal-nav">学习手账</button><button data-action="help" class="text-button">玩法说明</button></nav><div class="local"><span></span>本地练习 · 无需登录</div></header>
   <main class="layout"><aside class="rail"><div class="eyebrow">YOUR FIRST ASCENT</div><h2>一层一句，<br>粤讲粤有底气。</h2><p>第一章 / 霓虹初声</p><div class="route">${[
     ...LESSONS
   ]

@@ -10,7 +10,7 @@ test.use({
 
 const answerIndices = [0, 1, 2, 0, 1, 0];
 test("六层阅读通关、奖励与刷新恢复，不伪造口语次数", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?mode=beginner");
   await expect(page.locator(".phrase")).toHaveText("你好");
   await expect(page.locator('[data-action="next"]')).toBeDisabled();
   await page.locator('[data-answer="1"]').click();
@@ -40,7 +40,7 @@ test("六层阅读通关、奖励与刷新恢复，不伪造口语次数", async
 });
 
 test("领取奖励前刷新仍在奖励页，领取后进入下一层并保留提示", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?mode=beginner");
   await page.locator('[data-action="reading"]').click();
   await page.locator('[data-answer="0"]').click();
   await page.locator('[data-action="next"]').click();
@@ -61,7 +61,7 @@ test("损坏存档安全回退，原版存档不受影响", async ({ page }) => 
     localStorage.setItem(key, JSON.stringify({ floor: 99, done: true }));
     localStorage.setItem("voice-tower-save-v2", "legacy-sentinel");
   }, BEGINNER_KEY);
-  await page.goto("/");
+  await page.goto("/?mode=beginner");
   await expect(page.locator(".phrase")).toHaveText("你好");
   expect(await page.evaluate(() => localStorage.getItem("voice-tower-save-v2"))).toBe(
     "legacy-sentinel"
@@ -77,7 +77,7 @@ test("麦克风拒绝后可切阅读模式，无假录音记录", async ({ page 
       }
     });
   });
-  await page.goto("/");
+  await page.goto("/?mode=beginner");
   await page.locator('[data-action="record"]').click();
   await expect(page.locator("#notice")).toContainText("无法访问麦克风");
   await expect(page.locator('[data-action="play"]')).toHaveCount(0);
@@ -99,7 +99,7 @@ test("没有系统粤语声音时仍播放内置粤语示范", async ({ page }) 
   });
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto("/");
+  await page.goto("/?mode=beginner");
   await page.locator('[data-action="listen"]').click();
   await expect(page.locator("#notice")).toContainText("正在播放内置粤语合成示范");
   expect(errors).toEqual([]);
@@ -116,7 +116,7 @@ test("旧版 hash-only 挑战链接与刷新保持原版入口", async ({ page }
 
 test.describe("模拟麦克风（不代表真实音质）", () => {
   test("录音、回放、重录中不允许过关，存档不含音频", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?mode=beginner");
     await page.locator('[data-action="record"]').click();
     await expect(page.locator(".recording")).toBeVisible();
     await page.waitForTimeout(500); // Allow the simulated input to produce at least one audio packet.

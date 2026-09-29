@@ -3,8 +3,8 @@ import { freshProgress, restoreProgress } from "../../src/beginner/progress";
 import { entryMode } from "../../src/core/entry-route";
 
 describe("P18 entry compatibility", () => {
-  test("default beginner, explicit classic and old challenge links preserved", () => {
-    expect(entryMode("", "")).toBe("beginner");
+  test("default street, explicit beginner/classic and old challenge links preserved", () => {
+    expect(entryMode("", "")).toBe("street");
     expect(entryMode("?mode=classic", "")).toBe("classic");
     expect(entryMode("?duel=1", "#c=VT1.example")).toBe("classic");
     expect(entryMode("", "#c=VT1.example")).toBe("classic");

@@ -1013,3 +1013,472 @@ h2 {
   font-size: 20px;
   margin-top: 14px;
 }
+/* ---------- 主页 ---------- */
+body.street-body {
+  background: #05060d;
+}
+.home {
+  padding-bottom: 22px;
+}
+.hero {
+  height: 300px;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+.brand {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.brand .seal {
+  font-family: "Songti SC", "Noto Serif CJK SC", serif;
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--pink);
+  border: 2px solid var(--pink);
+  border-radius: 10px;
+  padding: 2px 8px;
+  background: rgba(11, 13, 26, 0.6);
+  box-shadow: 0 0 16px rgba(255, 79, 139, 0.6);
+  text-shadow: 0 0 8px var(--pink);
+}
+.brand b {
+  display: block;
+  font-size: 17px;
+  letter-spacing: 2px;
+  text-shadow: 0 2px 6px #000;
+}
+.brand small {
+  font-size: 11px;
+  color: #cfd3f5;
+  text-shadow: 0 1px 4px #000;
+}
+.hero .cast {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -6px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  height: auto;
+  margin: 0;
+}
+.hero .cast img {
+  height: 120px;
+  margin: 0 -16px;
+  filter: drop-shadow(0 8px 8px rgba(0, 0, 0, 0.55));
+  animation: bob 3s ease-in-out infinite;
+}
+.hero .cast img {
+  transform: none;
+}
+.hero .cast .c2 {
+  height: 150px;
+  z-index: 2;
+}
+.hero .cast .c1,
+.hero .cast .c3 {
+  height: 132px;
+  z-index: 1;
+}
+.hero .cast .c1 {
+  animation-delay: .4s;
+}
+.hero .cast .c2 {
+  animation-delay: .8s;
+}
+.hero .cast .c3 {
+  animation-delay: 1.2s;
+}
+.hero .cast .c4 {
+  animation-delay: 1.6s;
+}
+@keyframes bob {
+  50% {
+    translate: 0 -4px;
+  }
+}
+.homebody {
+  padding: 14px 16px 0;
+}
+.home h1 {
+  font-family: "Songti SC", "Noto Serif CJK SC", serif;
+  font-size: 24px;
+  text-align: center;
+  letter-spacing: 2px;
+}
+.home .tag {
+  text-align: center;
+  color: var(--cyan);
+  font-size: 12px;
+  margin: 6px 0 12px;
+}
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.stats div {
+  background: var(--card);
+  border: 1px solid #262d4d;
+  border-radius: 12px;
+  padding: 8px 0;
+  text-align: center;
+}
+.stats b {
+  display: block;
+  font-size: 17px;
+  color: var(--amber);
+}
+.stats small {
+  font-size: 10px;
+  color: var(--dim);
+}
+.menu {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 14px;
+}
+.menu button {
+  background: var(--card);
+  border: 1px solid #262d4d;
+  border-bottom-width: 4px;
+  border-radius: 14px;
+  padding: 10px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.menu .ico {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 2px solid currentColor;
+  display: grid;
+  place-items: center;
+  font-family: "Songti SC", "Noto Serif CJK SC", serif;
+  font-weight: 900;
+}
+.menu b {
+  font-size: 13px;
+}
+.menu small {
+  font-size: 10px;
+  color: var(--dim);
+}
+details.howto {
+  margin: 14px 0 0;
+  padding: 10px 14px;
+}
+details.howto summary {
+  cursor: pointer;
+  font-weight: 800;
+  color: var(--cyan);
+  font-size: 13px;
+}
+.older {
+  text-align: center;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--dim);
+}
+.older a {
+  color: var(--dim);
+  margin: 0 8px;
+}
+/* 列表页 */
+.list {
+  padding: 0 14px 20px;
+}
+.backbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 0 8px;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 5;
+}
+.backbar button {
+  color: var(--cyan);
+  font-weight: 800;
+  font-size: 14px;
+}
+.backbar span {
+  width: 50px;
+}
+.sub {
+  font-size: 11px;
+  color: var(--dim);
+  text-align: center;
+  margin-bottom: 6px;
+}
+.grp {
+  font-size: 13px;
+  color: var(--dim);
+  margin: 14px 0 8px;
+  letter-spacing: 2px;
+}
+.codex {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.entry {
+  position: relative;
+  text-align: left;
+  background: var(--card);
+  border: 1px solid #262d4d;
+  border-radius: 12px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 92px;
+}
+.entry b {
+  font-size: 16px;
+}
+.entry .jp {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 9px;
+  color: var(--pink);
+}
+.entry small {
+  font-size: 11px;
+  color: var(--dim);
+}
+.entry em {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--dim);
+  margin-top: auto;
+}
+.entry em.good {
+  color: var(--amber);
+}
+.entry .play {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  color: var(--cyan);
+  font-size: 12px;
+}
+.entry.locked {
+  opacity: 0.4;
+  border-style: dashed;
+}
+.npccard {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  min-height: 150px;
+  border-radius: 16px;
+  overflow: hidden;
+  background-size: cover;
+  background-position: center;
+  border: 1px solid #2b3258;
+  margin-bottom: 10px;
+  padding: 12px;
+}
+.npccard .info {
+  flex: 1;
+  position: relative;
+  z-index: 2;
+  max-width: 68%;
+}
+.npccard b {
+  font-size: 16px;
+}
+.npccard b em {
+  font-style: normal;
+  font-size: 10px;
+  border: 1px solid var(--amber);
+  border-radius: 6px;
+  padding: 0 4px;
+  margin-left: 4px;
+}
+.npccard small {
+  display: block;
+  font-size: 11px;
+  color: #cfd3f5;
+  margin: 4px 0 6px;
+  line-height: 1.5;
+}
+.npccard .lines {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+.npccard .lines button {
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 3px 8px;
+  text-align: left;
+}
+.npccard .beat {
+  display: inline-block;
+  font-size: 10px;
+  color: var(--amber);
+  margin-top: 6px;
+}
+.npccard img {
+  position: absolute;
+  right: 4px;
+  bottom: 0;
+  height: 140px;
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.6));
+}
+.npccard.locked {
+  background: #111526;
+  border-style: dashed;
+}
+.npccard.locked img {
+  filter: brightness(0) opacity(0.5);
+}
+.set {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--card);
+  border: 1px solid #262d4d;
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.set.col {
+  flex-wrap: wrap;
+}
+.set b {
+  font-size: 14px;
+}
+.set small {
+  display: block;
+  font-size: 11px;
+  color: var(--dim);
+  margin-top: 2px;
+}
+.tog {
+  width: 48px;
+  height: 28px;
+  border-radius: 14px;
+  background: #2b3258;
+  position: relative;
+  flex: none;
+  transition: background .2s;
+}
+.tog i {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left .2s;
+}
+.tog.on {
+  background: var(--green);
+}
+.tog.on i {
+  left: 23px;
+}
+.seg {
+  display: flex;
+  gap: 6px;
+}
+.seg button {
+  border: 1px solid #343c63;
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.seg button.on {
+  background: var(--pink);
+  border-color: var(--pink);
+  color: #fff;
+  font-weight: 800;
+}
+.set.danger b {
+  color: var(--pink);
+}
+/* 战斗场景背景 */
+.scene {
+  background-size: cover;
+  background-position: center;
+}
+.intent.hidden {
+  background: #fff8e6;
+}
+.intent.hidden b {
+  color: #8a5a00;
+}
+
+/* 主页可读性：正文不低于 12px */
+.home .fine,
+.home .menu small,
+.home .stats small,
+.home .brand small {
+  font-size: 12px;
+}
+.home .menu b {
+  font-size: 14px;
+}
+.home .tag,
+.home .older,
+.home details.howto {
+  font-size: 13px;
+}
+.hero .cast img {
+  width: auto;
+}
+
+/* 主页角色队列收窄，避免两边裁切 */
+.hero .cast img {
+  height: 96px;
+  margin: 0 -8px;
+  max-width: 24%;
+  object-fit: contain;
+}
+.hero .cast .c1,
+.hero .cast .c3 {
+  height: 108px;
+}
+.hero .cast .c2 {
+  height: 126px;
+}
+.hero .cast img {
+  max-width: none;
+  margin: 0 -14px;
+}
+.hero .cast .c0,
+.hero .cast .c4 {
+  height: 84px;
+}
+.hero .cast img {
+  margin: 0 -12px;
+  height: 112px;
+}
+.hero .cast .h1 {
+  height: 132px;
+  z-index: 2;
+}
+.hero .cast .h0 {
+  animation-delay: 0.5s;
+}
+.hero .cast .h2 {
+  animation-delay: 1s;
+}

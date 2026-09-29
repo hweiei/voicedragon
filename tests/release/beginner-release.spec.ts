@@ -20,7 +20,7 @@ test("新手首页在严格 CSP 与 320px 视口下可阅读作答", async ({ pa
       headers: { ...response.headers(), "content-security-policy": CSP! }
     });
   });
-  await page.goto("/");
+  await page.goto("/?mode=beginner");
   await expect(page.locator(".phrase")).toHaveText("你好");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.locator('[data-action="reading"]').click();
@@ -32,7 +32,7 @@ test("新手首页在严格 CSP 与 320px 视口下可阅读作答", async ({ pa
 
 test("新手首页安装壳可离线重载", async ({ browserName, page, context }) => {
   test.skip(browserName === "webkit", "WebKit 离线模拟限制；仍须 Safari 真机验证。");
-  await page.goto("/");
+  await page.goto("/?mode=beginner");
   await expect(page.locator(".phrase")).toBeVisible();
   await page.evaluate(async () => {
     await navigator.serviceWorker.ready;
@@ -58,7 +58,7 @@ test("新手首页安装壳可离线重载", async ({ browserName, page, context
 });
 
 test("学习手账与回忆自评在浏览器矩阵中可用", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?mode=beginner");
   await page.locator('[data-action="reading"]').click();
   await page.locator('[data-answer="0"]').click();
   await page.locator('[data-action="next"]').click();
@@ -78,7 +78,7 @@ test("学习手账与回忆自评在浏览器矩阵中可用", async ({ page }) 
 });
 
 test("选路与实战提示在浏览器矩阵中可恢复", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?mode=beginner");
   await page.locator('[data-action="reading"]').click();
   await page.locator('[data-answer="0"]').click();
   await page.locator('[data-action="next"]').click();

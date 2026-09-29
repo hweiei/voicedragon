@@ -22,7 +22,7 @@ async function seedBoss(page: import("@playwright/test").Page) {
     },
     { key: BEGINNER_KEY, state }
   );
-  await page.goto("/");
+  await page.goto("/?mode=beginner");
 }
 async function recordRound(page: import("@playwright/test").Page, correct: number) {
   await page.locator('[data-action="record"]').click();
@@ -35,7 +35,7 @@ async function recordRound(page: import("@playwright/test").Page, correct: numbe
 }
 
 test("十段粤语音频均可解码，正常与慢速播放无需系统音色", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?mode=beginner");
   const clips = [
     "greeting",
     "please",
@@ -69,7 +69,7 @@ test("十段粤语音频均可解码，正常与慢速播放无需系统音色",
 
 test("示范加载失败给出可操作提示，不假装播放成功", async ({ page }) => {
   await page.route("**/audio/yue/greeting.mp3", (route) => route.abort());
-  await page.goto("/");
+  await page.goto("/?mode=beginner");
   await page.locator('[data-action="listen"]').click();
   await expect(page.locator("#notice")).toContainText("示范音频暂时无法播放");
   await expect(page.locator('[data-action="record"]')).toBeEnabled();
@@ -107,7 +107,7 @@ test("三轮都录音才记录完整对话的录音尝试", async ({ page }) => 
 });
 
 test("导出恢复手账需确认，取消与非法文件都不覆盖记录", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?mode=beginner");
   await page.locator('[data-action="reading"]').click();
   await page.locator('[data-answer="0"]').click();
   await page.locator('[data-action="next"]').click();
