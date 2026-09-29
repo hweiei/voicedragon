@@ -48,7 +48,15 @@ interface Ui {
   reward: string[];
   rewardGold: number;
   adUsed: boolean;
-  shop: { cards: string[]; relic: string | null; bought: string[] };
+  shop: {
+    cards: string[];
+    relic: string | null;
+    bought: string[];
+    removing: boolean;
+    removed: boolean;
+  };
+  /** 主页上正在讲嘢嘅街坊 */
+  talk: string | null;
   event: { idx: number; card?: string; done: boolean };
   recording: boolean;
   lastTake: { score: number | null; user: number[]; tpl: number[] } | null;
@@ -58,6 +66,7 @@ interface Ui {
 }
 
 const SAVE = "street-run-v1";
+const REMOVE_PRICE = 50;
 if (document.getElementById("game-shell")) {
   document.body.innerHTML = '<div id="app"></div>';
   document.body.className = "street-body";
@@ -72,7 +81,8 @@ const ui: Ui = {
   reward: [],
   rewardGold: 0,
   adUsed: false,
-  shop: { cards: [], relic: null, bought: [] },
+  shop: { cards: [], relic: null, bought: [], removing: false, removed: false },
+  talk: null,
   event: { idx: 0, done: false },
   recording: false,
   lastTake: null,
@@ -166,6 +176,26 @@ function curveSvg(user: number[], tpl: number[]): string {
 }
 
 /* ---------- 各屏 ---------- */
+const HOME_CAST = ["auntie", "boss", "waiter"] as const;
+
+/** 按本地日期挑「今日一句」，同一日所有人一样 */
+function dailyCard(): string {
+  const d = new Date();
+  const key = d.getFullYear() * 400 + d.getMonth() * 31 + d.getDate();
+  const ids = Object.keys(CARDS).filter((id) => CARDS[id].rarity !== "starter");
+  const pool = ids.length ? ids : Object.keys(CARDS);
+  return pool[((key * 2654435761) % pool.length) >>> 0];
+}
+
+function streetStrip(): string {
+  return Object.values(NPCS)
+    .map((n) => {
+      const st = prof.beaten[n.id] ? "done" : prof.met.includes(n.id) ? "met" : "";
+      return `<div class="stop ${st}"><span>${n.sign}</span><i>${st === "done" ? "✓" : st === "met" ? "·" : "?"}</i></div>`;
+    })
+    .join('<b class="road"></b>');
+}
+
 function titleScreen(): string {
   const saved = load();
   const known = prof.seen.length;
@@ -173,11 +203,20 @@ function titleScreen(): string {
   return `<div class="screen home">
     <div class="hero" style="background-image:linear-gradient(180deg,rgba(11,13,26,.15),rgba(11,13,26,.35) 55%,var(--bg)),url(${art("sm/cafe.webp")})">
       <div class="brand"><span class="seal">龍</span><div><b>声震龙楼</b><small>街坊卡牌 · 第一章</small></div></div>
-      <div class="cast">${["auntie", "boss", "waiter"].map((n, i) => `<img class="h${i}" src="${art(`sm/${n}.webp`)}" alt="">`).join("")}</div>
+      <div class="neon" aria-hidden="true"><span>龍</span><span>樓</span><span class="flick">茶</span><span>記</span></div>
+      <div class="steam" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="cast">${HOME_CAST.map((n, i) => `<button class="who h${i}${ui.talk === n ? " talking" : ""}" data-act="talk" data-id="${n}" aria-label="听${NPCS[n].name}讲嘢">${ui.talk === n ? `<span class="bub">${esc(NPCS[n].intents[0].line)}</span>` : ""}<img src="${art(`sm/${n}.webp`)}" alt=""></button>`).join("")}</div>
+      <div class="hint-tap">点街坊，听佢讲句</div>
     </div>
     <div class="homebody">
       <h1>用粤语，搞掂成条街</h1>
       <p class="tag">听懂街坊讲乜 → 出啱句子 → 开口讲出嚟</p>
+      <div class="street">${streetStrip()}</div>
+      ${(() => {
+        const d = CARDS[dailyCard()];
+        const best = prof.best[d.id];
+        return `<button class="daily" data-act="hear" data-id="${d.id}"><span class="lbl">今日一句</span><b>${esc(d.phrase)}</b><span class="jp">${d.jp}</span><small>${esc(d.meaning)}${best !== undefined ? ` · 最佳 ${best}` : ""}</small><span class="play">▶</span></button>`;
+      })()}
       <div class="stats">
         <div><b>${prof.runs}</b><small>行街</small></div>
         <div><b>${prof.wins}</b><small>通关</small></div>
@@ -397,7 +436,13 @@ function shopScreen(run: Run): string {
     s.relic && !s.bought.includes(s.relic)
       ? `<button class="relicshop" data-act="buyRelic"><span class="relic big">${RELICS[s.relic].glyph}</span><div><b>${RELICS[s.relic].name}</b><small>${RELICS[s.relic].desc}</small></div><span class="price">$60</span></button>`
       : "";
-  return `<div class="screen shop">${hud(run)}<h2 class="amber">士多 · 买句子，买密码</h2><div class="pick wrap">${cards}</div>${relic}
+  const remove = s.removed
+    ? `<div class="svc done">今日已经请走一张卡</div>`
+    : `<button class="relicshop svc${s.removing ? " on" : ""}" data-act="removeMode"><span class="relic big">剪</span><div><b>请走一张卡</b><small>卡组越精，好句越易抽到</small></div><span class="price">$${REMOVE_PRICE}</span></button>`;
+  const picker = s.removing
+    ? `<div class="gradt">揀一张请走（卡组现有 ${run.deck.length} 张，最少留 5 张）</div><div class="pick wrap">${[...new Set(run.deck)].map((id) => cardHtml(id, { act: "remove" })).join("")}</div>`
+    : "";
+  return `<div class="screen shop">${hud(run)}<h2 class="amber">士多 · 买句子，买密码</h2><div class="pick wrap">${cards}</div>${relic}${remove}${picker}
     <button class="btn ghost" data-act="leave">行出去</button></div>`;
 }
 
@@ -450,7 +495,13 @@ function goNode(id: string): void {
     saveProf();
     ui.screen = "battle";
   } else if (node.type === "shop") {
-    ui.shop = { cards: rewardChoices(run, 4), relic: relicOffer(run), bought: [] };
+    ui.shop = {
+      cards: rewardChoices(run, 4),
+      relic: relicOffer(run),
+      bought: [],
+      removing: false,
+      removed: false
+    };
     ui.screen = "shop";
   } else if (node.type === "rest") ui.screen = "rest";
   else {
@@ -626,6 +677,41 @@ function onClick(e: Event): void {
       ui.sel = ui.sel === idx ? null : idx;
       if (ui.sel !== null && run?.combat && prof.settings.autoSpeak)
         say(CARDS[run.combat.hand[idx]].phrase);
+      break;
+    }
+    case "talk": {
+      const n = NPCS[id];
+      if (!n) break;
+      ui.talk = id;
+      say(n.intents[0].line);
+      window.setTimeout(() => {
+        if (ui.talk === id) {
+          ui.talk = null;
+          if (ui.screen === "title") render();
+        }
+      }, 2600);
+      break;
+    }
+    case "removeMode":
+      if (!run || ui.shop.removed) break;
+      if (run.gold < REMOVE_PRICE) {
+        toast("港纸唔够");
+        break;
+      }
+      ui.shop.removing = !ui.shop.removing;
+      break;
+    case "remove": {
+      if (!run || !ui.shop.removing || ui.shop.removed) break;
+      const at = run.deck.indexOf(id);
+      if (at < 0 || run.deck.length <= 5) {
+        toast("卡组最少要留 5 张");
+        break;
+      }
+      run.gold -= REMOVE_PRICE;
+      run.deck.splice(at, 1);
+      ui.shop.removed = true;
+      ui.shop.removing = false;
+      toast(`「${CARDS[id].phrase}」执包袱走人`);
       break;
     }
     case "hear":

@@ -40,3 +40,37 @@ test("旧入口保留：?mode=beginner 进新手塔，?mode=classic 进原版", 
   await page.goto("/?mode=classic");
   await expect(page.locator("#app")).not.toBeEmpty();
 });
+
+test("主页：点街坊冒口头禅气泡，今日一句与街道进度可见", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator(".daily")).toBeVisible();
+  await expect(page.locator(".street .stop")).toHaveCount(5);
+  await page.locator('[data-act="talk"][data-id="boss"]').click({ force: true });
+  await expect(page.locator(".hero .bub")).toBeVisible();
+});
+
+test("士多：花 $50 请走一张卡，每间士多限一次", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('[data-act="new"]').click();
+  await page.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem("street-run-v1") ?? "{}");
+    s.run.gold = 200;
+    for (const n of s.run.map)
+      if (n.row === 0) {
+        n.type = "shop";
+        n.npc = undefined;
+      }
+    localStorage.setItem("street-run-v1", JSON.stringify(s));
+  });
+  await page.goto("/");
+  await page.locator('[data-act="resume"]').click();
+  await page.locator(".mn.can").first().click();
+  await page.locator('[data-act="removeMode"]').click();
+  await page.locator('[data-act="remove"]').first().click();
+  await expect(page.locator(".svc.done")).toBeVisible();
+  const run = await page.evaluate(
+    () => JSON.parse(localStorage.getItem("street-run-v1") ?? "{}").run
+  );
+  expect(run.deck.length).toBe(9);
+  expect(run.gold).toBe(150);
+});
