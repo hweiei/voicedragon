@@ -1,8 +1,18 @@
 {
   "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
-  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
   "files": {
-    "ignore": ["dist", "public", "outputs", "docs", "tests/fixtures"]
+    "ignore": [
+      "dist",
+      "public",
+      "outputs",
+      "docs",
+      "tests/fixtures"
+    ]
   },
   "formatter": {
     "enabled": true,
@@ -14,8 +24,12 @@
     "enabled": true,
     "rules": {
       "recommended": true,
-      "style": { "noNonNullAssertion": "off" },
-      "suspicious": { "noExplicitAny": "off" }
+      "style": {
+        "noNonNullAssertion": "error"
+      },
+      "suspicious": {
+        "noExplicitAny": "error"
+      }
     }
   },
   "javascript": {
@@ -24,5 +38,20 @@
       "semicolons": "always",
       "trailingCommas": "none"
     }
-  }
+  },
+  "overrides": [
+    {
+      "path": "tests/**",
+      "linter": {
+        "rules": {
+          "style": {
+            "noNonNullAssertion": "off"
+          },
+          "suspicious": {
+            "noExplicitAny": "off"
+          }
+        }
+      }
+    }
+  ]
 }
