@@ -29,7 +29,25 @@ export default defineConfig({
     maxWorkers: 1,
     minWorkers: 1,
     environment: "node",
-    include: ["tests/**/*.test.ts"]
+    include: ["tests/**/*.test.ts"],
+    coverage: {
+      // 棘轮范围 = 可测逻辑层（web 冻结渲染层不计入，见 docs/harness/baseline.json）
+      provider: "v8",
+      reporter: ["json-summary", "text-summary"],
+      include: ["src/street/**/*.ts", "src/core/**/*.ts", "minigame/src/**/*.ts"],
+      exclude: [
+        "**/*.d.ts",
+        "src/ui/**",
+        "src/beginner/**",
+        "minigame/src/game.ts",
+        "minigame/src/platform-wx.ts",
+        "minigame/src/platform-web.ts",
+        "minigame/src/audio-manifest.ts",
+        "minigame/src/draw.ts",
+        "src/street/app.ts",
+        "src/street/style.css"
+      ]
+    }
   },
   plugins: [
     VitePWA({

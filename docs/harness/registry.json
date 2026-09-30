@@ -76,21 +76,21 @@
    "id": "H-08",
    "priority": "P1",
    "title": "platform-wx 0 单测、内容表覆盖不齐",
-   "status": "open",
+   "status": "done",
    "files": [
     "tests/"
    ],
-   "note": "阶段5.2"
+   "note": "platform-wx mock 单测 6 项 + ch1 补齐 + 内容总账 + 平衡带固化（tests/street-sim）"
   },
   {
    "id": "H-09",
    "priority": "P2",
    "title": "音频/美术完整性无门禁",
-   "status": "open",
+   "status": "done",
    "files": [
     "minigame/build.mjs"
    ],
-   "note": "阶段5.4"
+   "note": "audioPath 全卡映射断言在 street-content-ledger；美术引用完整性在 assetPath 使用面（构建期枚举）"
   },
   {
    "id": "H-10",
