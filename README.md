@@ -13,7 +13,7 @@ npm run dev        # http://localhost:4190/street/ —— 街坊卡牌（需 Nod
 
 ## 真机试玩（微信小游戏 · 主力形态）
 
-1. `npm run build:wx`（产出 `minigame/dist/`，含分包切分与 manifest 生成）
+1. `npm run minigame`（产出 `minigame/dist/`，含分包切分与 manifest 生成）
 2. 微信开发者工具「导入项目」→ 选 `minigame/dist/`，AppID 用测试号或 `wx66ad516be4157de5`
 3. 「预览」扫码即可真机玩。注意：`wx.getRecorder` 仅真机可用（工具内模拟）；
    首次进游戏需下载子包（~5.5MB 音频，Wi-Fi 下自动续传）。

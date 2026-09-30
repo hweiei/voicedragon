@@ -26,7 +26,8 @@
     "codegraph:status": "codegraph status .",
     "minigame": "node minigame/build.mjs",
     "minigame:preview": "node minigame/build.mjs --web && python3 -m http.server 4190 --bind 0.0.0.0 --directory minigame/preview",
-    "gate": "npm run check && tsc --noEmit && vitest run && npm run build && node minigame/build.mjs"
+    "gate": "npm run check && tsc --noEmit && vitest run && npm run build && node minigame/build.mjs && node scripts/harness/run-all.mjs --full",
+    "gate:harness": "node scripts/harness/run-all.mjs --full"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",

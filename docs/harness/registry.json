@@ -136,11 +136,11 @@
    "id": "H-14",
    "priority": "P1",
    "title": "web innerHTML 无围栏",
-   "status": "open",
+   "status": "fixing",
    "files": [
     "src/ui/"
    ],
-   "note": "阶段4.5 xss.ts 白名单"
+   "note": "xss.mjs 活跃线硬闸+冻结线告警已上线；safeHtml 白名单函数阶段4.5"
   },
   {
    "id": "H-15",
@@ -154,11 +154,11 @@
    "id": "H-16",
    "priority": "P1",
    "title": "小游戏无包体/帧预算门禁",
-   "status": "open",
+   "status": "done",
    "files": [
     "minigame/build.mjs"
    ],
-   "note": "阶段3.6 bundle/perf-wx"
+   "note": "阶段3.3/3.6 完成：size/perf-wx/bundle 检查器落地"
   },
   {
    "id": "H-17",
@@ -174,9 +174,9 @@
    "id": "H-18",
    "priority": "P2",
    "title": "孤儿目录卫生检查缺失",
-   "status": "open",
+   "status": "done",
    "files": [],
-   "note": "阶段3.5 hygiene"
+   "note": "阶段3.5 hygiene 检查器落地"
   },
   {
    "id": "H-19",

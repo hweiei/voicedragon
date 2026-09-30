@@ -1,0 +1,20 @@
+{
+ "$comment": "棘轮基线：warn 线只收不放（新纪录须同 commit 说明）。size/perfWx 于阶段3首建。",
+ "size": {
+  "warnMainKB": 2505
+ },
+ "perfWx": {
+  "warnStartGzKB": 49.7
+ },
+ "bundle": {
+  "warnChunkGzKB": 400
+ },
+ "coverage": {
+  "targetLines": 80,
+  "targetBranches": 55,
+  "note": "计划目标；当前实测低于此则告警不阻塞，阶段5收口"
+ },
+ "jscpd": {
+  "maxDuplicatePct": 1.7
+ }
+}

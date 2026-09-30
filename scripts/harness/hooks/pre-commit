@@ -1,0 +1,7 @@
+#!/bin/sh
+# 样例 hook（不强制安装）：cp scripts/harness/hooks/pre-commit .git/hooks/
+# harnessing 分支上提交须带规范前缀（计划 §2 提交规范）
+msg=$(git log -1 --pretty=%B 2>/dev/null || cat .git/COMMIT_EDITMSG)
+case "$(git rev-parse --abbrev-ref HEAD)" in
+  harnessing) echo "$msg" | grep -qE "^(docs|ci|refactor|test|fix|chore)\(harness\)" || { echo "pre-commit: harnessing 分支提交须用 (harness) 前缀"; exit 1; };;
+esac

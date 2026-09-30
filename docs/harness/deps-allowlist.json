@@ -1,13 +1,48 @@
 {
-  "$comment": "docs/ARCHITECTURE.md §2 的机器版；改边先改本表+文档，同 PR。from 目录的 import 解析到仓库相对路径后，必须以 allow 前缀之一开头；相对导入以解析结果为准。tests/ 与 scripts/ 全放行。",
+  "$comment": "docs/ARCHITECTURE.md §2 的机器版；改边先改本表+文档，同 PR。from 目录的 import 解析到仓库相对路径后，必须以 allow 前缀之一开头；相对导入以解析结果为准。tests/ 与 scripts/ 全放行。 修订2026-09-30：deps 检查首跑抓到 voice.ts 依赖 adapters/voice+core/tone（实测存在于 import），原「street 零外依赖」表述系文档失真，已按现实更正。",
   "rules": {
-    "minigame/src": ["src/street/", "src/adapters/voice/", "src/core/tone", "minigame/"],
-    "minigame": ["minigame/", "src/street/"],
-    "src/street": ["src/street/"],
-    "src/core": ["src/core/"],
-    "src/ui": ["src/ui/", "src/core/", "src/adapters/"],
-    "src/beginner": ["src/beginner/", "src/core/", "src/ui/", "src/adapters/"],
-    "src/adapters": ["src/adapters/", "src/core/"]
+    "minigame/src": [
+      "src/street/",
+      "src/adapters/voice/",
+      "src/core/tone",
+      "minigame/"
+    ],
+    "minigame": [
+      "minigame/",
+      "src/street/"
+    ],
+    "src/street": [
+      "src/street/",
+      "src/adapters/voice/",
+      "src/core/tone"
+    ],
+    "src/core": [
+      "src/core/"
+    ],
+    "src/ui": [
+      "src/ui/",
+      "src/core/",
+      "src/adapters/"
+    ],
+    "src/beginner": [
+      "src/beginner/",
+      "src/core/",
+      "src/ui/",
+      "src/adapters/"
+    ],
+    "src/adapters": [
+      "src/adapters/",
+      "src/core/"
+    ]
   },
-  "skipDirs": ["node_modules", "dist", "preview", "tests", "scripts", "docs", "public", ".github"]
+  "skipDirs": [
+    "node_modules",
+    "dist",
+    "preview",
+    "tests",
+    "scripts",
+    "docs",
+    "public",
+    ".github"
+  ]
 }
