@@ -13,5 +13,5 @@
 | 7 | 首屏耗时 | 冷启动计时 | 首页可交互 < 2.5s（主包 2.4MB） |
 | 8 | 广告 | 开发者工具「模拟广告」或真机加载 | 无 id 时全流程跳过；有 id 时失败不阻塞游戏 |
 
-回归口径：跑 `docs/exec-plans/active/HARNESS-PLAN.md` §6 行为清单同序进行。
+回归口径：跑 `docs/exec-plans/completed/HARNESS-PLAN.md` §6 行为清单同序进行。
 失败处置：登记 `docs/harness/registry.json` 新 H 编号（标 bugfix），小 commit 修复，勿搭车。

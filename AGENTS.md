@@ -63,4 +63,4 @@ npx vitest run                # 单测（tests/**，含 street 六章内容表�
 - `docs/harness/` —— 改造台账：SCAN-REPORT.md（20 项问题）、registry.json、baseline.json
 - `docs/ARCHITECTURE.md` —— 依赖方向与目录职责的正式版
 
-新会话第一读：本文件 → `docs/exec-plans/active/HARNESS-PLAN.md`（看当前阶段）→ 相应 docs 深链。
+新会话第一读：本文件 → `docs/exec-plans/completed/HARNESS-PLAN.md`（看当前阶段）→ 相应 docs 深链。
