@@ -22,7 +22,11 @@ export type Tag =
   | "polite"
   | "schedule"
   | "skill"
-  | "docs";
+  | "docs"
+  | "symptom"
+  | "reason"
+  | "compare"
+  | "queue";
 
 export interface CardDef {
   id: string;

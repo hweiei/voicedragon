@@ -6,6 +6,7 @@ import { CH1_STARTER } from "./content/ch1";
 import { CH2_STARTER } from "./content/ch2";
 import { CH3_STARTER } from "./content/ch3";
 import { CH4_STARTER } from "./content/ch4";
+import { CH5_STARTER } from "./content/ch5";
 
 export interface ChapterDef {
   id: number;
@@ -79,12 +80,12 @@ export const CHAPTERS: ChapterDef[] = [
     label: "第五章",
     title: "办事·睇医生",
     focus: "描述问题 · 因为／所以 · 比较",
-    bg: "bg/market.jpg",
-    ready: false,
-    npcsEarly: [],
-    npcsLate: [],
-    boss: "",
-    starter: []
+    bg: "bg/clinic.jpg",
+    ready: true,
+    npcsEarly: ["doctor", "counter"],
+    npcsLate: ["doctor", "counter", "ticket"],
+    boss: "yuen",
+    starter: CH5_STARTER
   },
   {
     id: 6,
