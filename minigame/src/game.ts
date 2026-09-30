@@ -1,5 +1,5 @@
 /**
- * 街坊卡牌 · 小游戏版主循环。
+ * 声震龙楼 · 小游戏版主循环。
  * 规则 / 数据 / 档案校验 / 声调评分全部复用网页版（src/street、src/core），这里只负责画面与交互。
  */
 import { PitchTracker } from "../../src/adapters/voice/pitch-tracker";
@@ -29,7 +29,19 @@ import { audioPath } from "./audio-manifest";
 import { C, MONO, Painter } from "./draw";
 import type { Platform } from "./platform";
 
-type Screen = "home" | "map" | "battle" | "reward" | "shop" | "rest" | "event" | "win" | "lose";
+type Screen =
+  | "home"
+  | "map"
+  | "battle"
+  | "reward"
+  | "shop"
+  | "rest"
+  | "event"
+  | "win"
+  | "lose"
+  | "codex"
+  | "npcs"
+  | "settings";
 
 const RUN_KEY = "street-run-v1";
 const PROF_KEY = "street-profile-v1";
@@ -58,6 +70,9 @@ interface State {
   talk: { id: string; until: number } | null;
   float: { text: string; color: string; t0: number } | null;
   busy: boolean;
+  /** 听力挑战：本回合台词是否已揭开 */
+  revealed: boolean;
+  codexPage: number;
 }
 
 export function startGame(p: Platform): void {
@@ -65,7 +80,7 @@ export function startGame(p: Platform): void {
   const W = p.width;
   const H = p.height;
   const top = p.safeTop;
-  const prof: Profile = loadProfile();
+  let prof: Profile = loadProfile();
   let tracker: PitchTracker | null = null;
   let recStart = 0;
   let holding = false;
@@ -85,7 +100,9 @@ export function startGame(p: Platform): void {
     lastScore: null,
     talk: null,
     float: null,
-    busy: false
+    busy: false,
+    revealed: false,
+    codexPage: 0
   };
 
   /* ---------- 存档 ---------- */
@@ -287,7 +304,7 @@ export function startGame(p: Platform): void {
 
   /* ---------- 各屏 ---------- */
   function homeScreen(t: number): void {
-    const heroH = Math.round(Math.min(H * 0.4, W * 0.78));
+    const heroH = Math.round(Math.min(H * (H < 720 ? 0.33 : 0.4), W * 0.78));
     g.cover(p.loadImage("street/bg/cafe.jpg"), 0, 0, W, heroH);
     g.vfade(0, heroH * 0.45, W, heroH * 0.55 + 1, "rgba(11,13,26,0)", C.bg);
     // 品牌
@@ -413,13 +430,168 @@ export function startGame(p: Platform): void {
       g.button(16, y, half, bh, "继续上一局", "resume", "", "ok");
       g.button(26 + half, y, half, bh, "重新开一局", "new", "", "ghost");
     } else g.button(16, y, W - 32, bh, "开始行街", "new", "", "ok");
-    y += bh + 18;
+    y += bh + 12;
+    const menu: [string, string, string, string][] = [
+      ["卡", "句子图鉴", `${prof.seen.length} / ${Object.keys(CARDS).length}`, "codex"],
+      ["坊", "街坊录", `${prof.met.length} / ${Object.keys(NPCS).length}`, "npcs"],
+      ["设", "设置", prof.settings.listen ? "听力挑战开" : `语速 ${prof.settings.rate}`, "settings"]
+    ];
+    const mw = (W - 32 - 16) / 3;
+    const colors = [C.pink, C.cyan, C.amber];
+    menu.forEach(([ico, label, sub, act], i) => {
+      const x = 16 + i * (mw + 8);
+      g.rr(x, y, mw, 56, 12, C.panel, C.line);
+      g.rr(x + 10, y + 14, 28, 28, 7, undefined, colors[i], 1.5);
+      g.text(ico, x + 24, y + 33, { size: 14, weight: "bold", color: colors[i], align: "center" });
+      g.text(label, x + 46, y + 26, { size: 14, weight: "bold" });
+      g.text(sub, x + 46, y + 44, { size: 11, color: C.dim });
+      g.region(x, y, mw, 56, act);
+    });
+    y += 56 + 16;
     if (y < H - 16)
       g.text("录音只喺本机分析，唔上传 · 声调分只睇音高走势", W / 2, Math.min(H - 14, y + 4), {
         size: 11,
         color: C.dim,
         align: "center"
       });
+  }
+
+  function backBar(t: string): number {
+    g.text("‹ 返回", 16, top + 20, { size: 15, color: C.cyan });
+    g.region(8, top, 80, 32, "back");
+    g.text(t, W / 2, top + 20, { size: 17, weight: "bold", align: "center" });
+    return top + 44;
+  }
+
+  const CODEX_PER_PAGE = 10;
+  function codexScreen(): void {
+    let y = backBar("句子图鉴");
+    g.text("点句子听示范 · 最佳声调分只计开口出牌", W / 2, y, {
+      size: 12,
+      color: C.dim,
+      align: "center"
+    });
+    y += 14;
+    const ids = Object.keys(CARDS);
+    const pages = Math.ceil(ids.length / CODEX_PER_PAGE);
+    s.codexPage = Math.min(s.codexPage, pages - 1);
+    const shown = ids.slice(s.codexPage * CODEX_PER_PAGE, (s.codexPage + 1) * CODEX_PER_PAGE);
+    const cw = (W - 42) / 2;
+    const rows = Math.ceil(shown.length / 2);
+    const chh = Math.min(84, (H - y - 80) / rows - 8);
+    shown.forEach((id, i) => {
+      const x = 16 + (i % 2) * (cw + 10);
+      const yy = y + Math.floor(i / 2) * (chh + 8);
+      const c = CARDS[id];
+      const seen = prof.seen.includes(id);
+      g.rr(x, yy, cw, chh, 10, seen ? C.panel : "rgba(22,26,51,.5)", seen ? C.line : "#1f2344");
+      if (!seen) {
+        g.text("？？？", x + 12, yy + 28, { size: 16, weight: "bold", color: C.dim });
+        g.text("行街时遇到先解锁", x + 12, yy + 48, { size: 11, color: "#4d5378" });
+        return;
+      }
+      g.text(c.phrase, x + 10, yy + 24, { size: 15, weight: "bold" });
+      g.text(c.jp, x + 10, yy + 40, { size: 10, color: C.pink, font: MONO });
+      g.text(c.meaning, x + 10, yy + 56, { size: 11, color: C.dim });
+      const best = prof.best[id];
+      g.text(best === undefined ? "未开口" : `最佳 ${best}`, x + 10, yy + chh - 8, {
+        size: 11,
+        color: best !== undefined && best >= 70 ? C.ok : C.dim
+      });
+      g.text("▶", x + cw - 14, yy + 20, { size: 12, color: C.cyan, align: "center" });
+      g.region(x, yy, cw, chh, "hearCard", id);
+    });
+    const py = H - 56;
+    if (s.codexPage > 0) g.button(16, py, 90, 40, "‹ 上页", "page", "-1", "ghost");
+    g.text(`${s.codexPage + 1} / ${pages}`, W / 2, py + 26, {
+      size: 13,
+      color: C.dim,
+      align: "center"
+    });
+    if (s.codexPage < pages - 1) g.button(W - 106, py, 90, 40, "下页 ›", "page", "1", "ghost");
+  }
+
+  function npcsScreen(): void {
+    let y = backBar("街坊录");
+    const list = Object.values(NPCS);
+    const rh = Math.min(104, (H - y - 20) / list.length - 8);
+    for (const n of list) {
+      const met = prof.met.includes(n.id);
+      g.ctx.save();
+      g.rr(16, y, W - 32, rh, 12);
+      g.ctx.clip();
+      if (met) {
+        g.cover(p.loadImage(`street/${n.bg}`), 16, y, W - 32, rh);
+        g.ctx.fillStyle = "rgba(11,13,26,.72)";
+        g.ctx.fillRect(16, y, W - 32, rh);
+        g.img(p.loadImage(`street/${n.img}`), W - 16 - rh * 1.2, y + 4, rh * 1.2, rh - 4, "bottom");
+      } else {
+        g.ctx.fillStyle = "rgba(22,26,51,.6)";
+        g.ctx.fillRect(16, y, W - 32, rh);
+      }
+      g.ctx.restore();
+      g.rr(16, y, W - 32, rh, 12, undefined, met ? C.line : "#1f2344");
+      if (met) {
+        g.text(n.name, 28, y + 26, { size: 16, weight: "bold" });
+        g.text(`「${n.intents[0].line}」`, 28, y + 48, { size: 12, color: C.cyan });
+        const beaten = prof.beaten[n.id] ?? 0;
+        g.text(beaten ? `说服咗 ${beaten} 次` : "未说服过", 28, y + rh - 12, {
+          size: 12,
+          color: beaten ? C.amber : C.dim
+        });
+        g.region(16, y, W - 32, rh, "talkNpc", n.id);
+      } else {
+        g.text("？？？", 28, y + 30, { size: 16, weight: "bold", color: C.dim });
+        g.text("喺街上遇到先会记低", 28, y + 52, { size: 12, color: "#4d5378" });
+      }
+      y += rh + 8;
+    }
+  }
+
+  function settingsScreen(): void {
+    let y = backBar("设置") + 6;
+    const row = (label: string, sub: string, on: boolean, act: string) => {
+      g.rr(16, y, W - 32, 62, 12, C.panel, C.line);
+      g.text(label, 28, y + 26, { size: 15, weight: "bold" });
+      g.text(sub, 28, y + 46, { size: 11, color: C.dim });
+      g.rr(W - 76, y + 18, 48, 26, 13, on ? C.ok : "#2a2f55");
+      g.ctx.beginPath();
+      g.ctx.arc(on ? W - 41 : W - 63, y + 31, 10, 0, Math.PI * 2);
+      g.ctx.fillStyle = "#fff";
+      g.ctx.fill();
+      g.region(16, y, W - 32, 62, act);
+      y += 72;
+    };
+    row("听力挑战", "街坊台词先收埋，听完或者点开先睇到", prof.settings.listen, "togListen");
+    row("揀卡自动读", "揀卡时自动播示范（有录音先会播）", prof.settings.autoSpeak, "togAuto");
+    g.text("示范语速", 28, y + 18, { size: 15, weight: "bold" });
+    y += 30;
+    const rates = [0.8, 0.9, 1];
+    const bw = (W - 32 - 16) / 3;
+    rates.forEach((r, i) => {
+      const on = Math.abs(prof.settings.rate - r) < 0.01;
+      const x = 16 + i * (bw + 8);
+      g.rr(x, y, bw, 42, 10, on ? C.cyan : C.panel, on ? C.cyan : C.line);
+      g.text(r === 1 ? "正常" : `${r}×`, x + bw / 2, y + 27, {
+        size: 14,
+        weight: "bold",
+        color: on ? C.ink : C.text,
+        align: "center"
+      });
+      g.region(x, y, bw, 42, "rate", String(r));
+    });
+    y += 64;
+    g.button(16, y, W - 32, 46, "清除图鉴、街坊录同统计", "wipe", "", "ghost");
+    y += 66;
+    g.wrap(
+      "录音只喺手机本地分析音高，唔会上传、唔会保存。声调分只睇音高走势，唔等于发音考试。",
+      16,
+      y,
+      W - 32,
+      18,
+      { size: 12, color: C.dim },
+      3
+    );
   }
 
   function mapScreen(run: Run, t: number): void {
@@ -551,17 +723,25 @@ export function startGame(p: Platform): void {
       const by = sy + 12;
       g.rr(bx, by + 3, bw, 80, 12, C.pink);
       g.rr(bx, by, bw, 80, 12, "#fff");
-      g.wrap(
-        intent.line,
-        bx + 10,
-        by + 22,
-        bw - 40,
-        18,
-        { size: 15, weight: "bold", color: C.ink },
-        2
-      );
-      g.text(intent.gloss, bx + 10, by + 58, { size: 11, color: "#6b6f8e" });
-      g.text(`意图：${intent.label}`, bx + 10, by + 73, { size: 11, color: "#6b6f8e" });
+      const hidden = prof.settings.listen && !s.revealed;
+      if (hidden) {
+        g.text("🎧 听力挑战", bx + 10, by + 24, { size: 15, weight: "bold", color: C.ink });
+        g.text("先听佢讲乜，再出牌", bx + 10, by + 46, { size: 12, color: "#6b6f8e" });
+        g.text("点一下揭开文字", bx + 10, by + 66, { size: 11, color: C.pink });
+      } else
+        g.wrap(
+          intent.line,
+          bx + 10,
+          by + 22,
+          bw - 40,
+          18,
+          { size: 15, weight: "bold", color: C.ink },
+          2
+        );
+      if (!hidden) {
+        g.text(intent.gloss, bx + 10, by + 58, { size: 11, color: "#6b6f8e" });
+        g.text(`意图：${intent.label}`, bx + 10, by + 73, { size: 11, color: "#6b6f8e" });
+      }
       g.text(`耐心 -${intent.loss}`, bx + bw - 10, by + 73, {
         size: 11,
         color: C.pink,
@@ -889,6 +1069,7 @@ export function startGame(p: Platform): void {
     s.lastScore = null;
     if (node.type === "fight" || node.type === "boss") {
       startCombat(run, node.npc ?? "auntie");
+      s.revealed = false;
       if (node.npc && !prof.met.includes(node.npc)) prof.met.push(node.npc);
       saveProf();
       s.screen = "battle";
@@ -1011,6 +1192,9 @@ export function startGame(p: Platform): void {
       case "resume":
         if (!loadRun()) p.toast("存档读唔到，开过新一局啦");
         break;
+      case "back":
+        s.screen = "home";
+        break;
       case "home":
         s.screen = "home";
         s.run = null;
@@ -1021,11 +1205,45 @@ export function startGame(p: Platform): void {
         s.talk = { id, until: p.now() + 2600 };
         hear(intentKey(id, 0));
         break;
+      case "codex":
+      case "npcs":
+      case "settings":
+        s.screen = act;
+        s.codexPage = 0;
+        break;
+      case "page":
+        s.codexPage = Math.max(0, s.codexPage + Number(id));
+        break;
+      case "talkNpc":
+        if (NPCS[id]) hear(intentKey(id, 0));
+        break;
+      case "togListen":
+        prof.settings.listen = !prof.settings.listen;
+        saveProf();
+        break;
+      case "togAuto":
+        prof.settings.autoSpeak = !prof.settings.autoSpeak;
+        saveProf();
+        break;
+      case "rate":
+        prof.settings.rate = Number(id);
+        saveProf();
+        break;
+      case "wipe":
+        if (await p.confirm("清除档案", "确定清除图鉴、街坊录同统计？当前一局唔受影响。")) {
+          prof = freshProfile();
+          saveProf();
+          p.toast("档案已清除");
+        }
+        break;
       case "hearCard":
         hear(cardKey(id));
         break;
       case "hearIntent":
-        if (run?.combat) hear(intentKey(run.combat.npc, run.combat.intentIndex));
+        if (run?.combat) {
+          s.revealed = true;
+          hear(intentKey(run.combat.npc, run.combat.intentIndex));
+        }
         break;
       case "relic":
         if (RELICS[id]) p.toast(`${RELICS[id].name}：${RELICS[id].desc}`);
@@ -1036,6 +1254,10 @@ export function startGame(p: Platform): void {
       case "sel": {
         const i = Number(id);
         s.sel = s.sel === i ? null : i;
+        if (s.sel !== null && prof.settings.autoSpeak && run?.combat) {
+          const path = audioPath(cardKey(run.combat.hand[s.sel]));
+          if (path) p.playAudio(path, prof.settings.rate);
+        }
         break;
       }
       case "tap":
@@ -1048,6 +1270,7 @@ export function startGame(p: Platform): void {
         if (!run?.combat) break;
         s.sel = null;
         const r = endTurn(run);
+        s.revealed = false;
         if (r.lost) {
           s.screen = "lose";
           break;
@@ -1201,7 +1424,10 @@ export function startGame(p: Platform): void {
     const t = p.now();
     g.begin();
     const run = s.run;
-    if (s.screen === "home" || !run) homeScreen(t);
+    if (s.screen === "codex") codexScreen();
+    else if (s.screen === "npcs") npcsScreen();
+    else if (s.screen === "settings") settingsScreen();
+    else if (s.screen === "home" || !run) homeScreen(t);
     else if (s.screen === "map") mapScreen(run, t);
     else if (s.screen === "battle") battleScreen(run, t);
     else if (s.screen === "reward") rewardScreen(run);

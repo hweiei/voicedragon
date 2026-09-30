@@ -1,9 +1,9 @@
 {
-  "description": "街坊卡牌（粤语学习卡牌小游戏）",
+  "description": "声震龙楼（粤语学习休闲小游戏）",
   "compileType": "game",
   "miniprogramRoot": "",
-  "appid": "touristappid",
-  "projectname": "jiefang-kapai",
+  "appid": "wx66ad516be4157de5",
+  "projectname": "shengzhenlonglou",
   "setting": {
     "es6": true,
     "minified": true,

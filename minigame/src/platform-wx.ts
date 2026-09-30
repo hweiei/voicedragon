@@ -60,7 +60,7 @@ export function createWxPlatform(): Platform {
   // 转发：只开放普通分享菜单，不做任何分享奖励（避免诱导分享）
   try {
     wx.showShareMenu({ menus: ["shareAppMessage", "shareTimeline"] });
-    wx.onShareAppMessage(() => ({ title: "用粤语搞掂成条街：街坊卡牌" }));
+    wx.onShareAppMessage(() => ({ title: "声震龙楼 · 用粤语搞掂成条街" }));
   } catch {
     /* ignore */
   }
