@@ -189,6 +189,7 @@ function dailyCard(): string {
 
 function streetStrip(): string {
   return Object.values(NPCS)
+    .filter((n) => !n.hidden)
     .map((n) => {
       const st = prof.beaten[n.id] ? "done" : prof.met.includes(n.id) ? "met" : "";
       return `<div class="stop ${st}"><span>${n.sign}</span><i>${st === "done" ? "✓" : st === "met" ? "·" : "?"}</i></div>`;
@@ -227,7 +228,7 @@ function titleScreen(): string {
       <button class="btn ${saved ? "ghost" : "ok"}" data-act="new">${saved ? "重新开一局" : "开始行街"}</button>
       <div class="menu">
         <button data-act="codex"><span class="ico pink">卡</span><b>句子图鉴</b><small>${known} / ${total}</small></button>
-        <button data-act="npcs"><span class="ico cyan">坊</span><b>街坊录</b><small>${prof.met.length} / ${Object.keys(NPCS).length}</small></button>
+        <button data-act="npcs"><span class="ico cyan">坊</span><b>街坊录</b><small>${prof.met.length} / ${Object.values(NPCS).filter((n) => !n.hidden).length}</small></button>
         <button data-act="settings"><span class="ico amber">设</span><b>设置</b><small>${prof.settings.listen ? "听力挑战开" : `语速 ${prof.settings.rate}`}</small></button>
       </div>
       <details class="howto"><summary>点玩？</summary>
@@ -271,6 +272,7 @@ function codexScreen(): string {
 
 function npcsScreen(): string {
   const body = Object.values(NPCS)
+    .filter((n) => !n.hidden)
     .map((n) => {
       const met = prof.met.includes(n.id);
       const beat = prof.beaten[n.id] ?? 0;

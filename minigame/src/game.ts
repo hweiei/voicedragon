@@ -17,13 +17,15 @@ import {
   reachable,
   relicOffer,
   rewardChoices,
-  startCombat
+  startCombat,
+  startReview
 } from "../../src/street/engine";
 import {
   LEVEL_NAMES,
   type MasteryEvent,
   applyDecay,
   bonusTable,
+  dueCards,
   gainXp,
   levelBonus,
   levelOf
@@ -334,10 +336,15 @@ export function startGame(p: Platform): void {
     g.glow(C.pink, 12, () => g.rr(14, top, 38, 38, 9, "rgba(11,13,26,.6)", C.pink, 2));
     g.text("龍", 33, top + 27, { size: 22, weight: "900", color: C.pink, align: "center" });
     g.text("声震龙楼", 60, top + 18, { size: 17, weight: "bold" });
-    g.text(`街坊篇 · 已通关 ${prof.cleared.length} / ${CHAPTERS.length} 区`, 60, top + 35, {
-      size: 12,
-      color: "#cfd3f5"
-    });
+    const dueN = dueCards(prof.mastery, Date.now(), 99).length;
+    g.text(
+      dueN
+        ? `街坊篇 · 已通关 ${prof.cleared.length} / ${CHAPTERS.length} 区 · 今日温习 ${dueN} 句`
+        : `街坊篇 · 已通关 ${prof.cleared.length} / ${CHAPTERS.length} 区`,
+      60,
+      top + 35,
+      { size: 12, color: dueN ? C.amber : "#cfd3f5" }
+    );
     // 霓虹招牌（「茶」字接触不良）
     const nx = W - 46;
     g.glow(C.cyan, 12, () => g.rr(nx, top, 32, 96, 7, "rgba(11,13,26,.55)", C.cyan, 2));
@@ -390,7 +397,7 @@ export function startGame(p: Platform): void {
     });
     // 街道进度
     y += 22;
-    const stops = Object.values(NPCS);
+    const stops = Object.values(NPCS).filter((n) => !n.hidden);
     const stepW = (W - 32) / stops.length;
     stops.forEach((n, i) => {
       const cx = 16 + stepW * (i + 0.5);
@@ -459,7 +466,12 @@ export function startGame(p: Platform): void {
     y += bh + 12;
     const menu: [string, string, string, string][] = [
       ["卡", "句子图鉴", `${prof.seen.length} / ${Object.keys(CARDS).length}`, "codex"],
-      ["坊", "街坊录", `${prof.met.length} / ${Object.keys(NPCS).length}`, "npcs"],
+      [
+        "坊",
+        "街坊录",
+        `${prof.met.length} / ${Object.values(NPCS).filter((n) => !n.hidden).length}`,
+        "npcs"
+      ],
       ["设", "设置", prof.settings.listen ? "听力挑战开" : `语速 ${prof.settings.rate}`, "settings"]
     ];
     const mw = (W - 32 - 16) / 3;
@@ -585,7 +597,7 @@ export function startGame(p: Platform): void {
 
   function npcsScreen(): void {
     let y = backBar("街坊录");
-    const list = Object.values(NPCS);
+    const list = Object.values(NPCS).filter((n) => !n.hidden);
     const rh = Math.min(104, (H - y - 20) / list.length - 8);
     for (const n of list) {
       const met = prof.met.includes(n.id);
@@ -696,7 +708,13 @@ export function startGame(p: Platform): void {
       }
     }
     g.ctx.setLineDash([]);
-    const glyph: Record<string, string> = { event: "?", shop: "士", rest: "糖", boss: "午" };
+    const glyph: Record<string, string> = {
+      event: "?",
+      shop: "士",
+      rest: "糖",
+      boss: "午",
+      review: "温"
+    };
     for (const n of run.map) {
       const { x, y } = pos(n);
       const r = n.type === "boss" ? 30 : 24;
@@ -709,7 +727,7 @@ export function startGame(p: Platform): void {
             ? C.amber
             : n.type === "rest"
               ? C.ok
-              : n.type === "event"
+              : n.type === "event" || n.type === "review"
                 ? C.violet
                 : C.cyan;
       const pulse = on ? 8 + Math.sin(t / 250) * 6 : 0;
@@ -740,7 +758,7 @@ export function startGame(p: Platform): void {
       const label =
         n.type === "fight" || n.type === "boss"
           ? NPCS[n.npc ?? "auntie"].sign
-          : { event: "奇遇", shop: "士多", rest: "糖水铺" }[n.type as "event"];
+          : { event: "奇遇", shop: "士多", rest: "糖水铺", review: "温习" }[n.type as "event"];
       g.text(label, x, y + r + 15, { size: 12, color: on ? C.text : C.dim, align: "center" });
       if (on) g.region(x - r - 6, y - r - 6, r * 2 + 12, r * 2 + 26, "go", n.id);
     }
@@ -1161,7 +1179,20 @@ export function startGame(p: Platform): void {
       };
       s.screen = "shop";
     } else if (node.type === "rest") s.screen = "rest";
-    else {
+    else if (node.type === "review") {
+      const due = dueCards(prof.mastery, Date.now(), 6);
+      if (due.length < 2) {
+        run.patience = Math.min(run.maxPatience, run.patience + 6);
+        s.run = run;
+        s.screen = "map";
+        p.toast("无嘢好温习，饮啖茶先（耐心 +6）");
+      } else {
+        startReview(run, due);
+        s.revealed = false;
+        s.levelUps = [];
+        s.screen = "battle";
+      }
+    } else {
       const idx = Math.floor(nextRand(run)() * EVENTS.length);
       s.event = { idx, card: EVENTS[idx].reward === "card" ? rewardChoices(run, 1)[0] : undefined };
       s.screen = "event";

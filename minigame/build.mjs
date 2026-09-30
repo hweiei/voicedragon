@@ -25,8 +25,8 @@ const web = process.argv.includes("--web");
 /** 包内静态资源：场景图、街坊立绘、示范音频 */
 function copyAssets(to) {
   mkdirSync(join(to, "street", "bg"), { recursive: true });
-  for (const n of ["auntie", "waiter", "taxi", "landlady", "boss"])
-    cpSync(join(root, "public/street", `${n}.png`), join(to, "street", `${n}.png`));
+  for (const f of readdirSync(join(root, "public/street")))
+    if (f.endsWith(".png")) cpSync(join(root, "public/street", f), join(to, "street", f));
   cpSync(join(root, "public/street/bg"), join(to, "street/bg"), { recursive: true });
   const audio = join(here, "assets/audio");
   if (existsSync(audio)) cpSync(audio, join(to, "audio"), { recursive: true });

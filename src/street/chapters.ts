@@ -3,6 +3,7 @@
  * ready=false 的章节只展示预告，不能开局。
  */
 import { CH1_STARTER } from "./content/ch1";
+import { CH2_STARTER } from "./content/ch2";
 
 export interface ChapterDef {
   id: number;
@@ -40,12 +41,12 @@ export const CHAPTERS: ChapterDef[] = [
     label: "第二章",
     title: "出行·问路",
     focus: "方位 · 地点 · 时间 · 喺／去／嚟",
-    bg: "bg/taxi.jpg",
-    ready: false,
-    npcsEarly: [],
-    npcsLate: [],
-    boss: "",
-    starter: []
+    bg: "bg/busstop.jpg",
+    ready: true,
+    npcsEarly: ["mtrstaff", "grandpa"],
+    npcsLate: ["mtrstaff", "grandpa", "minibus"],
+    boss: "buscaptain",
+    starter: CH2_STARTER
   },
   {
     id: 3,

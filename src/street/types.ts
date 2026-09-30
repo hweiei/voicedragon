@@ -2,7 +2,19 @@
 
 export type CardKind = "persuade" | "calm" | "skill";
 /** 标签：用于「接住」街坊的意图（讲价、催促、提问……）。 */
-export type Tag = "raise" | "rush" | "sorry" | "confused" | "seats" | "order" | "bill" | "where";
+export type Tag =
+  | "raise"
+  | "rush"
+  | "sorry"
+  | "confused"
+  | "seats"
+  | "order"
+  | "bill"
+  | "where"
+  | "time"
+  | "direction"
+  | "fare"
+  | "transport";
 
 export interface CardDef {
   id: string;
@@ -47,6 +59,8 @@ export interface NpcDef {
   win: string;
   intents: Intent[];
   boss?: boolean;
+  /** 不在街坊录/街道进度里展示（如温习地摊） */
+  hidden?: boolean;
   /** 所属章节，缺省为第 1 章 */
   chapter?: number;
 }

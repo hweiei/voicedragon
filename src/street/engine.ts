@@ -13,7 +13,7 @@ export function rng(seed: number): () => number {
   };
 }
 
-export type NodeType = "fight" | "event" | "shop" | "rest" | "boss";
+export type NodeType = "fight" | "event" | "shop" | "rest" | "boss" | "review";
 export interface MapNode {
   id: string;
   row: number;
@@ -41,6 +41,12 @@ export function genMap(rand: () => number, chapter = 1): MapNode[] {
         return node;
       })
     );
+  }
+  // 第 2 行固定放一个「温习地摊」：把到期要复习的句子拿来打一局
+  const rv = [rows[2], rows[1], rows[3]].flat().find((n) => n.type === "fight") ?? rows[2]?.[0];
+  if (rv) {
+    rv.type = "review";
+    rv.npc = undefined;
   }
   for (let r = 0; r < ROWS - 1; r++) {
     for (const n of rows[r]) {
@@ -184,6 +190,16 @@ export function startCombat(run: Run, npcId: string): Combat {
   };
   run.combat = c;
   beginTurn(run);
+  return c;
+}
+
+/** 温习局：手牌 = 到期句子，打这些卡会重置各自的复习计时 */
+export function startReview(run: Run, cards: string[]): Combat {
+  const c = startCombat(run, "recap");
+  c.target = 14 + cards.length * 4;
+  c.draw = [];
+  c.discard = [];
+  c.hand = cards.slice(0, 5);
   return c;
 }
 
