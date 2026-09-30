@@ -36,11 +36,11 @@
    "id": "H-04",
    "priority": "P2",
    "title": "street/style.css 585 行克隆块",
-   "status": "open",
+   "status": "done",
    "files": [
     "src/street/style.css"
    ],
-   "note": "阶段4.4"
+   "note": "style.css 583 行整段重复删除；机器验证：规则集合 2份→1份且无其他 diff"
   },
   {
    "id": "H-05",
