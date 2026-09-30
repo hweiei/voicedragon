@@ -93,6 +93,16 @@ export const AUDIO_KEYS: ReadonlySet<string> = new Set<string>([
   "n-chair-1",
   "n-chair-2",
   "n-chair-3",
+  "n-chief-0",
+  "n-chief-1",
+  "n-chief-2",
+  "n-clerk-0",
+  "n-clerk-1",
+  "n-clerk-2",
+  "n-director-0",
+  "n-director-1",
+  "n-director-2",
+  "n-director-3",
   "n-faan-0",
   "n-faan-1",
   "n-faan-2",
@@ -117,6 +127,9 @@ export const AUDIO_KEYS: ReadonlySet<string> = new Set<string>([
   "n-recap-0",
   "n-recap-1",
   "n-recap-2",
+  "n-staff-0",
+  "n-staff-1",
+  "n-staff-2",
   "n-taxi-0",
   "n-taxi-1",
   "n-taxi-2",
@@ -125,7 +138,7 @@ export const AUDIO_KEYS: ReadonlySet<string> = new Set<string>([
   "n-waiter-2"
 ]);
 
-const AUDIO_SUB: Record<string, string> = {"c-bou1waan4":"res3","c-bungei":"res3","c-cankau":"res3","c-ceot1loeng4":"res4","c-cing1jat6":"res3","c-dang6jat6":"res4","c-dim2soeng5":"res4","c-gaap3cin2":"res3","c-gaapsi4":"res4","c-gaau1bei2":"res3","c-gaau2din6":"res4","c-gaautin":"res3","c-geidonim2":"res4","c-haaci3je6":"res3","c-hei2caau2":"res4","c-jam2caa4":"res3","c-jau5je5":"res3","c-jau5seoi1":"res4","c-m4gam3ji3":"res4","c-m4haai3":"res4","c-mgoibong":"res3","c-mgoineoi":"res4","c-mingsan":"res4","c-ngaam1ngaam1":"res3","c-saiseng":"res3","c-sakdak1":"res4","c-seoifai3":"res3","c-sik1sin1":"res4","c-tai2fan6":"res4","c-tau4sin1":"res3","c-tintoim4":"res3","c-wunsoeng5":"res4","c-zap1hou2":"res3","c-zebou6syun1":"res3","c-zing3geoi3":"res4","c-zyun3zing3":"res4","n-chair-0":"res3","n-chair-1":"res3","n-chair-2":"res3","n-chair-3":"res3","n-faan-0":"res3","n-faan-1":"res3","n-faan-2":"res3","n-kid-0":"res3","n-kid-1":"res3","n-kid-2":"res3","n-neibour-0":"res3","n-neibour-1":"res3","n-neibour-2":"res3"};
+const AUDIO_SUB: Record<string, string> = {"c-bou1waan4":"res3","c-bungei":"res3","c-cankau":"res3","c-ceot1loeng4":"res4","c-cing1jat6":"res3","c-dang6jat6":"res4","c-dim2soeng5":"res4","c-gaap3cin2":"res3","c-gaapsi4":"res4","c-gaau1bei2":"res3","c-gaau2din6":"res4","c-gaautin":"res3","c-geidonim2":"res4","c-haaci3je6":"res3","c-hei2caau2":"res4","c-jam2caa4":"res3","c-jau5je5":"res3","c-jau5seoi1":"res4","c-m4gam3ji3":"res4","c-m4haai3":"res4","c-mgoibong":"res3","c-mgoineoi":"res4","c-mingsan":"res4","c-ngaam1ngaam1":"res3","c-saiseng":"res3","c-sakdak1":"res4","c-seoifai3":"res3","c-sik1sin1":"res4","c-tai2fan6":"res4","c-tau4sin1":"res3","c-tintoim4":"res3","c-wunsoeng5":"res4","c-zap1hou2":"res3","c-zebou6syun1":"res3","c-zing3geoi3":"res4","c-zyun3zing3":"res4","n-chair-0":"res3","n-chair-1":"res3","n-chair-2":"res3","n-chair-3":"res3","n-chief-0":"res4","n-chief-1":"res4","n-chief-2":"res4","n-clerk-0":"res4","n-clerk-1":"res4","n-clerk-2":"res4","n-director-0":"res4","n-director-1":"res4","n-director-2":"res4","n-director-3":"res4","n-faan-0":"res3","n-faan-1":"res3","n-faan-2":"res3","n-kid-0":"res3","n-kid-1":"res3","n-kid-2":"res3","n-neibour-0":"res3","n-neibour-1":"res3","n-neibour-2":"res3","n-staff-0":"res4","n-staff-1":"res4","n-staff-2":"res4"};
 
 const ASSET_SUB: Record<string, string> = {"neibour.png":"res3","kid.png":"res3","faan.png":"res3","chair.png":"res3","bg/rooftop.jpg":"res3","staff.png":"res4","clerk.png":"res4","chief.png":"res4","director.png":"res4"};
 
