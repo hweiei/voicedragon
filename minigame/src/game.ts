@@ -39,6 +39,8 @@ import {
 } from "../../src/street/profile";
 import { type Quiz, gradeAnswer, makeQuizSet, quizPool } from "../../src/street/school";
 import { playBeat, winBeat } from "../../src/street/session";
+import { mapScreen } from "./screens/map";
+
 import { endScreen, eventScreen, restScreen, rewardScreen, shopScreen } from "./screens/overlays";
 
 import { chaptersScreen, codexScreen, npcsScreen, settingsScreen } from "./screens/codex";
@@ -525,101 +527,6 @@ export function startGame(p: Platform): void {
         align: "center"
       });
       g.text(st.fb.txt, W / 2 + 30, y - 100, { size: 15, weight: "bold", align: "center" });
-    }
-  }
-
-  function mapScreen(run: Run, t: number): void {
-    const y0 = hud(ctx, run);
-    title(ctx, "揀路行街", y0 + 14, C.cyan);
-    const areaTop = y0 + 40;
-    const areaBot = H - 30;
-    const rows = Math.max(...run.map.map((n) => n.row)) + 1;
-    const rowH = (areaBot - areaTop) / rows;
-    const pos = (n: { row: number; col: number }) => ({
-      x: W / 2 + (n.col - 1) * Math.min(110, W * 0.28),
-      y: areaBot - rowH * (n.row + 0.5)
-    });
-    const can = new Set(reachable(run));
-    // 连线
-    for (const n of run.map) {
-      const a = pos(n);
-      for (const nid of n.next) {
-        const m = run.map.find((x) => x.id === nid);
-        if (!m) continue;
-        const b = pos(m);
-        const walked = run.visited.includes(n.id) && run.visited.includes(m.id);
-        g.ctx.strokeStyle = walked ? C.amber : "rgba(138,145,180,.35)";
-        g.ctx.lineWidth = walked ? 3 : 2;
-        g.ctx.setLineDash(walked ? [] : [5, 5]);
-        g.ctx.beginPath();
-        g.ctx.moveTo(a.x, a.y);
-        g.ctx.lineTo(b.x, b.y);
-        g.ctx.stroke();
-      }
-    }
-    g.ctx.setLineDash([]);
-    const glyph: Record<string, string> = {
-      event: "?",
-      shop: "士",
-      rest: "糖",
-      boss: "午",
-      review: "温",
-      school: "学"
-    };
-    for (const n of run.map) {
-      const { x, y } = pos(n);
-      const r = n.type === "boss" ? 30 : 24;
-      const on = can.has(n.id);
-      const done = run.visited.includes(n.id);
-      const color =
-        n.type === "boss"
-          ? C.pink
-          : n.type === "shop"
-            ? C.amber
-            : n.type === "rest"
-              ? C.ok
-              : n.type === "event" || n.type === "review"
-                ? C.violet
-                : n.type === "school"
-                  ? C.amber
-                  : C.cyan;
-      const pulse = on ? 8 + Math.sin(t / 250) * 6 : 0;
-      g.glow(on ? color : "transparent", pulse, () => {
-        g.ctx.beginPath();
-        g.ctx.arc(x, y, r, 0, Math.PI * 2);
-        g.ctx.fillStyle = done ? "#23284a" : C.panel;
-        g.ctx.fill();
-        g.ctx.lineWidth = on ? 3 : 1.5;
-        g.ctx.strokeStyle = on ? color : done ? C.dim : C.line;
-        g.ctx.stroke();
-      });
-      if ((n.type === "fight" || n.type === "boss") && n.npc) {
-        g.ctx.save();
-        g.ctx.beginPath();
-        g.ctx.arc(x, y, r - 3, 0, Math.PI * 2);
-        g.ctx.clip();
-        g.img(p.loadImage(assetPath(`street/${NPCS[n.npc].img}`)), x - r, y - r + 2, r * 2, r * 2);
-        g.ctx.restore();
-        if (!on && !done) g.ctx.globalAlpha = 1;
-      } else
-        g.text(glyph[n.type] ?? "?", x, y + 7, {
-          size: 20,
-          weight: "bold",
-          color,
-          align: "center"
-        });
-      const label =
-        n.type === "fight" || n.type === "boss"
-          ? NPCS[n.npc ?? "auntie"].sign
-          : {
-              event: "奇遇",
-              shop: "士多",
-              rest: "糖水铺",
-              review: "温习",
-              school: "学堂"
-            }[n.type as "event"];
-      g.text(label, x, y + r + 15, { size: 12, color: on ? C.text : C.dim, align: "center" });
-      if (on) g.region(x - r - 6, y - r - 6, r * 2 + 12, r * 2 + 26, "go", n.id);
     }
   }
 
@@ -1351,7 +1258,7 @@ export function startGame(p: Platform): void {
     else if (s.screen === "npcs") npcsScreen(ctx);
     else if (s.screen === "settings") settingsScreen(ctx);
     else if (s.screen === "home" || !run) homeScreen(t);
-    else if (s.screen === "map") mapScreen(run, t);
+    else if (s.screen === "map") mapScreen(ctx, run, t);
     else if (s.screen === "battle") battleScreen(run, t);
     else if (s.screen === "reward") rewardScreen(ctx, run);
     else if (s.screen === "shop") shopScreen(ctx, run);
