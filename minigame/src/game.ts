@@ -6,7 +6,6 @@ import { PitchTracker } from "../../src/adapters/voice/pitch-tracker";
 import { scoreToneContour } from "../../src/core/tone";
 import { CHAPTERS, chapterUnlocked } from "../../src/street/chapters";
 import { CARDS, type CardDef, EVENTS, NPCS, RELICS } from "../../src/street/data";
-import { playBeat, winBeat } from "../../src/street/session";
 import {
   type Run,
   cardPreview,
@@ -39,6 +38,7 @@ import {
   restoreProfile
 } from "../../src/street/profile";
 import { type Quiz, gradeAnswer, makeQuizSet, quizPool } from "../../src/street/school";
+import { playBeat, winBeat } from "../../src/street/session";
 import { assetPath, audioPath } from "./audio-manifest";
 import { C, MONO, Painter } from "./draw";
 import type { Platform } from "./platform";
@@ -1487,40 +1487,35 @@ export function startGame(p: Platform): void {
   function doPlay(crit: boolean, spoke: boolean, score: number | null = null): void {
     const run = s.run;
     if (!run?.combat || s.sel === null) return;
-    playBeat(
-      run,
-      s.sel,
-      crit,
-      spoke,
-      () => (s.sel = null),
-      {
-        toast: (m) => p.toast(m),
-        flash: (text, isCrit) => {
-          s.float = { text, color: isCrit ? C.amber : C.ok, t0: p.now() };
-        },
-        calmText: (n) => `稳住 ${n}`,
-        afterResult: (res, cardId) => {
-          snd.sfx(res.crit ? "crit" : "play");
-          const evs: MasteryEvent[] = ["play"];
-          if (res.answered) evs.push("answer");
-          if (score !== null && score >= 60) evs.push("spoke");
-          if (res.crit) evs.push("crit");
-          if (res.won) s.busy = true; // 700ms 结算窗口内防连点（原行为）
-          const up = gainXp(prof.mastery, cardId, evs, Date.now());
-          saveProf();
-          if (up.after > up.before) {
-            s.levelUps = s.levelUps.filter((l) => l.id !== cardId).concat({ id: cardId, lv: up.after });
-            run.bonus = { ...(run.bonus ?? {}), [cardId]: levelBonus(up.after) };
-            p.toast(`「${CARDS[cardId].phrase}」熟练度升到 Lv${up.after}`);
-          }
-        },
-        onWin: () => {
-          s.busy = false;
-          afterWin();
-          saveRun();
+    playBeat(run, s.sel, crit, spoke, () => (s.sel = null), {
+      toast: (m) => p.toast(m),
+      flash: (text, isCrit) => {
+        s.float = { text, color: isCrit ? C.amber : C.ok, t0: p.now() };
+      },
+      calmText: (n) => `稳住 ${n}`,
+      afterResult: (res, cardId) => {
+        snd.sfx(res.crit ? "crit" : "play");
+        const evs: MasteryEvent[] = ["play"];
+        if (res.answered) evs.push("answer");
+        if (score !== null && score >= 60) evs.push("spoke");
+        if (res.crit) evs.push("crit");
+        if (res.won) s.busy = true; // 700ms 结算窗口内防连点（原行为）
+        const up = gainXp(prof.mastery, cardId, evs, Date.now());
+        saveProf();
+        if (up.after > up.before) {
+          s.levelUps = s.levelUps
+            .filter((l) => l.id !== cardId)
+            .concat({ id: cardId, lv: up.after });
+          run.bonus = { ...(run.bonus ?? {}), [cardId]: levelBonus(up.after) };
+          p.toast(`「${CARDS[cardId].phrase}」熟练度升到 Lv${up.after}`);
         }
+      },
+      onWin: () => {
+        s.busy = false;
+        afterWin();
+        saveRun();
       }
-    );
+    });
   }
   async function micDown(): Promise<void> {
     const run = s.run;
