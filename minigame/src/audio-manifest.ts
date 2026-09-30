@@ -1,7 +1,7 @@
 /**
  * 包内粤语示范音频清单（构建时由 build.mjs 按 minigame/assets/audio/street/*.mp3 自动生成，勿手改）。
  * key：c-<卡牌id> / n-<街坊id>-<台词序号>。未列出的 key 播放时提示看粤拼跟读。
- * 小游戏里没有系统粤语 TTS，所以示范只能靠预录音频。
+ * 第 3 章起为分包路径 audioN/<key>.mp3（wx 端播放前会先 loadSubpackage）。
  */
 export const AUDIO_KEYS: ReadonlySet<string> = new Set<string>([
   "c-bou1waan4",
@@ -107,6 +107,42 @@ export const AUDIO_KEYS: ReadonlySet<string> = new Set<string>([
   "n-waiter-2"
 ]);
 
+const AUDIO_SUB: Record<string, string> = {
+  "c-bou1waan4": "audio3",
+  "c-bungei": "audio3",
+  "c-cankau": "audio3",
+  "c-cing1jat6": "audio3",
+  "c-gaap3cin2": "audio3",
+  "c-gaau1bei2": "audio3",
+  "c-gaautin": "audio3",
+  "c-haaci3je6": "audio3",
+  "c-jam2caa4": "audio3",
+  "c-jau5je5": "audio3",
+  "c-mgoibong": "audio3",
+  "c-ngaam1ngaam1": "audio3",
+  "c-saiseng": "audio3",
+  "c-seoifai3": "audio3",
+  "c-tau4sin1": "audio3",
+  "c-tintoim4": "audio3",
+  "c-zap1hou2": "audio3",
+  "c-zebou6syun1": "audio3",
+  "n-chair-0": "audio3",
+  "n-chair-1": "audio3",
+  "n-chair-2": "audio3",
+  "n-chair-3": "audio3",
+  "n-faan-0": "audio3",
+  "n-faan-1": "audio3",
+  "n-faan-2": "audio3",
+  "n-kid-0": "audio3",
+  "n-kid-1": "audio3",
+  "n-kid-2": "audio3",
+  "n-neibour-0": "audio3",
+  "n-neibour-1": "audio3",
+  "n-neibour-2": "audio3"
+};
+
 export function audioPath(key: string): string | null {
-  return AUDIO_KEYS.has(key) ? `audio/street/${key}.mp3` : null;
+  if (!AUDIO_KEYS.has(key)) return null;
+  const s = AUDIO_SUB[key];
+  return s ? `${s}/${key}.mp3` : `audio/street/${key}.mp3`;
 }

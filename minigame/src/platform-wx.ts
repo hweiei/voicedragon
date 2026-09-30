@@ -16,6 +16,31 @@ export function createWxPlatform(): Platform {
   ctx.scale(dpr, dpr);
 
   const images = new Map<string, WxMini.Image>();
+  const subReady = new Set<string>();
+  const subLoading = new Map<string, Promise<void>>();
+  function loadSub(name: string): Promise<void> {
+    let pr = subLoading.get(name);
+    if (!pr) {
+      pr = new Promise<void>((resolve, reject) => {
+        try {
+          const task = wx.loadSubpackage({ name });
+          task.onSuccess(() => {
+            subReady.add(name);
+            resolve();
+          });
+          task.onFail((e) => {
+            subLoading.delete(name);
+            console.warn("分包加载失败", name, e.errMsg);
+            reject(e);
+          });
+        } catch (e) {
+          reject(e);
+        }
+      });
+      subLoading.set(name, pr);
+    }
+    return pr;
+  }
   const audio = wx.createInnerAudioContext({ useWebAudioImplement: true });
   audio.onError(() => undefined);
   const recorder = wx.getRecorderManager();
@@ -108,15 +133,24 @@ export function createWxPlatform(): Platform {
       }
     },
     playAudio(path, rate) {
-      try {
-        audio.stop();
-        audio.src = path;
-        audio.playbackRate = rate;
-        audio.play();
+      const play = () => {
+        try {
+          audio.stop();
+          audio.src = path;
+          audio.playbackRate = rate;
+          audio.play();
+        } catch {
+          /* 分包未就绪时静默丢弃一次 */
+        }
+      };
+      // audioN/ 前缀 = 分包资源：先 loadSubpackage 再播（以官方文档为准）
+      const m = /^(audio\d+)\//.exec(path);
+      if (m && !subReady.has(m[1])) {
+        loadSub(m[1]).then(play, () => undefined);
         return true;
-      } catch {
-        return false;
       }
+      play();
+      return true;
     },
     startRecord(cb) {
       return new Promise((resolve, reject) => {

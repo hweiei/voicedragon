@@ -30,6 +30,11 @@ declare namespace WxMini {
     pixelRatio: number;
     safeArea?: { top: number; bottom: number; left: number; right: number };
   }
+  interface SubpackageTask {
+    onSuccess(cb: () => void): void;
+    onFail(cb: (e: { errMsg: string }) => void): void;
+    onProgressUpdate?(cb: (res: { progress: number }) => void): void;
+  }
   interface InnerAudioContext {
     src: string;
     playbackRate: number;
@@ -81,6 +86,7 @@ declare namespace WxMini {
     getRecorderManager(): RecorderManager;
     authorize(opts: { scope: string; success?: () => void; fail?: () => void }): void;
     openSetting(opts?: { success?: () => void }): void;
+    loadSubpackage(opts: { name: string }): SubpackageTask;
     showToast(opts: { title: string; icon?: "none" | "success"; duration?: number }): void;
     showModal(opts: {
       title: string;
