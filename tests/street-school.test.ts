@@ -73,9 +73,10 @@ describe("学堂题库生成", () => {
     }
   });
   it("章节起手卡都有音频键（c- 前缀由构建保证），且喺出题池", () => {
-    const pool = new Set(quizPool(2, {}, Date.now()));
-    for (const ch of CHAPTERS.filter((c) => c.ready))
+    for (const ch of CHAPTERS.filter((c) => c.ready)) {
+      const pool = new Set(quizPool(ch.id, {}, Date.now()));
       for (const id of ch.starter) expect(pool.has(id), `${ch.title}:${id}`).toBe(true);
+    }
     expect(Object.keys(RELICS).length).toBeGreaterThan(0);
   });
 });

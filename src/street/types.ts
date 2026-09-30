@@ -14,7 +14,11 @@ export type Tag =
   | "time"
   | "direction"
   | "fare"
-  | "transport";
+  | "transport"
+  | "help"
+  | "borrow"
+  | "noise"
+  | "repair";
 
 export interface CardDef {
   id: string;

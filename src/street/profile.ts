@@ -33,6 +33,8 @@ export interface Profile {
   cleared: number[];
   /** 已上过章首课的章节 */
   taught: number[];
+  /** 新手引导看完没 */
+  tutDone: boolean;
 }
 
 const KEY = "street-profile-v1";
@@ -50,6 +52,8 @@ export function freshProfile(): Profile {
     settings: { listen: false, rate: 0.9, autoSpeak: true },
     mastery: {},
     cleared: [],
+    /** 新手引导看完没 */
+    tutDone: false,
     /** 已上过章首课的章节 */
     taught: []
   };
@@ -90,6 +94,8 @@ export function restoreProfile(raw: unknown): Profile {
     : [];
   // v1 迁移：通关过 Boss 的旧档，视为第 1 章已通关
   if (p.wins > 0 && !p.cleared.includes(1)) p.cleared.push(1);
+  // 老玩家（打过局的）不再弹新手引导
+  p.tutDone = r.tutDone === true || p.runs > 0;
   p.taught = Array.isArray(r.taught)
     ? [...new Set(r.taught.filter((c): c is number => typeof c === "number" && ids.has(c)))]
     : [];

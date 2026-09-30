@@ -34,7 +34,14 @@ const ORDER_BANK: Record<string, string[]> = {
   hongloengfan: ["你", "行两分钟", "就去到"],
   jungbatdaatung: ["我", "用", "八达通"],
   mhaiban: ["唔系", "呢班车"],
-  gonsigan: ["我", "赶时间", "呀"]
+  gonsigan: ["我", "赶时间", "呀"],
+  // 第三章
+  zebou6syun1: ["可唔可以", "借阵", "部钻"],
+  saiseng: ["细声啲啦", "有人", "瞓紧"],
+  gaautin: ["搞掂咗喇", "唔使", "惊"],
+  jam2caa4: ["得闲", "饮杯茶", "先啦"],
+  bungei: ["部机", "坏咗", "好耐㖎"],
+  gaap3cin2: ["大家", "夹啲钱", "整部机啦"]
 };
 
 /** 句子去掉标点（跟 ORDER_BANK 校验同一口径） */

@@ -32,7 +32,8 @@ describe("第二章内容", () => {
   it("章节解锁链", () => {
     expect(chapterUnlocked(2, [])).toBe(false);
     expect(chapterUnlocked(2, [1])).toBe(true);
-    expect(chapterUnlocked(3, [1, 2])).toBe(false); // 第 3 章未制作
+    expect(chapterUnlocked(3, [1, 2])).toBe(true);
+    expect(chapterUnlocked(4, [1, 2, 3])).toBe(false); // 第 4 章未制作
   });
 });
 

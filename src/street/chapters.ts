@@ -4,6 +4,7 @@
  */
 import { CH1_STARTER } from "./content/ch1";
 import { CH2_STARTER } from "./content/ch2";
+import { CH3_STARTER } from "./content/ch3";
 
 export interface ChapterDef {
   id: number;
@@ -52,13 +53,13 @@ export const CHAPTERS: ChapterDef[] = [
     id: 3,
     label: "第三章",
     title: "唐楼·邻里",
-    focus: "请求与投诉 · 咗／紧／过",
-    bg: "bg/tonglau.jpg",
-    ready: false,
-    npcsEarly: [],
-    npcsLate: [],
-    boss: "",
-    starter: []
+    focus: "请求与投诉 · 咗／紧（体貌助词）",
+    bg: "bg/rooftop.jpg",
+    ready: true,
+    npcsEarly: ["neibour", "kid"],
+    npcsLate: ["neibour", "kid", "faan"],
+    boss: "chair",
+    starter: CH3_STARTER
   },
   {
     id: 4,

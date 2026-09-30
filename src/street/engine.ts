@@ -269,6 +269,8 @@ export function cardPreview(
   let calm = card.calm ?? 0;
   if (persuade && run.relics.includes("rusheng") && hasRusheng(card.jp)) persuade += 2;
   if (calm && run.relics.includes("mtail") && hasMTail(card.jp)) calm += 2;
+  if (persuade && run.relics.includes("zorelic") && card.phrase.includes("咗")) persuade += 2;
+  if (calm && run.relics.includes("ganrelic") && card.phrase.includes("紧")) calm += 2;
   const mb = run.bonus?.[card.id] ?? 0;
   if (mb && persuade) persuade += mb;
   else if (mb && calm) calm += mb;

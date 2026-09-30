@@ -1082,8 +1082,16 @@ export function startGame(p: Platform): void {
       : need
         ? `💡 佢「${intent?.label}」→ 用带 ✓ 嘅句子卡接住，唔扣耐心、说服 ×1.5`
         : "💡 呢句冇得接，出稳住卡顶住";
-    g.wrap(tip, 16, y, W - 32, 16, { size: 12, color: C.cyan }, 2);
-    y += 26;
+    const tut = prof.tutDone
+      ? ""
+      : s.sel === null
+        ? "👋 新手第 1 步：撳中一张句子卡"
+        : c.discard.length === 0
+          ? "👋 新手第 2 步：按住黄色「🎙」读出声再出牌（未识读就撳「直接出」）"
+          : "👋 新手第 3 步：下一回合试再用带 ✓ 嘅卡接住佢";
+    if (tut) g.text(tut, 16, y + 12, { size: 12, color: C.amber, weight: "bold" });
+    g.wrap(tip, 16, y + (tut ? 20 : 0), W - 32, 16, { size: 12, color: C.cyan }, 2);
+    y += 26 + (tut ? 18 : 0);
     g.glow(C.amber, 12, () => {
       g.ctx.beginPath();
       g.ctx.arc(40, y + 22, 24, 0, Math.PI * 2);
@@ -1436,6 +1444,10 @@ export function startGame(p: Platform): void {
   function afterWin(): void {
     const run = s.run;
     if (!run?.combat) return;
+    if (!prof.tutDone) {
+      prof.tutDone = true;
+      saveProf();
+    }
     const npc = NPCS[run.combat.npc];
     prof.beaten[npc.id] = (prof.beaten[npc.id] ?? 0) + 1;
     if (npc.boss) {
@@ -1704,6 +1716,8 @@ export function startGame(p: Platform): void {
         const r = endTurn(run);
         s.revealed = false;
         if (r.lost) {
+          prof.tutDone = true;
+          saveProf();
           s.screen = "lose";
           break;
         }
