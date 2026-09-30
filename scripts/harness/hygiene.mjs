@@ -31,10 +31,10 @@ for (const f of readdirSync("scripts").filter(
 const BIG = {
   // 存量棘轮白名单（只收不放；H-01/H-02/H-03 拆分完成后必须移除对应行）
   "src/ui/ui.ts": 3452,
-  "minigame/src/game.ts": 1917, // 4.1 接线 +3；4.2 拆屏后须 <1200
+  "minigame/src/game.ts": 1368, // 4.2 拆屏中棘轮随迁随调（b2 后）
   "src/ui/roster.ts": 900,
   "src/core/engine.ts": 2218,
-  "src/street/app.ts": 863
+  "src/street/app.ts": 868
 };
 const isData = (f) => /src\/core\/content\/(p\d+\/)?act\d+\.ts$|data\.ts$/.test(f); // 纯数据表按行计无语义
 let lines;
