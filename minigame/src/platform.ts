@@ -18,6 +18,8 @@ export interface Platform {
   safeTop: number;
   ctx: CanvasRenderingContext2D;
   loadImage(path: string): ImageLike;
+  /** 预载分包资源（wx 才有；web 端资源同源直接可用） */
+  loadRes?(name: string): void;
   onTouch(start: (x: number, y: number) => void, end: (x: number, y: number) => void): void;
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;

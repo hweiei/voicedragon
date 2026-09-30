@@ -1,7 +1,7 @@
 /**
- * 包内粤语示范音频清单（构建时由 build.mjs 按 minigame/assets/audio/street/*.mp3 自动生成，勿手改）。
- * key：c-<卡牌id> / n-<街坊id>-<台词序号>。未列出的 key 播放时提示看粤拼跟读。
- * 第 3 章起为分包路径 audioN/<key>.mp3（wx 端播放前会先 loadSubpackage）。
+ * 包内静态资源清单（构建时由 build.mjs 自动生成，勿手改）：
+ * 示范音频 key：c-<卡牌id> / n-<街坊id>-<台词序号>；未列出的 key 播放时提示看粤拼跟读。
+ * 第 3 章起的立绘/背景/音频放分包 resN（wx 端会先 loadSubpackage）。
  */
 export const AUDIO_KEYS: ReadonlySet<string> = new Set<string>([
   "c-bou1waan4",
@@ -125,7 +125,16 @@ export const AUDIO_KEYS: ReadonlySet<string> = new Set<string>([
   "n-waiter-2"
 ]);
 
-const AUDIO_SUB: Record<string, string> = {"c-bou1waan4":"audio3","c-bungei":"audio3","c-cankau":"audio3","c-ceot1loeng4":"audio4","c-cing1jat6":"audio3","c-dang6jat6":"audio4","c-dim2soeng5":"audio4","c-gaap3cin2":"audio3","c-gaapsi4":"audio4","c-gaau1bei2":"audio3","c-gaau2din6":"audio4","c-gaautin":"audio3","c-geidonim2":"audio4","c-haaci3je6":"audio3","c-hei2caau2":"audio4","c-jam2caa4":"audio3","c-jau5je5":"audio3","c-jau5seoi1":"audio4","c-m4gam3ji3":"audio4","c-m4haai3":"audio4","c-mgoibong":"audio3","c-mgoineoi":"audio4","c-mingsan":"audio4","c-ngaam1ngaam1":"audio3","c-saiseng":"audio3","c-sakdak1":"audio4","c-seoifai3":"audio3","c-sik1sin1":"audio4","c-tai2fan6":"audio4","c-tau4sin1":"audio3","c-tintoim4":"audio3","c-wunsoeng5":"audio4","c-zap1hou2":"audio3","c-zebou6syun1":"audio3","c-zing3geoi3":"audio4","c-zyun3zing3":"audio4","n-chair-0":"audio3","n-chair-1":"audio3","n-chair-2":"audio3","n-chair-3":"audio3","n-faan-0":"audio3","n-faan-1":"audio3","n-faan-2":"audio3","n-kid-0":"audio3","n-kid-1":"audio3","n-kid-2":"audio3","n-neibour-0":"audio3","n-neibour-1":"audio3","n-neibour-2":"audio3"};
+const AUDIO_SUB: Record<string, string> = {"c-bou1waan4":"res3","c-bungei":"res3","c-cankau":"res3","c-ceot1loeng4":"res4","c-cing1jat6":"res3","c-dang6jat6":"res4","c-dim2soeng5":"res4","c-gaap3cin2":"res3","c-gaapsi4":"res4","c-gaau1bei2":"res3","c-gaau2din6":"res4","c-gaautin":"res3","c-geidonim2":"res4","c-haaci3je6":"res3","c-hei2caau2":"res4","c-jam2caa4":"res3","c-jau5je5":"res3","c-jau5seoi1":"res4","c-m4gam3ji3":"res4","c-m4haai3":"res4","c-mgoibong":"res3","c-mgoineoi":"res4","c-mingsan":"res4","c-ngaam1ngaam1":"res3","c-saiseng":"res3","c-sakdak1":"res4","c-seoifai3":"res3","c-sik1sin1":"res4","c-tai2fan6":"res4","c-tau4sin1":"res3","c-tintoim4":"res3","c-wunsoeng5":"res4","c-zap1hou2":"res3","c-zebou6syun1":"res3","c-zing3geoi3":"res4","c-zyun3zing3":"res4","n-chair-0":"res3","n-chair-1":"res3","n-chair-2":"res3","n-chair-3":"res3","n-faan-0":"res3","n-faan-1":"res3","n-faan-2":"res3","n-kid-0":"res3","n-kid-1":"res3","n-kid-2":"res3","n-neibour-0":"res3","n-neibour-1":"res3","n-neibour-2":"res3"};
+
+const ASSET_SUB: Record<string, string> = {"neibour.png":"res3","kid.png":"res3","faan.png":"res3","chair.png":"res3","bg/rooftop.jpg":"res3","staff.png":"res4","clerk.png":"res4","chief.png":"res4","director.png":"res4"};
+
+/** rel 形如 "street/auntie.png" 或 "street/bg/rooftop.jpg" */
+export function assetPath(rel: string): string {
+  const bare = rel.replace(/^street\//, "");
+  const s = ASSET_SUB[bare];
+  return s ? `${s}/${bare}` : rel;
+}
 
 export function audioPath(key: string): string | null {
   if (!AUDIO_KEYS.has(key)) return null;

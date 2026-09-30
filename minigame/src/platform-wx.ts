@@ -99,11 +99,22 @@ export function createWxPlatform(): Platform {
     loadImage(path: string): ImageLike {
       let img = images.get(path);
       if (!img) {
-        img = wx.createImage();
-        img.src = path;
-        images.set(path, img);
+        const im = wx.createImage();
+        images.set(path, im);
+        const m = /^(res\d+)\//.exec(path);
+        if (m && !subReady.has(m[1])) {
+          // 分包资源：等 loadSubpackage 完成再赋 src，失败则下次重画时重试
+          loadSub(m[1]).then(
+            () => (im.src = path),
+            () => images.delete(path)
+          );
+        } else im.src = path;
+        img = im;
       }
       return img;
+    },
+    loadRes(name: string) {
+      if (!subReady.has(name)) loadSub(name);
     },
     onTouch(start, end) {
       wx.onTouchStart((e) => {
@@ -143,8 +154,8 @@ export function createWxPlatform(): Platform {
           /* 分包未就绪时静默丢弃一次 */
         }
       };
-      // audioN/ 前缀 = 分包资源：先 loadSubpackage 再播（以官方文档为准）
-      const m = /^(audio\d+)\//.exec(path);
+      // resN/ 前缀 = 分包资源：先 loadSubpackage 再播（以官方文档为准）
+      const m = /^(res\d+)\//.exec(path);
       if (m && !subReady.has(m[1])) {
         loadSub(m[1]).then(play, () => undefined);
         return true;

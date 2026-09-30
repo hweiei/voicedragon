@@ -38,7 +38,7 @@ import {
   restoreProfile
 } from "../../src/street/profile";
 import { type Quiz, gradeAnswer, makeQuizSet, quizPool } from "../../src/street/school";
-import { audioPath } from "./audio-manifest";
+import { assetPath, audioPath } from "./audio-manifest";
 import { C, MONO, Painter } from "./draw";
 import type { Platform } from "./platform";
 
@@ -347,7 +347,7 @@ export function startGame(p: Platform): void {
   /* ---------- 各屏 ---------- */
   function homeScreen(t: number): void {
     const heroH = Math.round(Math.min(H * (H < 720 ? 0.33 : 0.4), W * 0.78));
-    g.cover(p.loadImage("street/bg/cafe.jpg"), 0, 0, W, heroH);
+    g.cover(p.loadImage(assetPath("street/bg/cafe.jpg")), 0, 0, W, heroH);
     g.vfade(0, heroH * 0.45, W, heroH * 0.55 + 1, "rgba(11,13,26,0)", C.bg);
     // 品牌
     g.glow(C.pink, 12, () => g.rr(14, top, 38, 38, 9, "rgba(11,13,26,.6)", C.pink, 2));
@@ -385,7 +385,7 @@ export function startGame(p: Platform): void {
       const x = W / 2 + (i - 1) * slotW * 0.92 - slotW / 2;
       const h = heights[i];
       const y = heroH - h - 6 + bob;
-      g.img(p.loadImage(`street/${NPCS[id].img}`), x, y, slotW, h, "bottom");
+      g.img(p.loadImage(assetPath(`street/${NPCS[id].img}`)), x, y, slotW, h, "bottom");
       g.region(x + slotW * 0.15, y, slotW * 0.7, h, "talk", id);
       if (s.talk?.id === id && s.talk.until > t) {
         const line = NPCS[id].intents[0].line;
@@ -715,7 +715,7 @@ export function startGame(p: Platform): void {
       g.ctx.save();
       g.rr(16, y, W - 32, rh, 12);
       g.ctx.clip();
-      g.cover(p.loadImage(`street/${ch.bg}`), 16, y, W - 32, rh);
+      g.cover(p.loadImage(assetPath(`street/${ch.bg}`)), 16, y, W - 32, rh);
       g.ctx.fillStyle = open ? "rgba(11,13,26,.55)" : "rgba(11,13,26,.82)";
       g.ctx.fillRect(16, y, W - 32, rh);
       g.ctx.restore();
@@ -817,10 +817,17 @@ export function startGame(p: Platform): void {
       g.rr(16, y, W - 32, rh, 12);
       g.ctx.clip();
       if (met) {
-        g.cover(p.loadImage(`street/${n.bg}`), 16, y, W - 32, rh);
+        g.cover(p.loadImage(assetPath(`street/${n.bg}`)), 16, y, W - 32, rh);
         g.ctx.fillStyle = "rgba(11,13,26,.72)";
         g.ctx.fillRect(16, y, W - 32, rh);
-        g.img(p.loadImage(`street/${n.img}`), W - 16 - rh * 1.2, y + 4, rh * 1.2, rh - 4, "bottom");
+        g.img(
+          p.loadImage(assetPath(`street/${n.img}`)),
+          W - 16 - rh * 1.2,
+          y + 4,
+          rh * 1.2,
+          rh - 4,
+          "bottom"
+        );
       } else {
         g.ctx.fillStyle = "rgba(22,26,51,.6)";
         g.ctx.fillRect(16, y, W - 32, rh);
@@ -960,7 +967,7 @@ export function startGame(p: Platform): void {
         g.ctx.beginPath();
         g.ctx.arc(x, y, r - 3, 0, Math.PI * 2);
         g.ctx.clip();
-        g.img(p.loadImage(`street/${NPCS[n.npc].img}`), x - r, y - r + 2, r * 2, r * 2);
+        g.img(p.loadImage(assetPath(`street/${NPCS[n.npc].img}`)), x - r, y - r + 2, r * 2, r * 2);
         g.ctx.restore();
         if (!on && !done) g.ctx.globalAlpha = 1;
       } else
@@ -1014,11 +1021,11 @@ export function startGame(p: Platform): void {
     g.ctx.save();
     g.rr(sx, sy, sw, sh, 16);
     g.ctx.clip();
-    g.cover(p.loadImage(`street/${npc.bg}`), sx, sy, sw, sh);
+    g.cover(p.loadImage(assetPath(`street/${npc.bg}`)), sx, sy, sw, sh);
     g.vfade(sx, sy + sh * 0.55, sw, sh * 0.45, "rgba(11,13,26,0)", "rgba(11,13,26,.8)");
     const bob = Math.sin(t / 600) * 3;
     g.img(
-      p.loadImage(`street/${npc.img}`),
+      p.loadImage(assetPath(`street/${npc.img}`)),
       sx + sw * 0.38,
       sy + sh * 0.12 + bob,
       sw * 0.6,
@@ -1338,7 +1345,7 @@ export function startGame(p: Platform): void {
   }
 
   function endScreen(run: Run | null, win: boolean): void {
-    const im = p.loadImage(`street/${win ? "boss.png" : "auntie.png"}`);
+    const im = p.loadImage(assetPath(`street/${win ? "boss.png" : "auntie.png"}`));
     g.img(im, W / 2 - 90, top + 30, 180, 190, "bottom");
     let y = top + 262;
     title(win ? "午市都搞掂！成条街都识你" : "耐心用晒……", y, win ? C.amber : C.pink);
@@ -1597,6 +1604,7 @@ export function startGame(p: Platform): void {
           );
           break;
         }
+        p.loadRes?.(`res${chId}`); // 提前拉本章素材分包（wx）
         s.run = newRun(Date.now() % 1_000_000, chId);
         s.run.bonus = bonusTable(prof.mastery);
         s.revived = false;
