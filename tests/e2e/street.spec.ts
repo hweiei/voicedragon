@@ -44,7 +44,8 @@ test("旧入口保留：?mode=beginner 进新手塔，?mode=classic 进原版", 
 test("主页：点街坊冒口头禅气泡，今日一句与街道进度可见", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator(".daily")).toBeVisible();
-  await expect(page.locator(".street .stop")).toHaveCount(5);
+  // 解耦内容数量（ch1-6 扩展后 5→25，曾因写死数字在 feat 分支腐烂）：只验进度条可见且有节点
+  await expect(page.locator(".street .stop")).not.toHaveCount(0);
   await page.locator('[data-act="talk"][data-id="boss"]').click({ force: true });
   await expect(page.locator(".hero .bub")).toBeVisible();
 });

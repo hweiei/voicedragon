@@ -41,14 +41,17 @@
   },
   "overrides": [
     {
-      "path": "tests/**",
+      "ignore": [
+        "tests/**",
+        "scripts/legacy/**"
+      ],
       "linter": {
         "rules": {
           "style": {
-            "noNonNullAssertion": "off"
+            "noNonNullAssertion": "error"
           },
           "suspicious": {
-            "noExplicitAny": "off"
+            "noExplicitAny": "error"
           }
         }
       }

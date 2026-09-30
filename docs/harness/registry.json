@@ -218,6 +218,16 @@
     "minigame/src/platform-wx.ts"
    ],
    "note": "箭头表达式赋值改块体"
+  },
+  {
+   "id": "H-23",
+   "priority": "P1",
+   "title": "[bugfix] street e2e 断言硬绑内容数量（5）随章节扩展腐烂，CI 盲区漏检",
+   "status": "done",
+   "files": [
+    "tests/e2e/street.spec.ts"
+   ],
+   "note": "H-05 扩分支触发后首个被抓住的存量腐烂；改解耦断言 not.toHaveCount(0)"
   }
  ]
 }
