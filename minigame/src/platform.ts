@@ -20,6 +20,8 @@ export interface Platform {
   loadImage(path: string): ImageLike;
   /** 预载分包资源（wx 才有；web 端资源同源直接可用） */
   loadRes?(name: string): void;
+  /** 返回可用的 WebAudio 上下文（不支持则 undefined）；供程序化 BGM/音效用 */
+  webAudioCtx?(): unknown;
   onTouch(start: (x: number, y: number) => void, end: (x: number, y: number) => void): void;
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;

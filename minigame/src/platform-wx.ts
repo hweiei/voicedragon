@@ -116,6 +116,13 @@ export function createWxPlatform(): Platform {
     loadRes(name: string) {
       if (!subReady.has(name)) loadSub(name);
     },
+    webAudioCtx() {
+      try {
+        return wx.createWebAudioContext ? wx.createWebAudioContext() : undefined;
+      } catch {
+        return undefined;
+      }
+    },
     onTouch(start, end) {
       wx.onTouchStart((e) => {
         const t = e.changedTouches[0];

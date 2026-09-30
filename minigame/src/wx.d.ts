@@ -87,6 +87,7 @@ declare namespace WxMini {
     authorize(opts: { scope: string; success?: () => void; fail?: () => void }): void;
     openSetting(opts?: { success?: () => void }): void;
     loadSubpackage(opts: { name: string }): SubpackageTask;
+    createWebAudioContext?(): unknown;
     showToast(opts: { title: string; icon?: "none" | "success"; duration?: number }): void;
     showModal(opts: {
       title: string;

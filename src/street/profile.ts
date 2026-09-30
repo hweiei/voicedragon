@@ -10,6 +10,8 @@ export interface Settings {
   rate: number;
   /** 出牌时自动读一次卡面 */
   autoSpeak: boolean;
+  /** 静音：关掉程序化 BGM 与音效 */
+  mute: boolean;
 }
 
 export interface Profile {
@@ -49,7 +51,7 @@ export function freshProfile(): Profile {
     spoken: 0,
     met: [],
     beaten: {},
-    settings: { listen: false, rate: 0.9, autoSpeak: true },
+    settings: { listen: false, rate: 0.9, autoSpeak: true, mute: false },
     mastery: {},
     cleared: [],
     /** 新手引导看完没 */
@@ -104,6 +106,7 @@ export function restoreProfile(raw: unknown): Profile {
   if (s && typeof s === "object") {
     p.settings.listen = s.listen === true;
     p.settings.autoSpeak = s.autoSpeak !== false;
+    p.settings.mute = s.mute === true;
     if (typeof s.rate === "number" && s.rate >= 0.6 && s.rate <= 1.2) p.settings.rate = s.rate;
   }
   return p;

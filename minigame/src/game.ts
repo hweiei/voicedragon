@@ -41,6 +41,7 @@ import { type Quiz, gradeAnswer, makeQuizSet, quizPool } from "../../src/street/
 import { assetPath, audioPath } from "./audio-manifest";
 import { C, MONO, Painter } from "./draw";
 import type { Platform } from "./platform";
+import { createSound } from "./sound";
 
 type Screen =
   | "home"
@@ -111,6 +112,8 @@ export function startGame(p: Platform): void {
   const H = p.height;
   const top = p.safeTop;
   let prof: Profile = loadProfile();
+  const snd = createSound(() => (p.webAudioCtx?.() ?? null) as import("./sound").AudioCtx | null);
+  snd.setMuted(prof.settings.mute);
   let tracker: PitchTracker | null = null;
   let recStart = 0;
   let holding = false;
@@ -867,6 +870,7 @@ export function startGame(p: Platform): void {
     };
     row("听力挑战", "街坊台词先收埋，听完或者点开先睇到", prof.settings.listen, "togListen");
     row("揀卡自动读", "揀卡时自动播示范（有录音先会播）", prof.settings.autoSpeak, "togAuto");
+    row("音乐与音效", "五声音阶程序化配乐，零音频文件、唔耗流量", !prof.settings.mute, "togMute");
     g.text("示范语速", 28, y + 18, { size: 15, weight: "bold" });
     y += 30;
     const rates = [0.8, 0.9, 1];
@@ -1449,6 +1453,7 @@ export function startGame(p: Platform): void {
   }
 
   function afterWin(): void {
+    snd.sfx("win");
     const run = s.run;
     if (!run?.combat) return;
     if (!prof.tutDone) {
@@ -1483,6 +1488,7 @@ export function startGame(p: Platform): void {
       return;
     }
     s.sel = null;
+    snd.sfx(res.crit ? "crit" : "play");
     // 熟练度：出牌 +1，接住 +2，读得准 +3，暴击 +4
     const evs: MasteryEvent[] = ["play"];
     if (res.answered) evs.push("answer");
@@ -1662,6 +1668,11 @@ export function startGame(p: Platform): void {
         prof.settings.autoSpeak = !prof.settings.autoSpeak;
         saveProf();
         break;
+      case "togMute":
+        prof.settings.mute = !prof.settings.mute;
+        snd.setMuted(prof.settings.mute);
+        saveProf();
+        break;
       case "rate":
         prof.settings.rate = Number(id);
         saveProf();
@@ -1724,6 +1735,7 @@ export function startGame(p: Platform): void {
         const r = endTurn(run);
         s.revealed = false;
         if (r.lost) {
+          snd.sfx("lose");
           prof.tutDone = true;
           saveProf();
           s.screen = "lose";
@@ -1854,6 +1866,7 @@ export function startGame(p: Platform): void {
   /* ---------- 输入 & 主循环 ---------- */
   p.onTouch(
     (x, y) => {
+      snd.unlock(); // 首个手势解锁 WebAudio（自动播放策略）
       const r = g.hit(x, y);
       downRegion = r ? `${r.act}|${r.id}` : null;
       if (r?.hold && !s.busy) {

@@ -18,6 +18,7 @@ export function createWebPlatform(canvas: HTMLCanvasElement, assetBase: string):
   const audio = new Audio();
   const simAds = new URLSearchParams(location.search).get("ads") === "sim";
   let rec: { ctx: AudioContext; stream: MediaStream; node: ScriptProcessorNode } | null = null;
+  let bgmCtx: AudioContext | null = null;
 
   const toastEl = document.createElement("div");
   toastEl.id = "toast";
@@ -60,6 +61,14 @@ export function createWebPlatform(canvas: HTMLCanvasElement, assetBase: string):
         localStorage.setItem(k, v);
       } catch {
         /* ignore */
+      }
+    },
+    webAudioCtx() {
+      try {
+        bgmCtx = bgmCtx ?? new AudioContext();
+        return bgmCtx;
+      } catch {
+        return undefined;
       }
     },
     playAudio(path, rate) {
