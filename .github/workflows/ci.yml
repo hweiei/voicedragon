@@ -1,8 +1,9 @@
 name: ci
 
+# H-05：触发面覆盖活跃分支；minigame 构建+包体门禁独立 job
 on:
   push:
-    branches: [main]
+    branches: [main, harnessing, "feat/**", "fix/**"]
   pull_request:
 
 jobs:
@@ -10,32 +11,47 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
-      - name: Install
-        run: npm ci
-
+      - run: npm ci
       - name: Lint
         run: npx biome ci .
-
       - name: Typecheck
         run: npx tsc --noEmit
-
       - name: Unit & contract tests
         run: npx vitest run
-
       - name: Build (PWA)
         run: npm run build
-
       - name: Performance budget (first-bundle JS gzip)
         run: npx vite-node scripts/perf-budget.ts
-
       - name: Release artifact contract (PWA shell, paths, headers)
         run: npx vite-node scripts/release-readiness.ts
+      - name: Harness gates (deps/xss/hygiene/registry/bundle)
+        run: node scripts/harness/run-all.mjs --full
+      - name: Coverage ratchet (告警档，阶段5 转硬)
+        continue-on-error: true
+        run: |
+          npm i -D "@vitest/coverage-v8@$(node -p "require('./node_modules/vitest/package.json').version")"
+          npx vitest run --coverage --coverage.reporter=json-summary
+          node scripts/harness/coverage.mjs
+
+  minigame:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build WeChat mini game (分包切分 + manifest 生成)
+        run: node minigame/build.mjs
+      - name: wx build must not leave web-only tree dirty
+        run: git diff --exit-code minigame/src/audio-manifest.ts
+      - name: Size + start-JS budget
+        run: node scripts/harness/size.mjs minigame/dist && node scripts/harness/perf-wx.mjs
 
   e2e:
     runs-on: ubuntu-latest
