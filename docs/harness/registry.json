@@ -25,12 +25,12 @@
    "id": "H-03",
    "priority": "P1",
    "title": "双 UI 重复出牌编排序列→street/session.ts",
-   "status": "open",
+   "status": "done",
    "files": [
     "src/street/app.ts",
     "minigame/src/game.ts"
    ],
-   "note": "阶段4.1"
+   "note": "session.ts 抽取+双端接入+单测"
   },
   {
    "id": "H-04",
@@ -46,31 +46,31 @@
    "id": "H-05",
    "priority": "P0",
    "title": "CI 不覆盖活跃分支且无 minigame job",
-   "status": "open",
+   "status": "done",
    "files": [
     ".github/workflows/ci.yml"
    ],
-   "note": "阶段3.1"
+   "note": "ci.yml 三分支触发+minigame job+harness 步骤；已抓出 3 处腐烂"
   },
   {
    "id": "H-06",
    "priority": "P1",
    "title": "无本地一键门禁",
-   "status": "fixing",
+   "status": "done",
    "files": [
     "package.json"
    ],
-   "note": "gate 脚本已加；hook 样例阶段3.2"
+   "note": "gate 脚本+hook 样例入库；强制安装留 tech-debt-tracker"
   },
   {
    "id": "H-07",
    "priority": "P1",
    "title": "质量规则松(any/! 关闭、复杂度无)",
-   "status": "open",
+   "status": "done",
    "files": [
     "biome.json"
    ],
-   "note": "阶段3.3"
+   "note": "biome error 化+800 行复杂度守卫+棘轮放闸机制，全部经实战验证（3 次拦截）"
   },
   {
    "id": "H-08",
@@ -136,11 +136,11 @@
    "id": "H-14",
    "priority": "P1",
    "title": "web innerHTML 无围栏",
-   "status": "fixing",
+   "status": "done",
    "files": [
     "src/ui/"
    ],
-   "note": "xss.mjs 活跃线硬闸+冻结线告警已上线；safeHtml 白名单函数阶段4.5"
+   "note": "活跃线 FAIL 闸+冻结线 WARN；esc/safeHtml 工具入 src/street/xss.ts 供新代码使用"
   },
   {
    "id": "H-15",
@@ -164,11 +164,11 @@
    "id": "H-17",
    "priority": "P2",
    "title": "PNG 未压缩、playwright 拖大安装",
-   "status": "open",
+   "status": "wontfix",
    "files": [
     "public/street/"
    ],
-   "note": "阶段5 顺带 optipng"
+   "note": "降级为技术债：docs/exec-plans/tech-debt-tracker.md 第 1 行"
   },
   {
    "id": "H-18",
@@ -228,6 +228,16 @@
     "tests/e2e/street.spec.ts"
    ],
    "note": "H-05 扩分支触发后首个被抓住的存量腐烂；改解耦断言 not.toHaveCount(0)"
+  },
+  {
+   "id": "H-24",
+   "priority": "P1",
+   "title": "[bugfix] platform-wx loadRes 未 catch 分包失败致 unhandled rejection（canvas 预热路径）",
+   "status": "done",
+   "files": [
+    "minigame/src/platform-wx.ts"
+   ],
+   "note": "阶段5.2 mock 单测暴露；补 .catch；生产真机偶发红屏日志源头之一"
   }
  ]
 }

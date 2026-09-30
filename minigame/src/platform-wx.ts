@@ -116,7 +116,8 @@ export function createWxPlatform(): Platform {
       return img;
     },
     loadRes(name: string) {
-      if (!subReady.has(name)) loadSub(name);
+      // 预热用途：失败已由 loadSub 清缓存+告警，这里吞掉 rejection 防 unhandled（H-24）
+      if (!subReady.has(name)) loadSub(name).catch(() => undefined);
     },
     webAudioCtx() {
       try {
