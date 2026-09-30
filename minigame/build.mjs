@@ -27,7 +27,8 @@ function copyAssets(to) {
   const { assetSub, sub } = manifestInfo;
   const put = (rel, srcAbs) => {
     const s = assetSub[rel];
-    const dstDir = s ? join(to, s) : join(to, "street", rel.includes("/") ? rel.split("/")[0] : "");
+    const sub = rel.includes("/") ? rel.split("/")[0] : "";
+    const dstDir = s ? join(to, s, sub) : join(to, "street", sub);
     mkdirSync(dstDir, { recursive: true });
     cpSync(srcAbs, join(dstDir, rel.split("/").pop()));
   };
