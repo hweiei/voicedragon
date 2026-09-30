@@ -271,6 +271,8 @@ export function cardPreview(
   if (calm && run.relics.includes("mtail") && hasMTail(card.jp)) calm += 2;
   if (persuade && run.relics.includes("zorelic") && card.phrase.includes("咗")) persuade += 2;
   if (calm && run.relics.includes("ganrelic") && card.phrase.includes("紧")) calm += 2;
+  if (persuade && run.relics.includes("sikfan") && card.phrase.includes("识")) persuade += 2;
+  if (calm && run.relics.includes("hoifan") && card.phrase.includes("可")) calm += 2;
   const mb = run.bonus?.[card.id] ?? 0;
   if (mb && persuade) persuade += mb;
   else if (mb && calm) calm += mb;

@@ -5,6 +5,7 @@
 import { CH1_STARTER } from "./content/ch1";
 import { CH2_STARTER } from "./content/ch2";
 import { CH3_STARTER } from "./content/ch3";
+import { CH4_STARTER } from "./content/ch4";
 
 export interface ChapterDef {
   id: number;
@@ -65,13 +66,13 @@ export const CHAPTERS: ChapterDef[] = [
     id: 4,
     label: "第四章",
     title: "写字楼·搵工",
-    focus: "礼貌用语 · 日程 · 可以／识／要",
+    focus: "礼貌与排期 · 可／识（情态动词）",
     bg: "bg/rush.jpg",
-    ready: false,
-    npcsEarly: [],
-    npcsLate: [],
-    boss: "",
-    starter: []
+    ready: true,
+    npcsEarly: ["staff", "clerk"],
+    npcsLate: ["staff", "clerk", "chief"],
+    boss: "director",
+    starter: CH4_STARTER
   },
   {
     id: 5,

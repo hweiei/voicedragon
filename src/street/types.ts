@@ -18,7 +18,11 @@ export type Tag =
   | "help"
   | "borrow"
   | "noise"
-  | "repair";
+  | "repair"
+  | "polite"
+  | "schedule"
+  | "skill"
+  | "docs";
 
 export interface CardDef {
   id: string;
