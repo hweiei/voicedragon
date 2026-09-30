@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "language": "yue",
+  "kind": "AI-generated spoken demonstration",
+  "created": "2026-09-30",
+  "selection": "User-selected educational voice (voice-00) in this session",
+  "review": "Not yet independently reviewed by a Cantonese native speaker",
+  "files": [
+    {
+      "file": "c-dangzan.mp3",
+      "bytes": 9004,
+      "sha256": "e0f1c8febb0a6511218edc647dab78a39aa12e3412ee88c7d6abbc9718d180a8"
+    },
+    {
+      "file": "c-geido.mp3",
+      "bytes": 6287,
+      "sha256": "7a12da3b7ce4f61d81c5b3e8ebedb080a7c4ecd406aaea3eeaa522c15146405b"
+    },
+    {
+      "file": "c-loengwai.mp3",
+      "bytes": 9422,
+      "sha256": "21ae6619ede6de46bea02ebdc02f7c4f98e3c854839d72ef5cd9aecc81ac5b8c"
+    },
+    {
+      "file": "c-mganjiu.mp3",
+      "bytes": 7332,
+      "sha256": "716972caeb087f5f50c5505711f406c825218c8cb12e8c9be2aa7d388ddba45c"
+    },
+    {
+      "file": "c-mgoi.mp3",
+      "bytes": 10467,
+      "sha256": "9f5969039618001c109e92ea4bc12bb887f1acc7034f37b0d650ffe887c4499c"
+    },
+    {
+      "file": "c-naaicaa.mp3",
+      "bytes": 14228,
+      "sha256": "491983308bce9cb9dd4470f019a1b6c8cadca16341cd4a9bd64150bcaf4c7f32"
+    },
+    {
+      "file": "c-peng.mp3",
+      "bytes": 10467,
+      "sha256": "5452280d754d71f94a4688f5893dbb88edb133b27a989dfd6a752fb058cb401c"
+    },
+    {
+      "file": "c-wonggok.mp3",
+      "bytes": 8795,
+      "sha256": "d69739ff5c9f5f0f8161760e4dce9f63f1781e5dc8625fa65b6f81c8a24b1990"
+    },
+    {
+      "file": "c-zaubing.mp3",
+      "bytes": 6914,
+      "sha256": "3b03edbe9563de1b1c0c6f5498dceda74bc2e03fd5a8406f6afc7f9f818a84bb"
+    },
+    {
+      "file": "c-zousan.mp3",
+      "bytes": 8795,
+      "sha256": "839b5cc5c8b7978bb632d5b66f04a162037f9b554e27bcd9e6e29c672a16497b"
+    }
+  ]
+}

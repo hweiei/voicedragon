@@ -26,7 +26,7 @@ npm run minigame:preview    # 浏览器预览 http://localhost:4190/?ads=sim
 ```
 
 微信开发者工具 → 导入项目 → 目录选 `minigame/dist` → AppID 先用「测试号」。
-拿到正式 AppID 后改 `project.config.json` 的 `appid`，重新构建。
+正式 AppID `wx66ad516be4157de5` 已写入 `project.config.json`。
 
 `?ads=sim` 只在浏览器预览里生效：用 1.5 秒的模拟广告测试激励流程。**正式包里广告 ID 为空时，广告按钮根本不显示**。
 
@@ -61,7 +61,6 @@ npm run minigame:preview    # 浏览器预览 http://localhost:4190/?ads=sim
 
 ## 已知限制
 
-- 小游戏里**没有系统粤语 TTS**，示范只能用预录音频（`assets/audio/street/*.mp3` + `audio-manifest.ts`），目前清单为空，点播放会提示看粤拼。
+- 小游戏里**没有系统粤语 TTS**，示范只能用预录音频：`assets/audio/street/*.mp3`，构建时自动生成清单。目前 36 条里已有 10 条（AI 生成，见 `assets/audio/provenance.json`，未经母语者审核），其余点播放会提示看粤拼。
 - 录音走 `RecorderManager` 的 PCM 帧回调（16 kHz），声调评分和网页版同一套算法，只看音高走势。
-- 图鉴 / 街坊录 / 设置 / 听力挑战还没移植到小游戏画面。
 - 防沉迷：微信小游戏平台侧会处理实名与未成年人限制，接入方式以后台要求为准。
