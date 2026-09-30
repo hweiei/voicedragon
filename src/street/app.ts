@@ -24,6 +24,7 @@ import {
   saveProfile
 } from "./profile";
 import { MicSession, speakCantonese } from "./voice";
+import { playBeat, winBeat } from "./session";
 import "./style.css";
 
 type Screen =
@@ -521,19 +522,23 @@ function goNode(id: string): void {
 function afterWin(): void {
   const run = ui.run;
   if (!run?.combat) return;
-  const boss = NPCS[run.combat.npc].boss;
-  prof.beaten[run.combat.npc] = (prof.beaten[run.combat.npc] ?? 0) + 1;
-  if (boss) prof.wins += 1;
-  saveProf();
-  if (boss) {
-    ui.screen = "win";
-    return;
-  }
-  ui.rewardGold = 12 + Math.floor(nextRand(run)() * 10);
-  run.gold += ui.rewardGold;
-  ui.reward = rewardChoices(run);
-  ui.adUsed = false;
-  ui.screen = "reward";
+  winBeat(run, {
+    markBeaten: (id) => {
+      prof.beaten[id] = (prof.beaten[id] ?? 0) + 1;
+    },
+    bossWin: () => {
+      prof.wins += 1;
+      saveProf();
+      ui.screen = "win";
+    },
+    afterReward: (gold, reward) => {
+      saveProf();
+      ui.rewardGold = gold;
+      ui.reward = reward;
+      ui.adUsed = false;
+      ui.screen = "reward";
+    }
+  });
 }
 
 function flash(text: string, cls: string): void {
@@ -547,25 +552,16 @@ function flash(text: string, cls: string): void {
 function doPlay(crit: boolean, spoke: boolean): void {
   const run = ui.run;
   if (!run || ui.sel === null) return;
-  const res = playCard(run, ui.sel, crit, spoke);
-  if (!res.ok) {
-    toast(res.reason ?? "出唔到");
-    return;
-  }
-  ui.sel = null;
-  const parts = [];
-  if (res.persuade) parts.push(`说服 +${res.persuade}`);
-  if (res.calm) parts.push(`🛡 ${res.calm}`);
-  flash(
-    `${res.crit ? "暴击！" : ""}${res.answered ? "接住！" : ""}${parts.join(" ")}`,
-    res.crit ? "crit" : "norm"
-  );
-  if (res.won)
-    setTimeout(() => {
+  playBeat(run, ui.sel, crit, spoke, () => (ui.sel = null), {
+    toast,
+    flash: (text, crit2) => flash(text, crit2 ? "crit" : "norm"),
+    calmText: (n) => `🛡 ${n}`,
+    onWin: () => {
       afterWin();
       save();
       render();
-    }, 700);
+    }
+  });
 }
 
 async function micDown(): Promise<void> {
