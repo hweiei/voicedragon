@@ -168,7 +168,7 @@
    "files": [
     "public/street/"
    ],
-   "note": "降级为技术债：docs/exec-plans/tech-debt-tracker.md 第 1 行"
+   "note": "2026-09-30 实测：无损重压全量仅省 14KB(0.3%)；调色板量化 MAD 2.5-5.3 超可见阈；结论=美术已近最优，转有损/webp 不值当（保画风统一）"
   },
   {
    "id": "H-18",
