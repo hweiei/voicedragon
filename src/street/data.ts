@@ -7,6 +7,7 @@ import { CH2_CARDS, CH2_EVENTS, CH2_NPCS, CH2_STARTER } from "./content/ch2";
 import { CH3_CARDS, CH3_EVENTS, CH3_NPCS, CH3_RELICS, CH3_STARTER } from "./content/ch3";
 import { CH4_CARDS, CH4_EVENTS, CH4_NPCS, CH4_RELICS, CH4_STARTER } from "./content/ch4";
 import { CH5_CARDS, CH5_EVENTS, CH5_NPCS, CH5_RELICS, CH5_STARTER } from "./content/ch5";
+import { CH6_CARDS, CH6_EVENTS, CH6_NPCS, CH6_RELICS, CH6_STARTER } from "./content/ch6";
 import type { CardDef, EventDef, NpcDef, RelicDef } from "./types";
 
 export type { CardDef, CardKind, EventDef, Intent, NpcDef, RelicDef, Tag } from "./types";
@@ -25,7 +26,8 @@ export const CARDS: Record<string, CardDef> = {
   ...tag(CH2_CARDS, 2),
   ...tag(CH3_CARDS, 3),
   ...tag(CH4_CARDS, 4),
-  ...tag(CH5_CARDS, 5)
+  ...tag(CH5_CARDS, 5),
+  ...tag(CH6_CARDS, 6)
 };
 /** 温习地摊：跨章节的复习对战对象，不进任何章节的常规池 */
 export const RECAP_NPCS: Record<string, NpcDef> = {
@@ -70,13 +72,15 @@ export const NPCS: Record<string, NpcDef> = {
   ...tag(CH3_NPCS, 3),
   ...tag(CH4_NPCS, 4),
   ...tag(CH5_NPCS, 5),
+  ...tag(CH6_NPCS, 6),
   ...tag(RECAP_NPCS, 1)
 };
 export const RELICS: Record<string, RelicDef> = {
   ...CH1_RELICS,
   ...CH3_RELICS,
   ...CH4_RELICS,
-  ...CH5_RELICS
+  ...CH5_RELICS,
+  ...CH6_RELICS
 };
 export const EVENTS: EventDef[] = [
   ...CH1_EVENTS,
@@ -87,4 +91,4 @@ export const EVENTS: EventDef[] = [
 ];
 /** 兼容旧代码：第 1 章起手卡组 */
 export const STARTER_DECK: string[] = [...CH1_STARTER];
-export { CH1_STARTER, CH2_STARTER, CH3_STARTER, CH4_STARTER, CH5_STARTER };
+export { CH1_STARTER, CH2_STARTER, CH3_STARTER, CH4_STARTER, CH5_STARTER, CH6_STARTER };

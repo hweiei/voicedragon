@@ -26,7 +26,12 @@ export type Tag =
   | "symptom"
   | "reason"
   | "compare"
-  | "queue";
+  | "queue"
+  | "bless"
+  | "emo"
+  | "eat"
+  | "chat"
+  | "gift";
 
 export interface CardDef {
   id: string;

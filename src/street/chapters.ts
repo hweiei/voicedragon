@@ -7,6 +7,7 @@ import { CH2_STARTER } from "./content/ch2";
 import { CH3_STARTER } from "./content/ch3";
 import { CH4_STARTER } from "./content/ch4";
 import { CH5_STARTER } from "./content/ch5";
+import { CH6_STARTER } from "./content/ch6";
 
 export interface ChapterDef {
   id: number;
@@ -91,13 +92,13 @@ export const CHAPTERS: ChapterDef[] = [
     id: 6,
     label: "第六章",
     title: "节庆·饮宴",
-    focus: "祝福语 · 情绪 · 俚语",
-    bg: "bg/rush.jpg",
-    ready: false,
-    npcsEarly: [],
-    npcsLate: [],
-    boss: "",
-    starter: []
+    focus: "祝福语 · 情绪 · 人情世故",
+    bg: "bg/banquet.jpg",
+    ready: true,
+    npcsEarly: ["mc", "cook2"],
+    npcsLate: ["mc", "cook2", "lion"],
+    boss: "saicing",
+    starter: CH6_STARTER
   }
 ];
 

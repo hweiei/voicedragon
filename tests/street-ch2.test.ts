@@ -35,7 +35,7 @@ describe("第二章内容", () => {
     expect(chapterUnlocked(3, [1, 2])).toBe(true);
     expect(chapterUnlocked(4, [1, 2, 3])).toBe(true);
     expect(chapterUnlocked(5, [1, 2, 3, 4])).toBe(true);
-    expect(chapterUnlocked(6, [1, 2, 3, 4, 5])).toBe(false); // 第 6 章未制作
+    expect(chapterUnlocked(6, [1, 2, 3, 4, 5])).toBe(true);
   });
 });
 
