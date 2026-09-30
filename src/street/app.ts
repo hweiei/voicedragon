@@ -23,8 +23,8 @@ import {
   noteScore,
   saveProfile
 } from "./profile";
-import { MicSession, speakCantonese } from "./voice";
 import { playBeat, winBeat } from "./session";
+import { MicSession, speakCantonese } from "./voice";
 import "./style.css";
 
 type Screen =
@@ -552,16 +552,25 @@ function flash(text: string, cls: string): void {
 function doPlay(crit: boolean, spoke: boolean): void {
   const run = ui.run;
   if (!run || ui.sel === null) return;
-  playBeat(run, ui.sel, crit, spoke, () => (ui.sel = null), {
-    toast,
-    flash: (text, crit2) => flash(text, crit2 ? "crit" : "norm"),
-    calmText: (n) => `🛡 ${n}`,
-    onWin: () => {
-      afterWin();
-      save();
-      render();
+  playBeat(
+    run,
+    ui.sel,
+    crit,
+    spoke,
+    () => {
+      ui.sel = null;
+    },
+    {
+      toast,
+      flash: (text, crit2) => flash(text, crit2 ? "crit" : "norm"),
+      calmText: (n) => `🛡 ${n}`,
+      onWin: () => {
+        afterWin();
+        save();
+        render();
+      }
     }
-  });
+  );
 }
 
 async function micDown(): Promise<void> {

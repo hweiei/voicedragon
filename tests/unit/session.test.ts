@@ -42,7 +42,16 @@ describe("playBeat", () => {
     const run = fakeRun();
     const h = hooks();
     let cleared = false;
-    playBeat(run, 0, true, true, () => (cleared = true), h);
+    playBeat(
+      run,
+      0,
+      true,
+      true,
+      () => {
+        cleared = true;
+      },
+      h
+    );
     if (h.flash.mock.calls.length) {
       const [text] = h.flash.mock.calls[0];
       expect(text).toMatch(/^(暴击！)?(接住！)?(说服 [+]\d+( 🛡 \d+)?)?$/);
