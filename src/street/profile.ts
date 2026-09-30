@@ -1,5 +1,7 @@
 /** 跨局档案：图鉴、街坊录、设置。只存聚合数据，不存录音。 */
+import { CHAPTERS } from "./chapters";
 import { CARDS, NPCS } from "./data";
+import type { MasteryEntry } from "./mastery";
 
 export interface Settings {
   /** 听力挑战：街坊台词先隐藏，听完 / 点一下先显示 */
@@ -11,7 +13,8 @@ export interface Settings {
 }
 
 export interface Profile {
-  version: 1;
+  /** 2：新增熟练度与章节进度（v1 自动迁移） */
+  version: 2;
   runs: number;
   wins: number;
   /** 见过（拥有过）的卡 */
@@ -24,13 +27,17 @@ export interface Profile {
   /** 每位街坊被说服次数 */
   beaten: Record<string, number>;
   settings: Settings;
+  /** 每句熟练度 */
+  mastery: Record<string, MasteryEntry>;
+  /** 已通关章节 */
+  cleared: number[];
 }
 
 const KEY = "street-profile-v1";
 
 export function freshProfile(): Profile {
   return {
-    version: 1,
+    version: 2,
     runs: 0,
     wins: 0,
     seen: [],
@@ -38,7 +45,9 @@ export function freshProfile(): Profile {
     spoken: 0,
     met: [],
     beaten: {},
-    settings: { listen: false, rate: 0.9, autoSpeak: true }
+    settings: { listen: false, rate: 0.9, autoSpeak: true },
+    mastery: {},
+    cleared: []
   };
 }
 
@@ -60,6 +69,23 @@ export function restoreProfile(raw: unknown): Profile {
     : [];
   for (const [id, v] of Object.entries(r.best ?? {})) if (id in CARDS) p.best[id] = n(v, 100);
   for (const [id, v] of Object.entries(r.beaten ?? {})) if (id in NPCS) p.beaten[id] = n(v);
+  const now = Date.now();
+  if (r.mastery && typeof r.mastery === "object") {
+    for (const [id, e] of Object.entries(r.mastery)) {
+      if (!(id in CARDS) || !e || typeof e !== "object") continue;
+      const xp = (e as MasteryEntry).xp;
+      const last = (e as MasteryEntry).last;
+      if (typeof xp !== "number" || !Number.isFinite(xp) || xp < 0) continue;
+      if (typeof last !== "number" || !Number.isFinite(last) || last <= 0) continue;
+      p.mastery[id] = { xp: Math.min(60, Math.floor(xp)), last: Math.min(last, now) };
+    }
+  }
+  const ids = new Set(CHAPTERS.map((c) => c.id));
+  p.cleared = Array.isArray(r.cleared)
+    ? [...new Set(r.cleared.filter((c): c is number => typeof c === "number" && ids.has(c)))]
+    : [];
+  // v1 迁移：通关过 Boss 的旧档，视为第 1 章已通关
+  if (p.wins > 0 && !p.cleared.includes(1)) p.cleared.push(1);
   const s = r.settings;
   if (s && typeof s === "object") {
     p.settings.listen = s.listen === true;

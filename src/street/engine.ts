@@ -1,5 +1,6 @@
 /** 街坊卡牌引擎：纯状态 + 纯函数（零 DOM），种子随机可复现。 */
-import { CARDS, type CardDef, type Intent, NPCS, type NpcDef, RELICS, STARTER_DECK } from "./data";
+import { chapterOf } from "./chapters";
+import { CARDS, type CardDef, type Intent, NPCS, type NpcDef, RELICS } from "./data";
 
 export function rng(seed: number): () => number {
   let a = seed >>> 0;
@@ -24,7 +25,8 @@ export interface MapNode {
 
 export const ROWS = 6; // 0..4 普通，5 = Boss
 
-export function genMap(rand: () => number): MapNode[] {
+export function genMap(rand: () => number, chapter = 1): MapNode[] {
+  const ch = chapterOf(chapter);
   const nodes: MapNode[] = [];
   const rows: MapNode[][] = [];
   for (let r = 0; r < ROWS; r++) {
@@ -33,8 +35,8 @@ export function genMap(rand: () => number): MapNode[] {
       cols.map((c) => {
         const type: NodeType = r === ROWS - 1 ? "boss" : r === 0 ? "fight" : rollType(rand, r);
         const node: MapNode = { id: `${r}-${c}`, row: r, col: c, type, next: [] };
-        if (type === "fight") node.npc = pickNpc(rand, r);
-        if (type === "boss") node.npc = "boss";
+        if (type === "fight") node.npc = pickNpc(rand, r, ch.npcsEarly, ch.npcsLate);
+        if (type === "boss") node.npc = ch.boss;
         nodes.push(node);
         return node;
       })
@@ -76,8 +78,8 @@ function rollType(rand: () => number, row: number): NodeType {
   if (x < 0.9) return "shop";
   return "rest";
 }
-function pickNpc(rand: () => number, row: number): string {
-  const pool = row >= 3 ? ["auntie", "waiter", "taxi", "landlady"] : ["auntie", "waiter", "taxi"];
+function pickNpc(rand: () => number, row: number, early: string[], late: string[]): string {
+  const pool = row >= 3 ? late : early;
   return pool[Math.floor(rand() * pool.length)];
 }
 
@@ -114,23 +116,29 @@ export interface Run {
   combat: Combat | null;
   graduated: string[];
   counter: number;
+  /** 章节（旧存档缺省为 1） */
+  chapter?: number;
+  /** 熟练度加成：卡 id → 说服/稳住加值（开局时由档案算出） */
+  bonus?: Record<string, number>;
 }
 
-export function newRun(seed = Date.now() % 1_000_000): Run {
+export function newRun(seed = Date.now() % 1_000_000, chapter = 1): Run {
   const rand = rng(seed);
+  const ch = chapterOf(chapter);
   return {
     seed,
     patience: 40,
     maxPatience: 40,
     gold: 30,
-    deck: [...STARTER_DECK],
+    deck: [...ch.starter],
     relics: ["dung"],
-    map: genMap(rand),
+    map: genMap(rand, ch.id),
     at: null,
     visited: [],
     combat: null,
     graduated: [],
-    counter: 1
+    counter: 1,
+    chapter: ch.id
   };
 }
 
@@ -239,6 +247,9 @@ export function cardPreview(
   let calm = card.calm ?? 0;
   if (persuade && run.relics.includes("rusheng") && hasRusheng(card.jp)) persuade += 2;
   if (calm && run.relics.includes("mtail") && hasMTail(card.jp)) calm += 2;
+  const mb = run.bonus?.[card.id] ?? 0;
+  if (mb && persuade) persuade += mb;
+  else if (mb && calm) calm += mb;
   const answers = Boolean(
     intent?.need && card.tags?.includes(intent.need) && !run.combat?.answered
   );
@@ -312,7 +323,10 @@ export function endTurn(run: Run): EndTurnResult {
 
 export function rewardChoices(run: Run, n = 3): string[] {
   const rand = nextRand(run);
-  const pool = Object.values(CARDS).filter((c) => c.rarity !== "starter");
+  const chapter = run.chapter ?? 1;
+  const pool = Object.values(CARDS).filter(
+    (c) => c.rarity !== "starter" && (c.chapter ?? 1) <= chapter
+  );
   const picks: string[] = [];
   while (picks.length < n && picks.length < pool.length) {
     const weightRare = rand() < 0.18;

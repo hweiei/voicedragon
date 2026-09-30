@@ -4,6 +4,7 @@
  */
 import { PitchTracker } from "../../src/adapters/voice/pitch-tracker";
 import { scoreToneContour } from "../../src/core/tone";
+import { CHAPTERS, chapterUnlocked } from "../../src/street/chapters";
 import { CARDS, type CardDef, EVENTS, NPCS, RELICS } from "../../src/street/data";
 import {
   type Run,
@@ -18,6 +19,15 @@ import {
   rewardChoices,
   startCombat
 } from "../../src/street/engine";
+import {
+  LEVEL_NAMES,
+  type MasteryEvent,
+  applyDecay,
+  bonusTable,
+  gainXp,
+  levelBonus,
+  levelOf
+} from "../../src/street/mastery";
 import {
   type Profile,
   freshProfile,
@@ -41,7 +51,8 @@ type Screen =
   | "lose"
   | "codex"
   | "npcs"
-  | "settings";
+  | "settings"
+  | "chapters";
 
 const RUN_KEY = "street-run-v1";
 const PROF_KEY = "street-profile-v1";
@@ -73,6 +84,8 @@ interface State {
   /** 听力挑战：本回合台词是否已揭开 */
   revealed: boolean;
   codexPage: number;
+  /** 本场对话里升级的句子 */
+  levelUps: { id: string; lv: number }[];
 }
 
 export function startGame(p: Platform): void {
@@ -102,8 +115,11 @@ export function startGame(p: Platform): void {
     float: null,
     busy: false,
     revealed: false,
-    codexPage: 0
+    codexPage: 0,
+    levelUps: []
   };
+  applyDecay(prof.mastery, Date.now());
+  saveProf();
 
   /* ---------- 存档 ---------- */
   function loadProfile(): Profile {
@@ -206,6 +222,13 @@ export function startGame(p: Platform): void {
     if (o.sel) g.glow(C.amber, 16, () => g.rr(x, y, w, h, 10, C.panel));
     g.rr(x, y, w, h, 10, o.answers ? "#12301f" : C.panel, border, o.sel || o.answers ? 2 : 1);
     g.text(k.label, x + 8, y + 16, { size: 11, color: k.color, weight: "bold" });
+    const lv = levelOf(prof.mastery[id]?.xp ?? 0);
+    for (let i = 0; i < 5; i++) {
+      g.ctx.beginPath();
+      g.ctx.arc(x + w - 8 - (4 - i) * 7, y + 12, 2.6, 0, Math.PI * 2);
+      g.ctx.fillStyle = i < lv ? C.amber : "#343a66";
+      g.ctx.fill();
+    }
     // 费用徽章
     g.ctx.beginPath();
     g.ctx.arc(x + 4, y + 4, 11, 0, Math.PI * 2);
@@ -311,7 +334,10 @@ export function startGame(p: Platform): void {
     g.glow(C.pink, 12, () => g.rr(14, top, 38, 38, 9, "rgba(11,13,26,.6)", C.pink, 2));
     g.text("龍", 33, top + 27, { size: 22, weight: "900", color: C.pink, align: "center" });
     g.text("声震龙楼", 60, top + 18, { size: 17, weight: "bold" });
-    g.text("街坊卡牌 · 第一章", 60, top + 35, { size: 12, color: "#cfd3f5" });
+    g.text(`街坊篇 · 已通关 ${prof.cleared.length} / ${CHAPTERS.length} 区`, 60, top + 35, {
+      size: 12,
+      color: "#cfd3f5"
+    });
     // 霓虹招牌（「茶」字接触不良）
     const nx = W - 46;
     g.glow(C.cyan, 12, () => g.rr(nx, top, 32, 96, 7, "rgba(11,13,26,.55)", C.cyan, 2));
@@ -456,6 +482,46 @@ export function startGame(p: Platform): void {
       });
   }
 
+  function chaptersScreen(): void {
+    let y = backBar("揀街区");
+    const rh = Math.min(96, (H - y - 16) / CHAPTERS.length - 8);
+    for (const ch of CHAPTERS) {
+      const open = chapterUnlocked(ch.id, prof.cleared);
+      const done = prof.cleared.includes(ch.id);
+      g.ctx.save();
+      g.rr(16, y, W - 32, rh, 12);
+      g.ctx.clip();
+      g.cover(p.loadImage(`street/${ch.bg}`), 16, y, W - 32, rh);
+      g.ctx.fillStyle = open ? "rgba(11,13,26,.55)" : "rgba(11,13,26,.82)";
+      g.ctx.fillRect(16, y, W - 32, rh);
+      g.ctx.restore();
+      g.rr(
+        16,
+        y,
+        W - 32,
+        rh,
+        12,
+        undefined,
+        done ? C.amber : open ? C.cyan : "#262a4a",
+        open ? 2 : 1
+      );
+      g.text(ch.label, 30, y + 22, { size: 12, color: open ? C.cyan : C.dim, weight: "bold" });
+      g.text(ch.title, 30, y + 46, { size: 18, weight: "900", color: open ? C.text : "#6b7196" });
+      g.text(ch.focus, 30, y + rh - 14, { size: 11, color: open ? "#cfd3f5" : "#4d5378" });
+      const tag = done ? "✓ 已通关" : open ? "开始 ›" : ch.ready ? "🔒 通关上一区" : "制作中";
+      const tw = g.measure(tag, 12, "bold") + 18;
+      g.rr(W - 28 - tw, y + 12, tw, 24, 12, done ? C.amber : open ? C.ok : "rgba(38,42,74,.9)");
+      g.text(tag, W - 28 - tw / 2, y + 28, {
+        size: 12,
+        weight: "bold",
+        color: done || open ? C.ink : C.dim,
+        align: "center"
+      });
+      g.region(16, y, W - 32, rh, "startChapter", String(ch.id));
+      y += rh + 8;
+    }
+  }
+
   function backBar(t: string): number {
     g.text("‹ 返回", 16, top + 20, { size: 15, color: C.cyan });
     g.region(8, top, 80, 32, "back");
@@ -494,6 +560,12 @@ export function startGame(p: Platform): void {
       g.text(c.jp, x + 10, yy + 40, { size: 10, color: C.pink, font: MONO });
       g.text(c.meaning, x + 10, yy + 56, { size: 11, color: C.dim });
       const best = prof.best[id];
+      const mlv = levelOf(prof.mastery[id]?.xp ?? 0);
+      g.text(`Lv${mlv} ${LEVEL_NAMES[mlv]}`, x + cw - 10, yy + chh - 8, {
+        size: 11,
+        color: mlv >= 3 ? C.amber : C.dim,
+        align: "right"
+      });
       g.text(best === undefined ? "未开口" : `最佳 ${best}`, x + 10, yy + chh - 8, {
         size: 11,
         color: best !== undefined && best >= 70 ? C.ok : C.dim
@@ -888,6 +960,11 @@ export function startGame(p: Platform): void {
       align: "center"
     });
     y += 20;
+    if (s.levelUps.length) {
+      const txt = s.levelUps.map((l) => `${CARDS[l.id].phrase} Lv${l.lv}`).join("、");
+      g.wrap(`熟练度提升：${txt}`, 16, y, W - 32, 17, { size: 13, color: C.amber }, 2);
+      y += 20;
+    }
     g.text("选一张句子卡加入卡组", W / 2, y, { size: 13, color: C.dim, align: "center" });
     y += 20;
     y += cardGrid(s.reward, y + 6, "pick");
@@ -1070,6 +1147,7 @@ export function startGame(p: Platform): void {
     if (node.type === "fight" || node.type === "boss") {
       startCombat(run, node.npc ?? "auntie");
       s.revealed = false;
+      s.levelUps = [];
       if (node.npc && !prof.met.includes(node.npc)) prof.met.push(node.npc);
       saveProf();
       s.screen = "battle";
@@ -1097,6 +1175,8 @@ export function startGame(p: Platform): void {
     prof.beaten[npc.id] = (prof.beaten[npc.id] ?? 0) + 1;
     if (npc.boss) {
       prof.wins += 1;
+      const chId = run.chapter ?? 1;
+      if (!prof.cleared.includes(chId)) prof.cleared.push(chId);
       saveProf();
       s.screen = "win";
       return;
@@ -1109,15 +1189,28 @@ export function startGame(p: Platform): void {
     s.screen = "reward";
   }
 
-  function doPlay(crit: boolean, spoke: boolean): void {
+  function doPlay(crit: boolean, spoke: boolean, score: number | null = null): void {
     const run = s.run;
-    if (!run || s.sel === null) return;
+    if (!run?.combat || s.sel === null) return;
+    const cardId = run.combat.hand[s.sel];
     const res = playCard(run, s.sel, crit, spoke);
     if (!res.ok) {
       p.toast(res.reason ?? "出唔到");
       return;
     }
     s.sel = null;
+    // 熟练度：出牌 +1，接住 +2，读得准 +3，暴击 +4
+    const evs: MasteryEvent[] = ["play"];
+    if (res.answered) evs.push("answer");
+    if (score !== null && score >= 60) evs.push("spoke");
+    if (res.crit) evs.push("crit");
+    const up = gainXp(prof.mastery, cardId, evs, Date.now());
+    saveProf();
+    if (up.after > up.before) {
+      s.levelUps = s.levelUps.filter((l) => l.id !== cardId).concat({ id: cardId, lv: up.after });
+      run.bonus = { ...(run.bonus ?? {}), [cardId]: levelBonus(up.after) };
+      p.toast(`「${CARDS[cardId].phrase}」熟练度升到 Lv${up.after}`);
+    }
     const parts: string[] = [];
     if (res.persuade) parts.push(`说服 +${res.persuade}`);
     if (res.calm) parts.push(`稳住 ${res.calm}`);
@@ -1176,19 +1269,32 @@ export function startGame(p: Platform): void {
     noteScore(prof, card.id, score);
     saveProf();
     if (score === null) p.toast("听唔清，照出（效果 ×1）");
-    doPlay(score !== null && score >= 70, true);
+    doPlay(score !== null && score >= 70, true, score);
   }
 
   async function handle(act: string, id: string): Promise<void> {
     const run = s.run;
     switch (act) {
       case "new":
-        s.run = newRun();
+        s.screen = "chapters";
+        break;
+      case "startChapter": {
+        const chId = Number(id);
+        if (!chapterUnlocked(chId, prof.cleared)) {
+          p.toast(
+            CHAPTERS.find((c) => c.id === chId)?.ready ? "通关上一区先解锁" : "呢区制作紧，敬请期待"
+          );
+          break;
+        }
+        s.run = newRun(Date.now() % 1_000_000, chId);
+        s.run.bonus = bonusTable(prof.mastery);
         s.revived = false;
+        s.levelUps = [];
         s.screen = "map";
         prof.runs += 1;
         saveProf();
         break;
+      }
       case "resume":
         if (!loadRun()) p.toast("存档读唔到，开过新一局啦");
         break;
@@ -1424,7 +1530,8 @@ export function startGame(p: Platform): void {
     const t = p.now();
     g.begin();
     const run = s.run;
-    if (s.screen === "codex") codexScreen();
+    if (s.screen === "chapters") chaptersScreen();
+    else if (s.screen === "codex") codexScreen();
     else if (s.screen === "npcs") npcsScreen();
     else if (s.screen === "settings") settingsScreen();
     else if (s.screen === "home" || !run) homeScreen(t);
