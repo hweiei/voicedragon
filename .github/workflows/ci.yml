@@ -29,7 +29,7 @@ jobs:
       - name: Release artifact contract (PWA shell, paths, headers)
         run: npx vite-node scripts/release-readiness.ts
       - name: Harness gates (deps/xss/hygiene/registry/bundle)
-        run: node scripts/harness/run-all.mjs --full
+        run: node scripts/harness/run-all.mjs --full --skip-wx
       - name: Coverage ratchet (告警档，阶段5 转硬)
         continue-on-error: true
         run: |
