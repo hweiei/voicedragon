@@ -8,6 +8,7 @@ const steps = [
   "deps",
   "xss",
   "hygiene",
+  "docs",
   "size",
   "perf-wx",
   ...(full ? ["bundle", "coverage"] : [])
