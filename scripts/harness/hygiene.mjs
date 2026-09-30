@@ -30,7 +30,7 @@ for (const f of readdirSync("scripts").filter(
 // 复杂度守卫：单文件 >800 行即 FAIL；冻结大文件走白名单（只收不放，拆分后须移除——H-01/H-02）
 const BIG = {
   // 存量棘轮白名单（只收不放；H-01/H-02/H-03 拆分完成后必须移除对应行）
-  "src/ui/ui.ts": 3453, /* 4.4 FROZEN 头注记 +1 */
+  "src/ui/ui.ts": 3453 /* 4.4 FROZEN 头注记 +1 */,
   "src/core/engine.ts": 2218,
   "src/street/app.ts": 868
 };

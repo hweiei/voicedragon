@@ -1,6 +1,6 @@
 # Harness 工程化改造计划（v1 · 待评审）
 
-> status: active · updated: 2026-09-30 · 本文件由 harness 迁移器统一加注（2026-09-30）
+> status: active（阶段1-4 已完成，阶段5 进行中） · updated: 2026-09-30 · 本文件由 harness 迁移器统一加注（2026-09-30）
 
 > 项目：声震龙楼（hweiei/voicedragon）· 分支：`harnessing`（基于 `feat/minigame` @ `7f17983`）
 > 方法论：OpenAI《工程技术：在智能体优先的世界中利用 Codex》（harness-engineering，2026-02）
