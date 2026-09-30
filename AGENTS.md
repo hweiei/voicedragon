@@ -32,14 +32,14 @@ npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 
   `engine.emit` 事件，不反向写入。
 - `src/adapters/` 是端口实现（audio/tts/voice/storage/platform）。
 - `src/ui/` 渲染与演出：模板字符串直渲 + `src/ui/fx/` 演出编排（FxDirector）。
-- 设计决策的单一事实源：`docs/REDESIGN-PLAN.md`（P0–P5 历史）与
-  `docs/FX-UPGRADE-PLAN.md`（P6 三期完成）及 `docs/CONTENT-EXPANSION-PLAN.md`（P7 三幕深耕）与 `docs/BUILDCRAFT-PLAN.md`（P8-A 构筑成型）、`docs/ENCOUNTER-EVOLUTION-PLAN.md`（P8-B 对手进化）、`docs/VOICE-MASTERY-PLAN.md`（P8-C 语音深化）、`docs/LEARNING-LOOP-PLAN.md`（P8-D 学习闭环）、`docs/RELEASE-READINESS-PLAN.md`（P8-E 发布与设备验收）与
-  `docs/COUNTER-ATTACK-PLAN.md`（P9 守势反击）、`docs/GROWTH-PLAN.md`（P10–P15 丰富度总路线）与
-  `docs/ROSTER-PLAN.md`（P10 名伶登场）、`docs/ULTIMATE-PLAN.md`（P11 声动九霄）、
-  `docs/P12-CHALLENGE-PLAN.md`（P12 切磋码）、`docs/P13-WORDBOOK-PLAN.md`（P13 词林拾遗）、
-  `docs/P14-REFINE-PLAN.md`（P14 声之细织）、`docs/P15-FORGE-PLAN.md`（P15 铸剑炉）与
-  `docs/P16-LEARN-FAST-PLAN.md`（P16 乐学快打·学习体验调优）与
-  `docs/P17-LEXICON-PLAN.md`（P17 词海·内容大扩容）。
+- 设计决策的单一事实源：`docs/docs/exec-plans/completed/REDESIGN-PLAN.md`（P0–P5 历史）与
+  `docs/docs/exec-plans/completed/FX-UPGRADE-PLAN.md`（P6 三期完成）及 `docs/docs/exec-plans/completed/CONTENT-EXPANSION-PLAN.md`（P7 三幕深耕）与 `docs/docs/exec-plans/completed/BUILDCRAFT-PLAN.md`（P8-A 构筑成型）、`docs/docs/exec-plans/completed/ENCOUNTER-EVOLUTION-PLAN.md`（P8-B 对手进化）、`docs/docs/exec-plans/completed/VOICE-MASTERY-PLAN.md`（P8-C 语音深化）、`docs/docs/exec-plans/completed/LEARNING-LOOP-PLAN.md`（P8-D 学习闭环）、`docs/docs/exec-plans/completed/RELEASE-READINESS-PLAN.md`（P8-E 发布与设备验收）与
+  `docs/docs/exec-plans/completed/COUNTER-ATTACK-PLAN.md`（P9 守势反击）、`docs/docs/exec-plans/completed/GROWTH-PLAN.md`（P10–P15 丰富度总路线）与
+  `docs/docs/exec-plans/completed/ROSTER-PLAN.md`（P10 名伶登场）、`docs/docs/exec-plans/completed/ULTIMATE-PLAN.md`（P11 声动九霄）、
+  `docs/docs/exec-plans/completed/P12-CHALLENGE-PLAN.md`（P12 切磋码）、`docs/docs/exec-plans/completed/P13-WORDBOOK-PLAN.md`（P13 词林拾遗）、
+  `docs/docs/exec-plans/completed/P14-REFINE-PLAN.md`（P14 声之细织）、`docs/docs/exec-plans/completed/P15-FORGE-PLAN.md`（P15 铸剑炉）与
+  `docs/docs/exec-plans/completed/P16-LEARN-FAST-PLAN.md`（P16 乐学快打·学习体验调优）与
+  `docs/docs/exec-plans/completed/P17-LEXICON-PLAN.md`（P17 词海·内容大扩容）。
 - 内容兼容：缺失 `ruleset` 的旧局按 legacy；P7 新内容只经 `skillsFor/eventsFor/itemsFor` 进入对应新局。
   不直接修改基础内容表或用扩展池替换基础池。新增参数须审查组合根包装器是否完整转发。
 - 构筑独立版本 `buildVersion:1` 仅用于新战役；缺失时保留旧玩法。升级按 `upgradedSlots` 记录具体牌组槽位，
@@ -53,7 +53,7 @@ npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 
 - P8-D 日历历史只保留最多 90 个练习日的分数聚合和不同技能 ID；每日目标按 3 个不同短句计数，连续天数不提供战斗加成。
   学习档案固定 `kind: voice-tower-learning` / `version: 1`，严格白名单、上限 1 MiB；导入须预览后二次确认并覆盖恢复，不盲目累加聚合数据。
 - P8-E 发布必须同时通过默认相对 base 与 GitHub Pages `/voicedragon/` 产物契约；CSP 变更须保留同源 Worker、Blob AudioWorklet/WASM 与 Hugging Face CDN 下载。
-  Playwright WebKit 模拟不等于 Safari 真机；离线模拟器限制必须明确 skip 并留在 `docs/DEVICE-TEST-MATRIX.md`，不得写成已通过。
+  Playwright WebKit 模拟不等于 Safari 真机；离线模拟器限制必须明确 skip 并留在 `docs/docs/exec-plans/completed/DEVICE-TEST-MATRIX.md`，不得写成已通过。
 - P9 反击独立版本 `counterVersion:1` 仅用于新战役；与 build/encounter 版本分离。startCampaign 第六参数必须经组合根完整转发。
   反击卡只经 `skillsFor(act,"p7",1)` 进入卡池；Skill.counter 是数据化字段，旧内容缺省无。
   还击纯规则在 `src/core/counter.ts`，预测与实际结算共用；穿甲不触发不消耗、无伤害回合保留姿态、guardAttack 先得甲再吃还击。
@@ -97,14 +97,14 @@ npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 
   在锻造局首胜按（角色×幕）槽位确定性授予一件（`finishCombatVictory`，`forgeRelicGranted` 一局一件）。
   遗物 `school` 为展示字段不参与判定；「每场一次」钩子走 `combat.forgeUsed`。切磋码版本束增列 `forge`（字段 `f`），
   旧码无此字段 = 旧内容池逐位同局（零破坏）。属性测试（fast-check，dev-only）与视觉回归（Playwright 截图门）只加门不放宽旧门。
-- P16 乐学快打（学习体验优先的 Owner 调参，见 `docs/P16-LEARN-FAST-PLAN.md`）：档位倍率入门 0.88 / 未稳 0.62
+- P16 乐学快打（学习体验优先的 Owner 调参，见 `docs/docs/exec-plans/completed/P16-LEARN-FAST-PLAN.md`）：档位倍率入门 0.88 / 未稳 0.62
   （只减少低分档惩罚，正音/清晰档不变）；敌人基础血量按幕调（幕1–2 小怪 −20%、幕3 −10%、各幕精英 −10%、Boss 不动）；
   凤冠花旦「水袖回风」叠甲 12→2（叠甲×沉默曾构成磨甲死锁，真实玩家同样受困）。
   **平衡门换带**：基线三幕贪心胜率 55–75%（旧 45–65），变体门（p7/构筑/进化/反击/名伶/绝技/词林/锻造）55–85%，
   基线快照 `BASELINE_WINS` 已按 P16 数值回填；仿真单场安全阀 60→90 回合（真实游戏无回合上限，阀门只抓死锁）。
   新短句只进 `EXPANSION_SKILLS`（基础表只读红线不变），题库 8→16、问答节点每图 3–4；
   档位浮字（正音！/清晰/入门/未稳）在 `src/ui/fx/plans.ts` 纯计划层（`tierFloaterFor`），不新增演出系统。
-  调参必先 `npm run sim` 对表 `docs/BALANCE-REPORT.md`，禁止凭直觉改。
+  调参必先 `npm run sim` 对表 `docs/docs/exec-plans/completed/BALANCE-REPORT.md`，禁止凭直觉改。
 - P17 词海内容独立版本 `lexiconVersion:1` 仅用于 p7 新局：+220 短句只经 `skillsFor` 第五参、
   +80 问答只经 `quizPoolFor` 第四参进入；数据全部在 `src/core/content/p17/`（基础表/EXPANSION 只读）。
   切磋码版本束增列 `lexicon`（字段 `l`，PAYLOAD_KEYS 白名单登记；旧码无字段 = 旧池逐位同局）。

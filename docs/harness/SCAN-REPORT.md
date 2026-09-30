@@ -1,5 +1,7 @@
 # Harness 化改造 · 全量扫描报告
 
+> status: active · updated: 2026-09-30 · 本文件由 harness 迁移器统一加注（2026-09-30）
+
 > 扫描日期：2026-09-30 · 基线：`feat/minigame` @ `7f17983`（分支 `harnessing` 自此拉出）
 > 扫描方式：全仓静态分析（jscpd / grep / wc / AST 粗算）+ CI 与文档交叉核对。**本轮零代码修改。**
 > 注意：本地沙箱仓库是浅克隆（19 个可见提交），完整历史以远端 `hweiei/voicedragon` 为准。

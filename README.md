@@ -39,4 +39,4 @@ npm run build
 - 浏览器自动化不等于真实手机、Safari 真机或学习效果验证。
 - 原版冒险中的 Web Speech 识别可能使用浏览器提供的在线服务，与新手塔的纯本地录音不同。
 
-最新首章交付说明：`docs/P21-FIRST-CHAPTER-RELEASE.md`。
+最新首章交付说明：`docs/docs/exec-plans/completed/P21-FIRST-CHAPTER-RELEASE.md`。
