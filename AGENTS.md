@@ -43,7 +43,7 @@ npx vitest run                # 单测（tests/**，含 street 六章内容表�
 ## 4. 硬性不变量（有 CI 门禁拦截，红叉别看心情）
 
 1. **微信主包 ≤ 4096KB**（第 3 章起资源自动进 `resN/` 分包；分包清单注入 game.json，勿手改）。
-2. **行为回归**：改动战斗/UI 后必须过 `tests/` 全绿 + 手测清单 `docs/HARNESS-PLAN §6`（迁移中，最终在 exec-plans 路径）。
+2. **行为回归**：改动战斗/UI 后必须过 `tests/` 全绿 + 手测清单 `docs/exec-plans/completed/HARNESS-PLAN.md` §6（十条行为回归）。
 3. **单文件 ≤ 800 行**（存量豁免见 `docs/harness/baseline.json`，只减不增）。
 4. **内容表完整性**：jp 字段只允许小写字母数字空格；新章必须过 `tests/street-chN.test.ts` 五件套（参照 ch6）。
 5. **不碰**：`minigame/src/audio-manifest.ts`（构建生成物）、`dist/`、`preview/`、`docs/generated/`。
@@ -56,11 +56,11 @@ npx vitest run                # 单测（tests/**，含 street 六章内容表�
 
 ## 6. 文档地图（记录系统）
 
-- `docs/exec-plans/active/` —— 进行中的执行计划（当前：HARNESS-PLAN.md，五阶段）
+- `docs/exec-plans/active/` —— 进行中的执行计划（当前为空；harness 五阶段计划已完成归档至 completed/HARNESS-PLAN.md；遗留债务看 exec-plans/tech-debt-tracker.md）
 - `docs/exec-plans/completed/` —— 历史计划归档（web 线 P 系列全部在此，status: done）
 - `docs/design-docs/` —— 现行设计：路线图 minigame-roadmap.md、提审 V1-RELEASE.md
 - `docs/references/` —— 口传知识落库：TTS 切分 SOP、微信合规、真机测试、沙箱修复
 - `docs/harness/` —— 改造台账：SCAN-REPORT.md（20 项问题）、registry.json、baseline.json
 - `docs/ARCHITECTURE.md` —— 依赖方向与目录职责的正式版
 
-新会话第一读：本文件 → `docs/exec-plans/completed/HARNESS-PLAN.md`（看当前阶段）→ 相应 docs 深链。
+新会话第一读：本文件 → `docs/harness/registry.json`（问题台账）→ 相应 docs 深链。
