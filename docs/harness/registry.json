@@ -5,11 +5,11 @@
    "id": "H-01",
    "priority": "P0",
    "title": "minigame game.ts 1765 行上帝闭包→按屏拆分",
-   "status": "open",
+   "status": "done",
    "files": [
     "minigame/src/game.ts"
    ],
-   "note": "阶段4.2"
+   "note": "4.2 完成：ctx/shared/codex/overlays/map/home/school/battle 八模块，屏幕文件全部 ≤400 行，game.ts 706 行只剩循环/输入/存档/语音编排"
   },
   {
    "id": "H-02",
