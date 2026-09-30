@@ -34,3 +34,13 @@
 - 整批文本必须与数据表逐字核对后再生成。
 - 沙箱重置会清 pip 包（imageio-ffmpeg）——见 `docs/references/sandbox-repair.md`。
 - 同一 user 轮内图 10 张 + 音 10 条是硬顶，混排任务先排音频批次。
+
+## 离线试听页（一次性生成，产物不入 git）
+
+`audio-check-offline.html`＝把 192 条 mp3 以 base64 内嵌的单文件试听表（连播/章节过滤/问题清单导出）。音频改动后重生成（勿提交，hygiene 拒生成物入库）：
+
+1. `rows.mts`：import `src/street/data` 出 192 行 `{key,text,jp,note,ch}` 过滤 `minigame/assets/audio/street/` 实际存在文件，`console.log(JSON.stringify(rows))`；
+2. `npx esbuild rows.mts --bundle --format=esm --platform=node --outfile=rows.mjs && node rows.mjs > rows.json`；
+3. python 读 rows.json + 逐个 `base64.b64encode(mp3)` 拼 `<audio src="data:audio/mpeg;base64,…">` 模板，`</` 转义 `<\\/`。
+
+参考实现见会话交付记录（2026-09-30 版含连播状态机与「生成问题清单」按钮）。
