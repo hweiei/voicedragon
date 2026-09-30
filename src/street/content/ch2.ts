@@ -227,7 +227,7 @@ export const CH2_NPCS: Record<string, NpcDef> = {
     img: "mtrstaff.png",
     bg: "bg/mtr.jpg",
     sign: "站台",
-    target: 30,
+    target: 54,
     intro: "站务员企喺闸机旁边：「有咩可以帮到你？」",
     win: "小心月台空隙，祝你一路顺风！",
     intents: [
@@ -236,7 +236,7 @@ export const CH2_NPCS: Record<string, NpcDef> = {
         jp: "nei5 jiu3 heoi3 bin1 dou6 aa3",
         gloss: "你要去哪里呀？",
         label: "问目的地",
-        loss: 5,
+        loss: 12,
         need: "where"
       },
       {
@@ -244,7 +244,7 @@ export const CH2_NPCS: Record<string, NpcDef> = {
         jp: "zyun3 lin6 hai2 haa6 jat1 zaam3 gaa3",
         gloss: "转线在下一站哦。",
         label: "讲转线",
-        loss: 6,
+        loss: 13,
         need: "direction"
       },
       {
@@ -252,7 +252,7 @@ export const CH2_NPCS: Record<string, NpcDef> = {
         jp: "mei5 baan1 ce1 sap6 jat1 dim2 gaa3",
         gloss: "末班车十一点。",
         label: "讲时间",
-        loss: 5,
+        loss: 12,
         need: "time"
       }
     ]
@@ -263,7 +263,7 @@ export const CH2_NPCS: Record<string, NpcDef> = {
     img: "grandpa.png",
     bg: "bg/busstop.jpg",
     sign: "街口",
-    target: 28,
+    target: 50,
     intro: "一位拿报纸嘅伯父行埋嚟，好似好热心的样子……但要你讲清楚先去帮你。",
     win: "后生仔肯开口讲粤语，好！直行就得！",
     intents: [
@@ -272,7 +272,7 @@ export const CH2_NPCS: Record<string, NpcDef> = {
         jp: "nei5 hong4 bin1 dou6 heoi3 aa3",
         gloss: "你去哪儿呀？",
         label: "问去向",
-        loss: 5,
+        loss: 12,
         need: "where"
       },
       {
@@ -280,7 +280,7 @@ export const CH2_NPCS: Record<string, NpcDef> = {
         jp: "nei5 gong2 faai3 zo2, ngo5 teng1 m4 ming2 me1",
         gloss: "你说太快了，我听不明白。",
         label: "听唔明",
-        loss: 5,
+        loss: 12,
         need: "confused"
       },
       {
@@ -288,7 +288,7 @@ export const CH2_NPCS: Record<string, NpcDef> = {
         jp: "hong4 ceot1 heoi3, zo2 dzun3 ding6 jau6 dzun3 aa3",
         gloss: "走出去，左转还是右转？",
         label: "问方位",
-        loss: 6,
+        loss: 13,
         need: "direction"
       }
     ]
@@ -299,7 +299,7 @@ export const CH2_NPCS: Record<string, NpcDef> = {
     img: "minibus.png",
     bg: "bg/taxi.jpg",
     sign: "小巴",
-    target: 34,
+    target: 56,
     intro: "司机师傅手揸方向盘，眼望倒后镜：「快啲啦，赶住开啦。」",
     win: "得！坐稳啦，几分钟就到！",
     intents: [
@@ -308,7 +308,7 @@ export const CH2_NPCS: Record<string, NpcDef> = {
         jp: "ce1 fai3 baat3 man1, jau5 mou5 ngaang6 bei6",
         gloss: "车费八块，有硬币吗？",
         label: "问零钱",
-        loss: 7,
+        loss: 14,
         need: "fare"
       },
       {
@@ -316,7 +316,7 @@ export const CH2_NPCS: Record<string, NpcDef> = {
         jp: "soeng5 m4 soeng5 ce1 aa3? faai3 di1 laa1",
         gloss: "上不上车？快点啦！",
         label: "催促",
-        loss: 6,
+        loss: 13,
         need: "rush"
       },
       {
@@ -324,7 +324,7 @@ export const CH2_NPCS: Record<string, NpcDef> = {
         jp: "lok6 ce1 ge3 dak1 on3 zung1 aa3 wai6",
         gloss: "下车记得按铃啊喂！",
         label: "吩咐落车",
-        loss: 6,
+        loss: 13,
         need: "where"
       }
     ]
@@ -335,7 +335,7 @@ export const CH2_NPCS: Record<string, NpcDef> = {
     img: "buscaptain.png",
     bg: "bg/busstop.jpg",
     sign: "巴士",
-    target: 55,
+    target: 88,
     boss: true,
     intro: "总站开蓬前一分钟，车长托住时间表望住你：上唔到呢班，就要等半个钟。",
     win: "好嘢！呢个乘客识听识讲，下次坐你坐最前排！",
@@ -345,7 +345,7 @@ export const CH2_NPCS: Record<string, NpcDef> = {
         jp: "heoi3 bin1 dou6 lok6 ce1 aa3",
         gloss: "去哪里下车？",
         label: "问落车",
-        loss: 7,
+        loss: 14,
         need: "where"
       },
       {
@@ -353,7 +353,7 @@ export const CH2_NPCS: Record<string, NpcDef> = {
         jp: "baat3 daat6 tung1 paak3 zo2 mei6 aa3",
         gloss: "八达通刷了没有？",
         label: "查拍卡",
-        loss: 7,
+        loss: 14,
         need: "fare"
       },
       {
@@ -361,7 +361,7 @@ export const CH2_NPCS: Record<string, NpcDef> = {
         jp: "ni1 baan1 m4 heoi3 dik1 sau4 lei4 gaa3",
         gloss: "这班不去迪士尼！",
         label: "查线路",
-        loss: 8,
+        loss: 15,
         need: "transport"
       },
       {
@@ -369,7 +369,7 @@ export const CH2_NPCS: Record<string, NpcDef> = {
         jp: "mei5 baan1 laa3, zung6 m4 fai3 sau2",
         gloss: "末班车了，还不快点！",
         label: "赶时间",
-        loss: 7,
+        loss: 14,
         need: "time"
       }
     ]

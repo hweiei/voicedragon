@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { CARDS, NPCS } from "../src/street/data";
 import { CHAPTERS, chapterUnlocked } from "../src/street/chapters";
+import { CH2_STARTER } from "../src/street/content/ch2";
+import { CARDS, NPCS } from "../src/street/data";
 import { genMap, newRun, startReview } from "../src/street/engine";
 import { rng } from "../src/street/engine";
-import { CH2_STARTER } from "../src/street/content/ch2";
 
 describe("第二章内容", () => {
   it("每张卡字段齐全、属于第 2 章、jp 合法", () => {

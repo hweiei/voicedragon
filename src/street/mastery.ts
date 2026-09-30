@@ -12,14 +12,14 @@ export interface MasteryEntry {
   last: number;
 }
 
-export type MasteryEvent = "play" | "answer" | "spoke" | "crit";
+export type MasteryEvent = "play" | "answer" | "spoke" | "crit" | "quiz";
 
 export const MAX_LEVEL = 5;
 /** 达到各等级需要的累计经验：Lv1=3 … Lv5=40 */
 export const LEVEL_XP = [0, 3, 8, 15, 25, 40];
 /** 各等级的复习间隔（天），超过 2 倍间隔会掉一级 */
 export const REVIEW_DAYS = [0, 1, 2, 4, 7, 14];
-const XP: Record<MasteryEvent, number> = { play: 1, answer: 2, spoke: 3, crit: 4 };
+const XP: Record<MasteryEvent, number> = { play: 1, answer: 2, spoke: 3, crit: 4, quiz: 2 };
 const DAY = 86_400_000;
 
 export const LEVEL_NAMES = ["生疏", "见过", "识听", "识讲", "熟", "滚瓜烂熟"];

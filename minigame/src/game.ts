@@ -37,6 +37,7 @@ import {
   noteScore,
   restoreProfile
 } from "../../src/street/profile";
+import { type Quiz, gradeAnswer, makeQuizSet, quizPool } from "../../src/street/school";
 import { audioPath } from "./audio-manifest";
 import { C, MONO, Painter } from "./draw";
 import type { Platform } from "./platform";
@@ -54,7 +55,8 @@ type Screen =
   | "codex"
   | "npcs"
   | "settings"
-  | "chapters";
+  | "chapters"
+  | "school";
 
 const RUN_KEY = "street-run-v1";
 const PROF_KEY = "street-profile-v1";
@@ -88,6 +90,19 @@ interface State {
   codexPage: number;
   /** 本场对话里升级的句子 */
   levelUps: { id: string; lv: number }[];
+  /** 学堂答题状态 */
+  school: SchoolState | null;
+}
+
+interface SchoolState {
+  /** lesson = 章首课（开局前）；node = 地图学堂节点 */
+  mode: "lesson" | "node";
+  quiz: Quiz[];
+  idx: number;
+  right: number;
+  /** 砌句题：已拣嘅词块下标 */
+  selTok: number[];
+  fb: { ok: boolean; txt: string } | null;
 }
 
 export function startGame(p: Platform): void {
@@ -99,6 +114,7 @@ export function startGame(p: Platform): void {
   let tracker: PitchTracker | null = null;
   let recStart = 0;
   let holding = false;
+  let recMode: "battle" | "school" = "battle";
   let downRegion: string | null = null;
 
   const s: State = {
@@ -118,7 +134,8 @@ export function startGame(p: Platform): void {
     busy: false,
     revealed: false,
     codexPage: 0,
-    levelUps: []
+    levelUps: [],
+    school: null
   };
   applyDecay(prof.mastery, Date.now());
   saveProf();
@@ -494,6 +511,201 @@ export function startGame(p: Platform): void {
       });
   }
 
+  function schoolJudge(ok: boolean): void {
+    const st = s.school;
+    if (!st || st.fb) return;
+    const q = st.quiz[st.idx];
+    st.fb = { ok, txt: ok ? "啱晒！" : "米啱，仲要练下" };
+    if (ok) {
+      st.right += 1;
+      const up = gainXp(prof.mastery, q.card, ["quiz"], Date.now());
+      if (up.after > up.before) p.toast(`「${CARDS[q.card].phrase}」熟练度升到 Lv${up.after}`);
+    }
+    saveProf();
+    s.busy = true;
+    setTimeout(() => {
+      s.busy = false;
+      if (!s.school) return;
+      s.school.fb = null;
+      s.school.idx += 1;
+      s.school.selTok = [];
+    }, 800);
+  }
+
+  function schoolPick(i: number): void {
+    const st = s.school;
+    if (!st || st.fb) return;
+    const q = st.quiz[st.idx];
+    if (q && (q.type === "mean" || q.type === "listen")) schoolJudge(i === q.right);
+  }
+
+  function schoolTok(i: number): void {
+    const st = s.school;
+    if (!st || st.fb) return;
+    const q = st.quiz[st.idx];
+    if (!q || q.type !== "order" || st.selTok.includes(i)) return;
+    st.selTok.push(i);
+    if (st.selTok.length === q.tokens.length) schoolJudge(gradeAnswer(q, st.selTok));
+  }
+
+  function finishSchool(): void {
+    const st = s.school;
+    if (!st) return;
+    const run = s.run;
+    if (st.mode === "node" && run && st.right === st.quiz.length && st.quiz.length > 0) {
+      run.gold += 20;
+      run.patience = Math.min(run.maxPatience, run.patience + 4);
+      p.toast("满分！$20 奖学金 · 耐心 +4");
+      saveRun();
+    }
+    s.school = null;
+    s.screen = "map";
+  }
+
+  function schoolScreen(): void {
+    const st = s.school;
+    if (!st) return;
+    let y = backBar(st.mode === "lesson" ? "章首课 · 新街區開學" : "学堂 · 温故知新");
+    const n = st.quiz.length;
+    g.text(`第 ${Math.min(st.idx + 1, n)} / ${n} 题 · 啱咗 ${st.right}`, 16, y + 12, {
+      size: 12,
+      color: C.dim
+    });
+    for (let i = 0; i < n; i++) {
+      g.ctx.beginPath();
+      g.ctx.arc(W - 16 - (n - i) * 16, y + 8, 5, 0, Math.PI * 2);
+      g.ctx.fillStyle = i < st.idx ? C.ok : "#262a4a";
+      g.ctx.fill();
+    }
+    y += 28;
+    if (st.idx >= n) {
+      const full = st.right === n;
+      g.rr(16, y, W - 32, 150, 14, C.panel, full ? C.amber : C.line, 2);
+      g.text(full ? "满分！学堂阿师递来奖励" : "今日学问有进步", W / 2, y + 34, {
+        size: 17,
+        weight: "bold",
+        align: "center"
+      });
+      g.text(
+        st.mode === "node"
+          ? full
+            ? "$20 奖学金 · 耐心 +4 · 啱嘅句加 2 经验"
+            : `啱 ${st.right}/${n}，每题加 2 熟练经验`
+          : `识听识讲就开学堂，啱 ${st.right}/${n} 题`,
+        W / 2,
+        y + 62,
+        { size: 13, color: C.dim, align: "center" }
+      );
+      g.button(W / 2 - 80, y + 88, 160, 48, "继续行街", "schDone", "", "ok");
+      if (st.fb) st.fb = null;
+      return;
+    }
+    const q = st.quiz[st.idx];
+    const card = CARDS[q.card];
+    g.rr(16, y, W - 32, 108, 14, "rgba(255,79,139,.08)", C.pink, 2);
+    const ask =
+      q.type === "mean"
+        ? "呢句咩意思？"
+        : q.type === "listen"
+          ? "听音，边句系呢句？"
+          : q.type === "order"
+            ? "拣词块砌返原句"
+            : "开口读顺佢（≥60 分算啱）";
+    g.text(ask, 30, y + 22, { size: 12, color: C.pink, weight: "bold" });
+    if (q.type === "listen") {
+      g.glow(C.pink, 10, () =>
+        g.rr(W / 2 - 30, y + 34, 60, 60, 30, "rgba(255,79,139,.2)", C.pink, 2)
+      );
+      g.text("🔊", W / 2, y + 74, { size: 26, align: "center" });
+      g.region(W / 2 - 30, y + 34, 60, 60, "schHear", q.card);
+      g.text(s.recording ? "听紧…" : "再听一次都冇问题", W / 2, y + 102, {
+        size: 11,
+        color: C.dim,
+        align: "center"
+      });
+    } else {
+      g.text(card.phrase, W / 2, y + 58, {
+        size: q.type === "mean" ? 24 : 22,
+        weight: "900",
+        align: "center"
+      });
+      g.text(card.jp, W / 2, y + 82, { size: 12, color: C.cyan, align: "center", font: MONO });
+      g.rr(W - 78, y + 12, 50, 30, 15, "rgba(39,225,214,.15)", C.cyan);
+      g.text("听", W - 53, y + 32, { size: 14, weight: "bold", color: C.cyan, align: "center" });
+      g.region(W - 78, y + 12, 50, 30, "schHear", q.card);
+    }
+    y += 120;
+    if (q.type === "mean" || q.type === "listen") {
+      const opts = q.type === "mean" ? q.opts : q.opts.map((id) => CARDS[id].phrase);
+      opts.forEach((t, i) => {
+        g.button(16, y + i * 54, W - 32, 46, t, "schOpt", String(i), "ghost");
+      });
+    } else if (q.type === "order") {
+      const tw = (W - 32 - (q.tokens.length - 1) * 8) / q.tokens.length;
+      q.tokens.forEach((_, i) => {
+        const sel = st.selTok[i];
+        g.rr(
+          16 + i * (tw + 8),
+          y,
+          tw,
+          40,
+          8,
+          sel === undefined ? "#171a33" : "rgba(61,220,132,.15)",
+          sel === undefined ? C.line : C.ok
+        );
+        g.text(sel === undefined ? "？" : q.tokens[sel], 16 + i * (tw + 8) + tw / 2, y + 26, {
+          size: 15,
+          weight: "bold",
+          color: sel === undefined ? C.dim : C.text,
+          align: "center"
+        });
+      });
+      let cy = y + 56;
+      let cx = 16;
+      q.tiles.forEach((t, i) => {
+        if (st.selTok.includes(i)) return;
+        const w2 = g.measure(t, 15, "bold") + 22;
+        if (cx + w2 > W - 16) {
+          cx = 16;
+          cy += 46;
+        }
+        g.rr(cx, cy, w2, 38, 10, C.amber);
+        g.text(t, cx + w2 / 2, cy + 25, {
+          size: 15,
+          weight: "bold",
+          color: C.ink,
+          align: "center"
+        });
+        g.region(cx, cy, w2, 38, "schTok", String(i));
+        cx += w2 + 8;
+      });
+    } else {
+      const rec = s.recording;
+      g.glow(rec ? C.pink : "transparent", rec ? 18 : 0, () =>
+        g.rr(16, y, W - 32, 56, 14, rec ? C.pink : C.amber)
+      );
+      g.text(rec ? "🎙 读紧…松手交卷" : "🎙 按住读一次", W / 2, y + 28, {
+        size: 16,
+        weight: "bold",
+        color: rec ? C.ink : C.ink,
+        align: "center"
+      });
+      g.region(16, y, W - 32, 56, "mic", "", true);
+      g.button(16, y + 66, W - 32, 40, "未识读，跳过（计答错）", "schSkip", "", "ghost");
+    }
+    if (st.fb) {
+      g.ctx.fillStyle = "rgba(11,13,26,.55)";
+      g.ctx.fillRect(0, y - 200, W, 260);
+      g.text(st.fb.ok ? "✓" : "✗", W / 2 - 60, y - 90, {
+        size: 54,
+        weight: "900",
+        color: st.fb.ok ? C.ok : C.pink,
+        align: "center"
+      });
+      g.text(st.fb.txt, W / 2 + 30, y - 100, { size: 15, weight: "bold", align: "center" });
+    }
+  }
+
   function chaptersScreen(): void {
     let y = backBar("揀街区");
     const rh = Math.min(96, (H - y - 16) / CHAPTERS.length - 8);
@@ -713,7 +925,8 @@ export function startGame(p: Platform): void {
       shop: "士",
       rest: "糖",
       boss: "午",
-      review: "温"
+      review: "温",
+      school: "学"
     };
     for (const n of run.map) {
       const { x, y } = pos(n);
@@ -729,7 +942,9 @@ export function startGame(p: Platform): void {
               ? C.ok
               : n.type === "event" || n.type === "review"
                 ? C.violet
-                : C.cyan;
+                : n.type === "school"
+                  ? C.amber
+                  : C.cyan;
       const pulse = on ? 8 + Math.sin(t / 250) * 6 : 0;
       g.glow(on ? color : "transparent", pulse, () => {
         g.ctx.beginPath();
@@ -758,7 +973,13 @@ export function startGame(p: Platform): void {
       const label =
         n.type === "fight" || n.type === "boss"
           ? NPCS[n.npc ?? "auntie"].sign
-          : { event: "奇遇", shop: "士多", rest: "糖水铺", review: "温习" }[n.type as "event"];
+          : {
+              event: "奇遇",
+              shop: "士多",
+              rest: "糖水铺",
+              review: "温习",
+              school: "学堂"
+            }[n.type as "event"];
       g.text(label, x, y + r + 15, { size: 12, color: on ? C.text : C.dim, align: "center" });
       if (on) g.region(x - r - 6, y - r - 6, r * 2 + 12, r * 2 + 26, "go", n.id);
     }
@@ -1179,7 +1400,20 @@ export function startGame(p: Platform): void {
       };
       s.screen = "shop";
     } else if (node.type === "rest") s.screen = "rest";
-    else if (node.type === "review") {
+    else if (node.type === "school") {
+      s.school = {
+        mode: "node",
+        quiz: makeQuizSet(
+          quizPool(run.chapter ?? 1, prof.mastery, Date.now()).slice(0, 12),
+          nextRand(run)
+        ),
+        idx: 0,
+        right: 0,
+        selTok: [],
+        fb: null
+      };
+      s.screen = "school";
+    } else if (node.type === "review") {
       const due = dueCards(prof.mastery, Date.now(), 6);
       if (due.length < 2) {
         run.patience = Math.min(run.maxPatience, run.patience + 6);
@@ -1262,12 +1496,22 @@ export function startGame(p: Platform): void {
 
   async function micDown(): Promise<void> {
     const run = s.run;
-    if (!run?.combat || s.sel === null || s.recording) return;
-    const card = CARDS[run.combat.hand[s.sel]];
-    if (card.cost > run.combat.energy) {
-      p.toast("底气唔够");
-      return;
+    if (s.recording) return;
+    let card: CardDef | null = null;
+    recMode = "battle";
+    if (s.screen === "school" && s.school && !s.school.fb) {
+      const q = s.school.quiz[s.school.idx];
+      if (!q || q.type !== "speak") return;
+      recMode = "school";
+      card = CARDS[q.card];
+    } else if (run?.combat && s.sel !== null) {
+      card = CARDS[run.combat.hand[s.sel]];
+      if (card.cost > run.combat.energy) {
+        p.toast("底气唔够");
+        return;
+      }
     }
+    if (!card) return;
     tracker = new PitchTracker();
     s.recording = true;
     recStart = p.now();
@@ -1275,19 +1519,43 @@ export function startGame(p: Platform): void {
       await p.startRecord((pcm, rate) => tracker?.push(pcm, rate));
     } catch {
       s.recording = false;
-      p.confirm("开唔到咪", "要开口出牌需要录音权限。可以去设置打开，或者先用「直接出」。").then(
-        (ok) => {
-          if (ok && p.name === "wx") wx.openSetting();
-        }
-      );
+      if (recMode === "school") p.toast("咪开唔到，食日再练（计答错）");
+      else
+        p.confirm("开唔到咪", "要开口出牌需要录音权限。可以去设置打开，或者先用「直接出」。").then(
+          (ok) => {
+            if (ok && p.name === "wx") wx.openSetting();
+          }
+        );
     }
   }
 
   function micUp(): void {
     const run = s.run;
-    if (!s.recording || !run?.combat || s.sel === null) return;
+    if (!s.recording) return;
     s.recording = false;
     p.stopRecord();
+    if (recMode === "school") {
+      const st = s.school;
+      const q = st?.quiz[st.idx];
+      if (p.now() - recStart < 350 || !tracker || !q || !st) {
+        tracker = null;
+        p.toast("按住讲完先松手");
+        return;
+      }
+      const detail = scoreToneContour(tracker.frames, CARDS[q.card].jp);
+      tracker = null;
+      const sc = detail?.score ?? null;
+      s.lastScore = sc === null ? null : Math.round(sc);
+      if (sc === null) {
+        p.toast("听唔清，食日再试");
+        return;
+      }
+      noteScore(prof, q.card, sc);
+      saveProf();
+      schoolJudge(sc >= 60);
+      return;
+    }
+    if (!run?.combat || s.sel === null) return;
     const card = CARDS[run.combat.hand[s.sel]];
     if (p.now() - recStart < 350 || !tracker) {
       p.toast("按住讲完先松手");
@@ -1321,7 +1589,19 @@ export function startGame(p: Platform): void {
         s.run.bonus = bonusTable(prof.mastery);
         s.revived = false;
         s.levelUps = [];
-        s.screen = "map";
+        if (!prof.taught.includes(chId)) {
+          prof.taught.push(chId);
+          const starter = CHAPTERS.find((c) => c.id === chId)?.starter ?? [];
+          s.school = {
+            mode: "lesson",
+            quiz: makeQuizSet(starter, Math.random, 3),
+            idx: 0,
+            right: 0,
+            selTok: [],
+            fb: null
+          };
+          s.screen = "school";
+        } else s.screen = "map";
         prof.runs += 1;
         saveProf();
         break;
@@ -1372,6 +1652,21 @@ export function startGame(p: Platform): void {
           saveProf();
           p.toast("档案已清除");
         }
+        break;
+      case "schOpt":
+        schoolPick(Number(id));
+        break;
+      case "schTok":
+        schoolTok(Number(id));
+        break;
+      case "schSkip":
+        schoolJudge(false);
+        break;
+      case "schHear":
+        if (id) hear(cardKey(id));
+        break;
+      case "schDone":
+        finishSchool();
         break;
       case "hearCard":
         hear(cardKey(id));
@@ -1561,7 +1856,8 @@ export function startGame(p: Platform): void {
     const t = p.now();
     g.begin();
     const run = s.run;
-    if (s.screen === "chapters") chaptersScreen();
+    if (s.screen === "school") schoolScreen();
+    else if (s.screen === "chapters") chaptersScreen();
     else if (s.screen === "codex") codexScreen();
     else if (s.screen === "npcs") npcsScreen();
     else if (s.screen === "settings") settingsScreen();

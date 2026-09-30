@@ -239,7 +239,7 @@ export const CH1_NPCS: Record<string, NpcDef> = {
     img: "auntie.png",
     bg: "bg/market.jpg",
     sign: "街市",
-    target: 30,
+    target: 46,
     intro: "生果档阿婶笑眯眯望住你……个价好似有啲贵。",
     win: "好啦好啦，八蚊俾你！",
     intents: [
@@ -248,7 +248,7 @@ export const CH1_NPCS: Record<string, NpcDef> = {
         jp: "leng3 zai2 ni1 di1 sap6 man1 jat1 gan1 gaa3",
         gloss: "帅哥，这些十块一斤的！",
         label: "抬价",
-        loss: 6,
+        loss: 12,
         need: "raise"
       },
       {
@@ -256,7 +256,7 @@ export const CH1_NPCS: Record<string, NpcDef> = {
         jp: "jiu3 m4 jiu3 aa3 faai3 di1 laa1",
         gloss: "要不要啊？快点啦！",
         label: "催促",
-        loss: 5,
+        loss: 11,
         need: "rush"
       },
       {
@@ -264,7 +264,7 @@ export const CH1_NPCS: Record<string, NpcDef> = {
         jp: "tai2 ngaam1 zau6 maai5 laa1",
         gloss: "看中就买吧！",
         label: "施压",
-        loss: 4
+        loss: 10
       }
     ]
   },
@@ -274,7 +274,7 @@ export const CH1_NPCS: Record<string, NpcDef> = {
     img: "waiter.png",
     bg: "bg/cafe.jpg",
     sign: "冰室",
-    target: 28,
+    target: 44,
     intro: "伙计拎住张单，眼都唔抬：「几位？」",
     win: "得，即刻嚟！",
     intents: [
@@ -283,7 +283,7 @@ export const CH1_NPCS: Record<string, NpcDef> = {
         jp: "gei2 do1 wai2 aa3",
         gloss: "几位？",
         label: "问人数",
-        loss: 5,
+        loss: 11,
         need: "seats"
       },
       {
@@ -291,7 +291,7 @@ export const CH1_NPCS: Record<string, NpcDef> = {
         jp: "jam2 mat1 je5 aa3",
         gloss: "喝什么？",
         label: "问饮品",
-        loss: 6,
+        loss: 12,
         need: "order"
       },
       {
@@ -299,7 +299,7 @@ export const CH1_NPCS: Record<string, NpcDef> = {
         jp: "faai3 di1 lok6 daan1 laa1",
         gloss: "快点下单！",
         label: "催促",
-        loss: 5,
+        loss: 11,
         need: "rush"
       }
     ]
@@ -310,7 +310,7 @@ export const CH1_NPCS: Record<string, NpcDef> = {
     img: "taxi.png",
     bg: "bg/taxi.jpg",
     sign: "的士",
-    target: 32,
+    target: 48,
     intro: "司机回头望你：「去边？」",
     win: "明白晒，坐稳啦！",
     intents: [
@@ -319,7 +319,7 @@ export const CH1_NPCS: Record<string, NpcDef> = {
         jp: "heoi3 bin1 dou6 aa3",
         gloss: "去哪里？",
         label: "问目的地",
-        loss: 6,
+        loss: 12,
         need: "where"
       },
       {
@@ -327,7 +327,7 @@ export const CH1_NPCS: Record<string, NpcDef> = {
         jp: "nei5 gong2 mat1 je5 waa2",
         gloss: "你说什么？",
         label: "听唔明",
-        loss: 5,
+        loss: 11,
         need: "confused"
       },
       {
@@ -335,7 +335,7 @@ export const CH1_NPCS: Record<string, NpcDef> = {
         jp: "hai2 bin1 dou6 lok6 ce1",
         gloss: "在哪里下车？",
         label: "问落车",
-        loss: 6,
+        loss: 12,
         need: "where"
       }
     ]
@@ -346,17 +346,17 @@ export const CH1_NPCS: Record<string, NpcDef> = {
     img: "landlady.png",
     bg: "bg/tonglau.jpg",
     sign: "唐楼",
-    target: 36,
+    target: 50,
     intro: "包租婆揸住一大串锁匙，企喺门口。",
     win: "算你识做，今个月唔加住！",
     intents: [
-      { line: "交租啦！", jp: "gaau1 zou1 laa1", gloss: "交房租啦！", label: "施压", loss: 8 },
+      { line: "交租啦！", jp: "gaau1 zou1 laa1", gloss: "交房租啦！", label: "施压", loss: 14 },
       {
         line: "下个月加租！",
         jp: "haa6 go3 jyut6 gaa1 zou1",
         gloss: "下个月涨房租！",
         label: "加价",
-        loss: 7,
+        loss: 13,
         need: "raise"
       },
       {
@@ -364,7 +364,7 @@ export const CH1_NPCS: Record<string, NpcDef> = {
         jp: "gam3 je6 zung6 gam3 cou4",
         gloss: "这么晚还这么吵！",
         label: "投诉",
-        loss: 6,
+        loss: 12,
         need: "sorry"
       }
     ]
@@ -375,7 +375,7 @@ export const CH1_NPCS: Record<string, NpcDef> = {
     img: "boss.png",
     bg: "bg/rush.jpg",
     sign: "茶餐厅",
-    target: 55,
+    target: 78,
     boss: true,
     intro: "十二点半，成间茶餐厅坐满人。部长姐托住一大盘嘢冲埋嚟！",
     win: "好！你呢位客，我记住咗！",
@@ -385,7 +385,7 @@ export const CH1_NPCS: Record<string, NpcDef> = {
         jp: "faai3 di1 hau6 min6 hou2 do1 jan4 dang2 gan2",
         gloss: "快点！后面很多人在等！",
         label: "催促",
-        loss: 7,
+        loss: 13,
         need: "rush"
       },
       {
@@ -393,7 +393,7 @@ export const CH1_NPCS: Record<string, NpcDef> = {
         jp: "jam2 mat1 je5",
         gloss: "喝什么？",
         label: "问饮品",
-        loss: 7,
+        loss: 13,
         need: "order"
       },
       {
@@ -401,7 +401,7 @@ export const CH1_NPCS: Record<string, NpcDef> = {
         jp: "gei2 do1 wai2",
         gloss: "几位？",
         label: "问人数",
-        loss: 6,
+        loss: 12,
         need: "seats"
       },
       {
@@ -409,7 +409,7 @@ export const CH1_NPCS: Record<string, NpcDef> = {
         jp: "maai4 m4 maai4 daan1",
         gloss: "结不结账？",
         label: "问埋单",
-        loss: 8,
+        loss: 14,
         need: "bill"
       }
     ]

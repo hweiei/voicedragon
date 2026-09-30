@@ -13,7 +13,7 @@ export function rng(seed: number): () => number {
   };
 }
 
-export type NodeType = "fight" | "event" | "shop" | "rest" | "boss" | "review";
+export type NodeType = "fight" | "event" | "shop" | "rest" | "boss" | "review" | "school";
 export interface MapNode {
   id: string;
   row: number;
@@ -47,6 +47,12 @@ export function genMap(rand: () => number, chapter = 1): MapNode[] {
   if (rv) {
     rv.type = "review";
     rv.npc = undefined;
+  }
+  // 第 1 行固定放一间「学堂」：本章重点句先温故知新（唔同温习地摊争粒位）
+  const sc = rows[1]?.find((n) => n.type === "fight" && n !== rv) ?? rows[1]?.find((n) => n !== rv);
+  if (sc) {
+    sc.type = "school";
+    sc.npc = undefined;
   }
   for (let r = 0; r < ROWS - 1; r++) {
     for (const n of rows[r]) {
