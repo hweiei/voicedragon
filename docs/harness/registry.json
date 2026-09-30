@@ -110,7 +110,7 @@
    "files": [
     "docs/"
    ],
-   "note": "阶段2.1"
+   "note": "2.6 docs.mjs 落地：status 头(≤4行窗口)+死链双检，挂 run-all 常跑"
   },
   {
    "id": "H-12",
