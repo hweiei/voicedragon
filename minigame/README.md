@@ -61,6 +61,6 @@ npm run minigame:preview    # 浏览器预览 http://localhost:4190/?ads=sim
 
 ## 已知限制
 
-- 小游戏里**没有系统粤语 TTS**，示范只能用预录音频：`assets/audio/street/*.mp3`，构建时自动生成清单。目前 36 条里已有 20 条（全部卡牌）（AI 生成，见 `assets/audio/provenance.json`，未经母语者审核），其余点播放会提示看粤拼。
+- 小游戏里**没有系统粤语 TTS**，示范只能用预录音频：`assets/audio/street/*.mp3`，构建时自动生成清单。36 条已全部生成（街坊台词为批量合成后自动切分），请用 `preview/audio-check.html` 逐条试听校对（AI 生成，见 `assets/audio/provenance.json`，未经母语者审核），其余点播放会提示看粤拼。
 - 录音走 `RecorderManager` 的 PCM 帧回调（16 kHz），声调评分和网页版同一套算法，只看音高走势。
 - 防沉迷：微信小游戏平台侧会处理实名与未成年人限制，接入方式以后台要求为准。

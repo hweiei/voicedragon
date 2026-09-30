@@ -105,6 +105,87 @@
       "file": "c-zousan.mp3",
       "bytes": 8795,
       "sha256": "839b5cc5c8b7978bb632d5b66f04a162037f9b554e27bcd9e6e29c672a16497b"
+    },
+    {
+      "file": "n-auntie-0.mp3",
+      "bytes": 22168,
+      "sha256": "4e45f7638bce7dc2937c37420749a2935b851cccab34d7dbd25d634fa5228074"
+    },
+    {
+      "file": "n-auntie-1.mp3",
+      "bytes": 17780,
+      "sha256": "ae31eba803308dffc5d90ed106d3cc2d858840027878e25e1c6295636ac2cd8f"
+    },
+    {
+      "file": "n-auntie-2.mp3",
+      "bytes": 10283,
+      "sha256": "a54e081d95b90753f6e2ddd6dcf835a5fa938d97622b69eed27e7be937dbed11"
+    },
+    {
+      "file": "n-boss-0.mp3",
+      "bytes": 17780,
+      "sha256": "688a604ee5dbad987967b1266f19fe6b4bbd416923044b43859040e3f94efe43"
+    },
+    {
+      "file": "n-boss-1.mp3",
+      "bytes": 8454,
+      "sha256": "284cd8de6f71794cd44d971ae4cb8b083e19af9d4146cfd611df5fbc44866360"
+    },
+    {
+      "file": "n-boss-2.mp3",
+      "bytes": 9734,
+      "sha256": "fba471348b2dad374b27ad12d77a8eb6c03fb433a4cc4edc93c457101e3f7a9f"
+    },
+    {
+      "file": "n-boss-3.mp3",
+      "bytes": 6991,
+      "sha256": "789a75cacf762d1353ee5a2475805fc05b4fdd5909327b713cea4ec4664c8bec"
+    },
+    {
+      "file": "n-landlady-0.mp3",
+      "bytes": 6808,
+      "sha256": "8c2593ab9cb1351b6ec71e06169872e1678dac45e886bac7fee27dc07b880208"
+    },
+    {
+      "file": "n-landlady-1.mp3",
+      "bytes": 10100,
+      "sha256": "e30244fe90a34d3b54d64faa6c11e96338201395c3303502b1e835ac03e39fc0"
+    },
+    {
+      "file": "n-landlady-2.mp3",
+      "bytes": 11014,
+      "sha256": "6cf3bdbe39910a9e7389f319543f9f360a1b55aa0763e46ef2e6b7395de78163"
+    },
+    {
+      "file": "n-taxi-0.mp3",
+      "bytes": 8271,
+      "sha256": "d4fbdc633919b26ab83f77af48657f39ab84d9ef2cb6be0cc544e12f2dedace9"
+    },
+    {
+      "file": "n-taxi-1.mp3",
+      "bytes": 8088,
+      "sha256": "e04effcfad5544b3f1a6ba16a4ba8b8eb88aac9f40a57dd8cbc64c51b7631f82"
+    },
+    {
+      "file": "n-taxi-2.mp3",
+      "bytes": 8271,
+      "sha256": "2dd3aed6089ed1c26ba2765f714ce09ade7df5a0c76716112e35d47857a79bd3"
+    },
+    {
+      "file": "n-waiter-0.mp3",
+      "bytes": 6991,
+      "sha256": "e292656de44065f6fe327d0deb63309a84eef939a7cff572967a22e3c8566b72"
+    },
+    {
+      "file": "n-waiter-1.mp3",
+      "bytes": 6808,
+      "sha256": "59bdf3604f9cc6b7eb276e11e0ebd62949fb4d0feee80f69c5e4a9f6131401ed"
+    },
+    {
+      "file": "n-waiter-2.mp3",
+      "bytes": 10648,
+      "sha256": "65e1e88c73eb2a2bf0955bd8ce64fc87ea99be1d47e2fc8f56b5fb2d7f3089e6"
     }
-  ]
+  ],
+  "note": "n-* 台词由一条多句合成音频按静音 + 字数对齐自动切分，需人工试听确认（preview/audio-check.html）"
 }

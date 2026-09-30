@@ -23,7 +23,23 @@ export const AUDIO_KEYS: ReadonlySet<string> = new Set<string>([
   "c-sengjat",
   "c-wonggok",
   "c-zaubing",
-  "c-zousan"
+  "c-zousan",
+  "n-auntie-0",
+  "n-auntie-1",
+  "n-auntie-2",
+  "n-boss-0",
+  "n-boss-1",
+  "n-boss-2",
+  "n-boss-3",
+  "n-landlady-0",
+  "n-landlady-1",
+  "n-landlady-2",
+  "n-taxi-0",
+  "n-taxi-1",
+  "n-taxi-2",
+  "n-waiter-0",
+  "n-waiter-1",
+  "n-waiter-2"
 ]);
 
 export function audioPath(key: string): string | null {

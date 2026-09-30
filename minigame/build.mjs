@@ -85,6 +85,22 @@ if (web) {
     outfile: join(out, "game.js")
   });
   writeFileSync(join(out, "index.html"), readFileSync(join(here, "preview.html"), "utf8"));
+  await build({
+    entryPoints: [join(here, "src/audio-check.ts")],
+    bundle: true,
+    format: "iife",
+    target: "es2019",
+    outfile: join(out, "audio-check.js")
+  });
+  writeFileSync(
+    join(out, "audio-check.html"),
+    `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>示范音频校对</title>
+<style>body{font:14px "PingFang SC",sans-serif;background:#0b0d1a;color:#f2f3ff;margin:0;padding:16px}h1{font-size:20px}
+table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #2c3160;padding:8px;text-align:left;vertical-align:middle}
+code{color:#ff4f8b;font-size:12px}audio{height:32px;width:200px}.miss{color:#8a91b4}
+button{margin:16px 0;padding:10px 16px;border:0;border-radius:10px;background:#3ddc84;font-weight:bold}pre{background:#161a33;padding:12px;border-radius:8px}</style>
+</head><body><div id="app"></div><script src="./audio-check.js"></script></body></html>`
+  );
   copyAssets(out);
 }
 
