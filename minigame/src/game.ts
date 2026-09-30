@@ -42,71 +42,25 @@ import { playBeat, winBeat } from "../../src/street/session";
 import { assetPath, audioPath } from "./audio-manifest";
 import { C, MONO, Painter } from "./draw";
 import type { Platform } from "./platform";
+import type { GameCtx, Screen, State } from "./screens/ctx";
+import {
+  HOME_CAST,
+  RELIC_PRICE,
+  REMOVE_PRICE,
+  backBar,
+  cardGrid,
+  cardKey,
+  drawCard,
+  effectText,
+  hear,
+  hud,
+  intentKey,
+  title
+} from "./screens/shared";
 import { createSound } from "./sound";
-
-type Screen =
-  | "home"
-  | "map"
-  | "battle"
-  | "reward"
-  | "shop"
-  | "rest"
-  | "event"
-  | "win"
-  | "lose"
-  | "codex"
-  | "npcs"
-  | "settings"
-  | "chapters"
-  | "school";
 
 const RUN_KEY = "street-run-v1";
 const PROF_KEY = "street-profile-v1";
-const REMOVE_PRICE = 50;
-const RELIC_PRICE = 60;
-const HOME_CAST = ["auntie", "boss", "waiter"] as const;
-
-interface State {
-  screen: Screen;
-  run: Run | null;
-  sel: number | null;
-  reward: string[];
-  rewardGold: number;
-  adUsed: boolean;
-  revived: boolean;
-  shop: {
-    cards: string[];
-    relic: string | null;
-    bought: string[];
-    removing: boolean;
-    removed: boolean;
-  };
-  event: { idx: number; card?: string };
-  recording: boolean;
-  lastScore: number | null;
-  talk: { id: string; until: number } | null;
-  float: { text: string; color: string; t0: number } | null;
-  busy: boolean;
-  /** 听力挑战：本回合台词是否已揭开 */
-  revealed: boolean;
-  codexPage: number;
-  /** 本场对话里升级的句子 */
-  levelUps: { id: string; lv: number }[];
-  /** 学堂答题状态 */
-  school: SchoolState | null;
-}
-
-interface SchoolState {
-  /** lesson = 章首课（开局前）；node = 地图学堂节点 */
-  mode: "lesson" | "node";
-  quiz: Quiz[];
-  idx: number;
-  right: number;
-  /** 砌句题：已拣嘅词块下标 */
-  selTok: number[];
-  fb: { ok: boolean; txt: string } | null;
-}
-
 export function startGame(p: Platform): void {
   const g = new Painter(p);
   const W = p.width;
@@ -143,6 +97,19 @@ export function startGame(p: Platform): void {
   };
   applyDecay(prof.mastery, Date.now());
   saveProf();
+
+  const ctx: GameCtx = {
+    s,
+    p,
+    g,
+    get prof() {
+      return prof;
+    },
+    snd,
+    W,
+    H,
+    top
+  };
 
   /* ---------- 存档 ---------- */
   function loadProfile(): Profile {
@@ -195,159 +162,6 @@ export function startGame(p: Platform): void {
   const hasSave = () => Boolean(p.getItem(RUN_KEY));
 
   /* ---------- 声音 ---------- */
-  function hear(key: string): void {
-    const path = audioPath(key);
-    if (!path || !p.playAudio(path, prof.settings.rate)) p.toast("示范录音制作中，先睇粤拼跟读");
-  }
-  function cardKey(id: string) {
-    return `c-${id}`;
-  }
-  function intentKey(npc: string, idx: number) {
-    return `n-${npc}-${idx % NPCS[npc].intents.length}`;
-  }
-
-  /* ---------- 通用部件 ---------- */
-  const KIND = {
-    persuade: { label: "说服", color: C.pink },
-    calm: { label: "稳住", color: C.cyan },
-    skill: { label: "技巧", color: C.violet }
-  };
-  function effectText(c: CardDef, pv?: { persuade: number; calm: number }): string {
-    const out: string[] = [];
-    const per = pv?.persuade ?? c.persuade;
-    const calm = pv?.calm ?? c.calm;
-    if (per) out.push(`说服 +${per}`);
-    if (calm) out.push(`稳住 ${calm}`);
-    if (c.draw) out.push(`抽 ${c.draw} 张`);
-    if (c.energy) out.push(`底气 +${c.energy}`);
-    return out.join(" ");
-  }
-
-  function drawCard(
-    id: string,
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-    o: {
-      sel?: boolean;
-      poor?: boolean;
-      answers?: boolean;
-      price?: number;
-      eff?: string;
-      act?: string;
-      idx?: number;
-    } = {}
-  ): void {
-    const c = CARDS[id];
-    const k = KIND[c.kind];
-    const border = o.answers ? C.ok : o.sel ? C.amber : C.line;
-    if (o.sel) g.glow(C.amber, 16, () => g.rr(x, y, w, h, 10, C.panel));
-    g.rr(x, y, w, h, 10, o.answers ? "#12301f" : C.panel, border, o.sel || o.answers ? 2 : 1);
-    g.text(k.label, x + 8, y + 16, { size: 11, color: k.color, weight: "bold" });
-    const lv = levelOf(prof.mastery[id]?.xp ?? 0);
-    for (let i = 0; i < 5; i++) {
-      g.ctx.beginPath();
-      g.ctx.arc(x + w - 8 - (4 - i) * 7, y + 12, 2.6, 0, Math.PI * 2);
-      g.ctx.fillStyle = i < lv ? C.amber : "#343a66";
-      g.ctx.fill();
-    }
-    // 费用徽章
-    g.ctx.beginPath();
-    g.ctx.arc(x + 4, y + 4, 11, 0, Math.PI * 2);
-    g.ctx.fillStyle = C.amber;
-    g.ctx.fill();
-    g.text(String(c.cost), x + 4, y + 9, {
-      size: 13,
-      weight: "bold",
-      color: C.ink,
-      align: "center"
-    });
-    const ph = g.wrap(c.phrase, x + 8, y + 36, w - 14, 19, { size: 16, weight: "bold" }, 2);
-    const jpLines = Math.max(1, Math.floor((h - 30 - (40 + ph)) / 12));
-    g.wrap(c.jp, x + 8, y + 40 + ph, w - 12, 12, { size: 10, color: C.pink, font: MONO }, jpLines);
-    g.ctx.fillStyle = C.line;
-    g.ctx.fillRect(x + 8, y + h - 26, w - 16, 1);
-    g.text(o.eff ?? effectText(c), x + 8, y + h - 10, { size: 11, color: C.text });
-    if (o.answers)
-      g.text("✓", x + w - 8, y + h - 10, { size: 13, color: C.ok, align: "right", weight: "bold" });
-    if (o.poor) g.rr(x, y, w, h, 10, "rgba(11,13,26,.55)");
-    if (o.price !== undefined) {
-      g.rr(x + w / 2 - 22, y + h - 9, 44, 18, 9, C.amber);
-      g.text(`$${o.price}`, x + w / 2, y + h + 4, {
-        size: 12,
-        weight: "bold",
-        color: C.ink,
-        align: "center"
-      });
-    }
-    if (o.act) g.region(x, y, w, h, o.act, o.idx !== undefined ? String(o.idx) : id);
-  }
-
-  /** 卡牌网格：返回占用高度 */
-  function cardGrid(
-    ids: string[],
-    y: number,
-    act: string,
-    extra?: (id: string) => { price?: number }
-  ): number {
-    const cols = 3;
-    const gap = 10;
-    const cw = Math.min(104, (W - 32 - gap * (cols - 1)) / cols);
-    const ch = cw * 1.32;
-    const rows = Math.ceil(ids.length / cols);
-    ids.forEach((id, i) => {
-      const r = Math.floor(i / cols);
-      const inRow = Math.min(cols, ids.length - r * cols);
-      const x0 = (W - (inRow * cw + (inRow - 1) * gap)) / 2;
-      drawCard(id, x0 + (i % cols) * (cw + gap), y + r * (ch + 18), cw, ch, {
-        act,
-        ...(extra?.(id) ?? {})
-      });
-    });
-    return rows * (ch + 18);
-  }
-
-  function hud(run: Run): number {
-    const y = top;
-    g.text(`♥ 耐心 ${run.patience}/${run.maxPatience}`, 14, y + 16, {
-      size: 14,
-      color: C.pink,
-      weight: "bold"
-    });
-    g.text(`$ 港纸 ${run.gold}`, W / 2, y + 16, {
-      size: 14,
-      color: C.amber,
-      weight: "bold",
-      align: "center"
-    });
-    g.text(`卡组 ${run.deck.length}`, W - 14, y + 16, {
-      size: 14,
-      color: C.cyan,
-      weight: "bold",
-      align: "right"
-    });
-    let x = 14;
-    for (const r of run.relics) {
-      const def = RELICS[r];
-      if (!def) continue;
-      g.rr(x, y + 26, 26, 26, 6, "rgba(155,123,255,.15)", C.violet);
-      g.text(def.glyph, x + 13, y + 44, {
-        size: 13,
-        color: C.violet,
-        align: "center",
-        weight: "bold"
-      });
-      g.region(x, y + 26, 26, 26, "relic", r);
-      x += 32;
-    }
-    return y + 60;
-  }
-
-  function title(t: string, y: number, color: string): void {
-    g.text(t, W / 2, y, { size: 20, weight: "bold", color, align: "center" });
-  }
-
   /* ---------- 各屏 ---------- */
   function homeScreen(t: number): void {
     const heroH = Math.round(Math.min(H * (H < 720 ? 0.33 : 0.4), W * 0.78));
@@ -569,7 +383,7 @@ export function startGame(p: Platform): void {
   function schoolScreen(): void {
     const st = s.school;
     if (!st) return;
-    let y = backBar(st.mode === "lesson" ? "章首课 · 新街區開學" : "学堂 · 温故知新");
+    let y = backBar(ctx, st.mode === "lesson" ? "章首课 · 新街區開學" : "学堂 · 温故知新");
     const n = st.quiz.length;
     g.text(`第 ${Math.min(st.idx + 1, n)} / ${n} 题 · 啱咗 ${st.right}`, 16, y + 12, {
       size: 12,
@@ -711,7 +525,7 @@ export function startGame(p: Platform): void {
   }
 
   function chaptersScreen(): void {
-    let y = backBar("揀街区");
+    let y = backBar(ctx, "揀街区");
     const rh = Math.min(96, (H - y - 16) / CHAPTERS.length - 8);
     for (const ch of CHAPTERS) {
       const open = chapterUnlocked(ch.id, prof.cleared);
@@ -750,16 +564,9 @@ export function startGame(p: Platform): void {
     }
   }
 
-  function backBar(t: string): number {
-    g.text("‹ 返回", 16, top + 20, { size: 15, color: C.cyan });
-    g.region(8, top, 80, 32, "back");
-    g.text(t, W / 2, top + 20, { size: 17, weight: "bold", align: "center" });
-    return top + 44;
-  }
-
   const CODEX_PER_PAGE = 10;
   function codexScreen(): void {
-    let y = backBar("句子图鉴");
+    let y = backBar(ctx, "句子图鉴");
     g.text("点句子听示范 · 最佳声调分只计开口出牌", W / 2, y, {
       size: 12,
       color: C.dim,
@@ -812,7 +619,7 @@ export function startGame(p: Platform): void {
   }
 
   function npcsScreen(): void {
-    let y = backBar("街坊录");
+    let y = backBar(ctx, "街坊录");
     const list = Object.values(NPCS).filter((n) => !n.hidden);
     const rh = Math.min(104, (H - y - 20) / list.length - 8);
     for (const n of list) {
@@ -856,7 +663,7 @@ export function startGame(p: Platform): void {
   }
 
   function settingsScreen(): void {
-    let y = backBar("设置") + 6;
+    let y = backBar(ctx, "设置") + 6;
     const row = (label: string, sub: string, on: boolean, act: string) => {
       g.rr(16, y, W - 32, 62, 12, C.panel, C.line);
       g.text(label, 28, y + 26, { size: 15, weight: "bold" });
@@ -903,8 +710,8 @@ export function startGame(p: Platform): void {
   }
 
   function mapScreen(run: Run, t: number): void {
-    const y0 = hud(run);
-    title("揀路行街", y0 + 14, C.cyan);
+    const y0 = hud(ctx, run);
+    title(ctx, "揀路行街", y0 + 14, C.cyan);
     const areaTop = y0 + 40;
     const areaBot = H - 30;
     const rows = Math.max(...run.map.map((n) => n.row)) + 1;
@@ -1134,7 +941,7 @@ export function startGame(p: Platform): void {
       if (i === s.sel) return;
       const card = CARDS[id];
       const pv = cardPreview(run, card);
-      drawCard(id, hx0 + i * step, y + 10, cw, ch, {
+      drawCard(ctx, id, hx0 + i * step, y + 10, cw, ch, {
         poor: card.cost > c.energy,
         answers: pv.answers,
         eff: effectText(card, pv),
@@ -1146,7 +953,7 @@ export function startGame(p: Platform): void {
       const i = s.sel;
       const card = CARDS[c.hand[i]];
       const pv = cardPreview(run, card);
-      drawCard(c.hand[i], hx0 + i * step, y - 8, cw, ch, {
+      drawCard(ctx, c.hand[i], hx0 + i * step, y - 8, cw, ch, {
         sel: true,
         answers: pv.answers,
         eff: effectText(card, pv),
@@ -1209,9 +1016,9 @@ export function startGame(p: Platform): void {
   }
 
   function rewardScreen(run: Run): void {
-    let y = hud(run);
+    let y = hud(ctx, run);
     const c = run.combat;
-    title("街坊畀你讲服咗！", y + 16, C.amber);
+    title(ctx, "街坊畀你讲服咗！", y + 16, C.amber);
     y += 44;
     g.text(`$ +${s.rewardGold}   开口 ${c?.spoken ?? 0} 句   暴击 ${c?.crits ?? 0} 次`, W / 2, y, {
       size: 13,
@@ -1226,7 +1033,7 @@ export function startGame(p: Platform): void {
     }
     g.text("选一张句子卡加入卡组", W / 2, y, { size: 13, color: C.dim, align: "center" });
     y += 20;
-    y += cardGrid(s.reward, y + 6, "pick");
+    y += cardGrid(ctx, s.reward, y + 6, "pick");
     if (!s.adUsed && p.adAvailable("extraCard")) {
       g.button(
         16,
@@ -1245,12 +1052,12 @@ export function startGame(p: Platform): void {
   }
 
   function shopScreen(run: Run): void {
-    let y = hud(run);
-    title("士多 · 买句子，买密码", y + 16, C.amber);
+    let y = hud(ctx, run);
+    title(ctx, "士多 · 买句子，买密码", y + 16, C.amber);
     y += 34;
     const sh = s.shop;
     const left = sh.cards.filter((id) => !sh.bought.includes(id));
-    y += cardGrid(left, y, "buy", (id) => ({ price: CARDS[id].rarity === "rare" ? 45 : 25 }));
+    y += cardGrid(ctx, left, y, "buy", (id) => ({ price: CARDS[id].rarity === "rare" ? 45 : 25 }));
     if (sh.relic && !sh.bought.includes(sh.relic)) {
       const r = RELICS[sh.relic];
       g.rr(16, y, W - 32, 60, 12, "rgba(155,123,255,.1)", C.violet);
@@ -1300,14 +1107,14 @@ export function startGame(p: Platform): void {
         color: C.cyan,
         align: "center"
       });
-      y += 14 + cardGrid([...new Set(run.deck)], y + 16, "remove");
+      y += 14 + cardGrid(ctx, [...new Set(run.deck)], y + 16, "remove");
     }
     g.button(16, Math.min(H - 58, y + 8), W - 32, 46, "行出去", "leave", "", "ghost");
   }
 
   function restScreen(run: Run): void {
-    let y = hud(run);
-    title("糖水铺 · 坐低抖下", y + 16, C.ok);
+    let y = hud(ctx, run);
+    title(ctx, "糖水铺 · 坐低抖下", y + 16, C.ok);
     y += 34;
     g.button(16, y, W - 32, 54, "饮碗红豆沙", "heal", "", "ok", "耐心 +12");
     y += 72;
@@ -1321,18 +1128,18 @@ export function startGame(p: Platform): void {
       2
     );
     y += 30;
-    cardGrid([...new Set(run.deck)], y, "grad");
+    cardGrid(ctx, [...new Set(run.deck)], y, "grad");
   }
 
   function eventScreen(run: Run): void {
-    let y = hud(run);
+    let y = hud(ctx, run);
     const ev = EVENTS[s.event.idx] ?? EVENTS[0];
-    title(ev.title, y + 20, C.violet);
+    title(ctx, ev.title, y + 20, C.violet);
     y += 50;
     y += g.wrap(ev.text, 24, y, W - 48, 22, { size: 15 }, 5) + 12;
     if (ev.reward === "card" && s.event.card) {
       const cw = 110;
-      drawCard(s.event.card, (W - cw) / 2, y, cw, cw * 1.32, { act: "evCard" });
+      drawCard(ctx, s.event.card, (W - cw) / 2, y, cw, cw * 1.32, { act: "evCard" });
       y += cw * 1.32 + 20;
       g.button(16, y, W - 32, 46, "多谢，唔使喇", "leave", "", "ghost");
     } else {
@@ -1353,7 +1160,7 @@ export function startGame(p: Platform): void {
     const im = p.loadImage(assetPath(`street/${win ? "boss.png" : "auntie.png"}`));
     g.img(im, W / 2 - 90, top + 30, 180, 190, "bottom");
     let y = top + 262;
-    title(win ? "午市都搞掂！成条街都识你" : "耐心用晒……", y, win ? C.amber : C.pink);
+    title(ctx, win ? "午市都搞掂！成条街都识你" : "耐心用晒……", y, win ? C.amber : C.pink);
     y += 28;
     g.text(win ? "第一章完成。你用粤语说服咗成条街。" : "唔紧要，讲错先会进步。", W / 2, y, {
       size: 14,
@@ -1653,7 +1460,7 @@ export function startGame(p: Platform): void {
         break;
       case "talk":
         s.talk = { id, until: p.now() + 2600 };
-        hear(intentKey(id, 0));
+        hear(ctx, intentKey(id, 0));
         break;
       case "codex":
       case "npcs":
@@ -1665,7 +1472,7 @@ export function startGame(p: Platform): void {
         s.codexPage = Math.max(0, s.codexPage + Number(id));
         break;
       case "talkNpc":
-        if (NPCS[id]) hear(intentKey(id, 0));
+        if (NPCS[id]) hear(ctx, intentKey(id, 0));
         break;
       case "togListen":
         prof.settings.listen = !prof.settings.listen;
@@ -1701,18 +1508,18 @@ export function startGame(p: Platform): void {
         schoolJudge(false);
         break;
       case "schHear":
-        if (id) hear(cardKey(id));
+        if (id) hear(ctx, cardKey(id));
         break;
       case "schDone":
         finishSchool();
         break;
       case "hearCard":
-        hear(cardKey(id));
+        hear(ctx, cardKey(id));
         break;
       case "hearIntent":
         if (run?.combat) {
           s.revealed = true;
-          hear(intentKey(run.combat.npc, run.combat.intentIndex));
+          hear(ctx, intentKey(run.combat.npc, run.combat.intentIndex));
         }
         break;
       case "relic":
