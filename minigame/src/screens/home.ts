@@ -174,11 +174,18 @@ export function homeScreen(gc: GameCtx, t: number): void {
     gc.g.region(x, y, mw, 56, act);
   });
   y += 56 + 16;
-  if (y < gc.H - 16)
+  // 适龄提示前置（审核硬性要求：启动界面须可见 12+ 与提示语；后台填写内容需与此一致）
+  gc.g.rr(14, gc.H - 26, 34, 16, 4, undefined, C.amber, 1.5);
+  gc.g.text("12+", 31, gc.H - 14, { size: 11, weight: "bold", color: C.amber, align: "center" });
+  gc.g.text("本游戏适合 12 岁以上用户 · 注意健康游戏，适度娱乐", 56, gc.H - 14, {
+    size: 10,
+    color: C.dim
+  });
+  if (y < gc.H - 44)
     gc.g.text(
       "录音只喺本机分析，唔上传 · 声调分只睇音高走势",
       gc.W / 2,
-      Math.min(gc.H - 14, y + 4),
+      Math.min(gc.H - 44, y + 4),
       {
         size: 11,
         color: C.dim,
