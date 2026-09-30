@@ -1,3 +1,4 @@
+/** FROZEN(v0 交付物 · 2026-09-30)：web 线冻结——只修 bug 不重构不扩功能。范围与解冻条件见 docs/design-docs/web-freeze.md */
 import { ultimateEnabled } from "../core/bravo";
 import { buildEnabled, removalPrice, removalReason, upgradeReason } from "../core/buildcraft";
 import { BOSS_EVOLUTIONS } from "../core/content/encounters";

@@ -1,3 +1,4 @@
+/** FROZEN(v0)：web 线冻结，见 docs/design-docs/web-freeze.md */
 import "./style.css";
 import { BOSS_STEPS, bossLesson, bossPrompt, bossView } from "./boss";
 import { aidsView, branchView, rewardView } from "./branch-view";
