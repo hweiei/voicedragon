@@ -77,4 +77,6 @@ export interface GameCtx {
   top: number;
   /** 是否存在可续档的 run（game.ts 判定，屏侧只读） */
   hasSave(): boolean;
+  saveProf(): void;
+  saveRun(): void;
 }
