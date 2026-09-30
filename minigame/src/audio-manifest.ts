@@ -5,12 +5,22 @@
  */
 export const AUDIO_KEYS: ReadonlySet<string> = new Set<string>([
   "c-dangzan",
+  "c-doze",
+  "c-gaaifong",
   "c-geido",
+  "c-houmei",
   "c-loengwai",
+  "c-lokce",
+  "c-maaidaan",
+  "c-maanmaan",
   "c-mganjiu",
   "c-mgoi",
+  "c-mhouji",
+  "c-moumantai",
   "c-naaicaa",
   "c-peng",
+  "c-pinji",
+  "c-sengjat",
   "c-wonggok",
   "c-zaubing",
   "c-zousan"

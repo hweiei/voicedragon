@@ -12,14 +12,44 @@
       "sha256": "e0f1c8febb0a6511218edc647dab78a39aa12e3412ee88c7d6abbc9718d180a8"
     },
     {
+      "file": "c-doze.mp3",
+      "bytes": 6287,
+      "sha256": "b6f10944c9e4a4813c713279a201d33b31c9bd581708d8bc572a86996ef62537"
+    },
+    {
+      "file": "c-gaaifong.mp3",
+      "bytes": 11720,
+      "sha256": "47ac8ec6c422d117ad6978227ff865ccc4a03d1f9b9f8dc75ae052c74fdc055c"
+    },
+    {
       "file": "c-geido.mp3",
       "bytes": 6287,
       "sha256": "7a12da3b7ce4f61d81c5b3e8ebedb080a7c4ecd406aaea3eeaa522c15146405b"
     },
     {
+      "file": "c-houmei.mp3",
+      "bytes": 8795,
+      "sha256": "bc0f208f981e09613628d2fb57563c04d8a1368bc14c11edb8554a9139195f0a"
+    },
+    {
       "file": "c-loengwai.mp3",
       "bytes": 9422,
       "sha256": "21ae6619ede6de46bea02ebdc02f7c4f98e3c854839d72ef5cd9aecc81ac5b8c"
+    },
+    {
+      "file": "c-lokce.mp3",
+      "bytes": 12765,
+      "sha256": "d82b047b6f20897d58b4343ae6c7b2ba752a352d8fa1b68892c5492a473e83d0"
+    },
+    {
+      "file": "c-maaidaan.mp3",
+      "bytes": 9422,
+      "sha256": "378cf9fe7177dd093b3225a5b7d486230473f4caf7a3a92814ddb1602880f917"
+    },
+    {
+      "file": "c-maanmaan.mp3",
+      "bytes": 12347,
+      "sha256": "dda60ac258a38e0069a595de21e8f14f16ff5b46a0ec0479a450f2c4feefdedc"
     },
     {
       "file": "c-mganjiu.mp3",
@@ -32,6 +62,16 @@
       "sha256": "9f5969039618001c109e92ea4bc12bb887f1acc7034f37b0d650ffe887c4499c"
     },
     {
+      "file": "c-mhouji.mp3",
+      "bytes": 9004,
+      "sha256": "9799677b1d404885e4ae300a9e71789729e5d31264799d92b265940ec740d425"
+    },
+    {
+      "file": "c-moumantai.mp3",
+      "bytes": 7332,
+      "sha256": "70ee83a5bb5dbb5a3b38231aa5f18de2e4b5161c1288715b57ca00ec979353b1"
+    },
+    {
       "file": "c-naaicaa.mp3",
       "bytes": 14228,
       "sha256": "491983308bce9cb9dd4470f019a1b6c8cadca16341cd4a9bd64150bcaf4c7f32"
@@ -40,6 +80,16 @@
       "file": "c-peng.mp3",
       "bytes": 10467,
       "sha256": "5452280d754d71f94a4688f5893dbb88edb133b27a989dfd6a752fb058cb401c"
+    },
+    {
+      "file": "c-pinji.mp3",
+      "bytes": 10049,
+      "sha256": "6f5fd8c52f3671c919e136659e5a5bd0301778da9c311a9715a74c4cc1cf41f7"
+    },
+    {
+      "file": "c-sengjat.mp3",
+      "bytes": 10675,
+      "sha256": "76c7ade4f58d979bc050e777dcbe2053870b7692c919d33ff50e7efe85804d22"
     },
     {
       "file": "c-wonggok.mp3",
