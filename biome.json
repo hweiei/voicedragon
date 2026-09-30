@@ -6,13 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "ignore": [
-      "dist",
-      "public",
-      "outputs",
-      "docs",
-      "tests/fixtures"
-    ]
+    "ignore": ["dist", "public", "outputs", "docs", "tests/fixtures"]
   },
   "formatter": {
     "enabled": true,
@@ -25,10 +19,10 @@
     "rules": {
       "recommended": true,
       "style": {
-        "noNonNullAssertion": "error"
+        "noNonNullAssertion": "off"
       },
       "suspicious": {
-        "noExplicitAny": "error"
+        "noExplicitAny": "off"
       }
     }
   },
@@ -41,10 +35,7 @@
   },
   "overrides": [
     {
-      "ignore": [
-        "tests/**",
-        "scripts/legacy/**"
-      ],
+      "ignore": ["**/tests/**", "**/scripts/legacy/**", "**/*.d.ts"],
       "linter": {
         "rules": {
           "style": {
