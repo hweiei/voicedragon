@@ -115,8 +115,8 @@ function writeAudioManifest() {
   }
   manifestInfo = { sub, assetSub };
   const body = keys.length ? `[\n${keys.map((k) => `  "${k}"`).join(",\n")}\n]` : "[]";
-  const subBody = JSON.stringify(sub);
-  const assetBody = JSON.stringify(assetSub);
+  const subBody = JSON.stringify(sub, null, 2);
+  const assetBody = JSON.stringify(assetSub, null, 2);
   const src = `/**
  * 包内静态资源清单（构建时由 build.mjs 自动生成，勿手改）：
  * 示范音频 key：c-<卡牌id> / n-<街坊id>-<台词序号>；未列出的 key 播放时提示看粤拼跟读。

@@ -1,0 +1,223 @@
+{
+ "$comment": "harness 问题台账：状态 open|fixing|done|wontfix；发现即登记，修完翻状态，CI 校验 schema。",
+ "items": [
+  {
+   "id": "H-01",
+   "priority": "P0",
+   "title": "minigame game.ts 1765 行上帝闭包→按屏拆分",
+   "status": "open",
+   "files": [
+    "minigame/src/game.ts"
+   ],
+   "note": "阶段4.2"
+  },
+  {
+   "id": "H-02",
+   "priority": "P1",
+   "title": "web ui.ts openRosterPicker 1864 行",
+   "status": "wontfix",
+   "files": [
+    "src/ui/ui.ts"
+   ],
+   "note": "D1 冻结：FROZEN 声明替代重构(4.5)"
+  },
+  {
+   "id": "H-03",
+   "priority": "P1",
+   "title": "双 UI 重复出牌编排序列→street/session.ts",
+   "status": "open",
+   "files": [
+    "src/street/app.ts",
+    "minigame/src/game.ts"
+   ],
+   "note": "阶段4.1"
+  },
+  {
+   "id": "H-04",
+   "priority": "P2",
+   "title": "street/style.css 585 行克隆块",
+   "status": "open",
+   "files": [
+    "src/street/style.css"
+   ],
+   "note": "阶段4.4"
+  },
+  {
+   "id": "H-05",
+   "priority": "P0",
+   "title": "CI 不覆盖活跃分支且无 minigame job",
+   "status": "open",
+   "files": [
+    ".github/workflows/ci.yml"
+   ],
+   "note": "阶段3.1"
+  },
+  {
+   "id": "H-06",
+   "priority": "P1",
+   "title": "无本地一键门禁",
+   "status": "fixing",
+   "files": [
+    "package.json"
+   ],
+   "note": "gate 脚本已加；hook 样例阶段3.2"
+  },
+  {
+   "id": "H-07",
+   "priority": "P1",
+   "title": "质量规则松(any/! 关闭、复杂度无)",
+   "status": "open",
+   "files": [
+    "biome.json"
+   ],
+   "note": "阶段3.3"
+  },
+  {
+   "id": "H-08",
+   "priority": "P1",
+   "title": "platform-wx 0 单测、内容表覆盖不齐",
+   "status": "open",
+   "files": [
+    "tests/"
+   ],
+   "note": "阶段5.2"
+  },
+  {
+   "id": "H-09",
+   "priority": "P2",
+   "title": "音频/美术完整性无门禁",
+   "status": "open",
+   "files": [
+    "minigame/build.mjs"
+   ],
+   "note": "阶段5.4"
+  },
+  {
+   "id": "H-10",
+   "priority": "P0",
+   "title": "AGENTS.md 失真(只写 web 线)",
+   "status": "done",
+   "files": [
+    "AGENTS.md"
+   ],
+   "note": "阶段2.2 重写66行"
+  },
+  {
+   "id": "H-11",
+   "priority": "P1",
+   "title": "docs 无分层无状态头",
+   "status": "done",
+   "files": [
+    "docs/"
+   ],
+   "note": "阶段2.1"
+  },
+  {
+   "id": "H-12",
+   "priority": "P1",
+   "title": "口传知识未入库",
+   "status": "done",
+   "files": [
+    "docs/references/"
+   ],
+   "note": "阶段2.4 五份"
+  },
+  {
+   "id": "H-13",
+   "priority": "P2",
+   "title": "缺 ARCHITECTURE.md",
+   "status": "done",
+   "files": [
+    "docs/ARCHITECTURE.md"
+   ],
+   "note": "阶段2.3"
+  },
+  {
+   "id": "H-14",
+   "priority": "P1",
+   "title": "web innerHTML 无围栏",
+   "status": "open",
+   "files": [
+    "src/ui/"
+   ],
+   "note": "阶段4.5 xss.ts 白名单"
+  },
+  {
+   "id": "H-15",
+   "priority": "P2",
+   "title": "无 CSP/SRI",
+   "status": "wontfix",
+   "files": [],
+   "note": "PWA 冻结线；风险记录在案"
+  },
+  {
+   "id": "H-16",
+   "priority": "P1",
+   "title": "小游戏无包体/帧预算门禁",
+   "status": "open",
+   "files": [
+    "minigame/build.mjs"
+   ],
+   "note": "阶段3.6 bundle/perf-wx"
+  },
+  {
+   "id": "H-17",
+   "priority": "P2",
+   "title": "PNG 未压缩、playwright 拖大安装",
+   "status": "open",
+   "files": [
+    "public/street/"
+   ],
+   "note": "阶段5 顺带 optipng"
+  },
+  {
+   "id": "H-18",
+   "priority": "P2",
+   "title": "孤儿目录卫生检查缺失",
+   "status": "open",
+   "files": [],
+   "note": "阶段3.5 hygiene"
+  },
+  {
+   "id": "H-19",
+   "priority": "P2",
+   "title": "scripts 无索引、历史一次性脚本混杂",
+   "status": "done",
+   "files": [
+    "scripts/legacy/",
+    "package.json"
+   ],
+   "note": "阶段2.5"
+  },
+  {
+   "id": "H-20",
+   "priority": "P0",
+   "title": "缺执行计划-验收骨架",
+   "status": "done",
+   "files": [
+    "docs/exec-plans/active/HARNESS-PLAN.md"
+   ],
+   "note": "本计划本身"
+  },
+  {
+   "id": "H-21",
+   "priority": "P1",
+   "title": "[bugfix] audio-manifest 生成文件不合 biome 格式(构建产物逃逸门禁)",
+   "status": "done",
+   "files": [
+    "minigame/build.mjs"
+   ],
+   "note": "根因: JSON.stringify 单行超长; 修: pretty-print"
+  },
+  {
+   "id": "H-22",
+   "priority": "P1",
+   "title": "[bugfix] platform-wx 分包回调 assign-in-expression 触发 lint 错",
+   "status": "done",
+   "files": [
+    "minigame/src/platform-wx.ts"
+   ],
+   "note": "箭头表达式赋值改块体"
+  }
+ ]
+}

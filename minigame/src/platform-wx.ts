@@ -105,7 +105,9 @@ export function createWxPlatform(): Platform {
         if (m && !subReady.has(m[1])) {
           // 分包资源：等 loadSubpackage 完成再赋 src，失败则下次重画时重试
           loadSub(m[1]).then(
-            () => (im.src = path),
+            () => {
+              im.src = path;
+            },
             () => images.delete(path)
           );
         } else im.src = path;
