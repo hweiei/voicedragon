@@ -1,167 +1,66 @@
-# AGENTS.md · AI 协作工作流（本仓库）
+# AGENTS.md · 声震龙楼仓库地图（给智能体的目录，不是百科）
 
-> 面向 AI 编码代理的项目守则。人类开发者同样可读。
-> 本仓库是《声震龙楼》——粤语语音驱动的爬塔 Roguelike（Vite + TS strict + PWA，零后端）。
+> 100 行原则：本文件只回答「东西在哪、怎么跑、什么不能碰」；细节一律跳链到 `docs/` 分层。
+> 与代码不符即为 bug：发现漂移请更新本文件（同 PR 内）。
 
-## 0. 代码理解：先用 codegraph，别上来就全仓 grep
+## 1. 两条产品线（一图）
 
-仓库已接入 [@colbymchenry/codegraph](https://github.com/colbymchenry/codegraph)（本地代码知识图谱，100% 离线，无遥测）。
-任何"这个符号在哪 / 谁调用了它 / 改它会影响谁 / 这个任务涉及哪些模块"的问题，
-**先查图再读码**，把读文件留给真正需要逐行细节的时刻：
-
-```bash
-npm i                      # node_modules 不在快照内，新会话先装依赖（含 codegraph）
-npm run codegraph          # 首次/索引缺失时重建（本仓库通常 <1s）
-npm run codegraph:sync     # 代码改动后增量同步
-
-npx codegraph query <符号名>          # 定位符号
-npx codegraph node <符号名>           # 单符号源码 + 调用/被调用链
-npx codegraph callers <符号名>        # 谁调用了它
-npx codegraph impact <符号名>         # 改动影响面分析（重构前必查）
-npx codegraph context <任务描述…>     # 任务级上下文聚合（开工前跑一次）
-npx codegraph explore <问题…>         # 区域探索：相关符号源码 + 调用路径
+```
+src/core|ui|beginner|adapters   ← Web/PWA 爬塔版（已冻结：只修 bug，不重构不加料）
+src/street/**                    ← 「街坊卡牌」共享领域层（纯 TS：引擎/内容表/画像/模拟）
+minigame/                        ← 微信小游戏版（活跃主线）：canvas 渲染 + 独立构建分包
 ```
 
-索引存于 `.codegraph/`（已被其自带 .gitignore 排除，勿提交）。
-大改一批文件后记得 `npm run codegraph:sync` 保持图新鲜。
+- 依赖方向铁律（CI 机械校验，清单在 `docs/harness/deps-allowlist.json`）：
+  `minigame → src/street`；`src/street` 不得 import web 层；`src/street/content/chN.ts` 是纯数据表。
+- Web 线详细冻结声明：`docs/design-docs/web-freeze.md`（阶段4落地后存在）。
 
-## 1. 架构纪律（六边形 / 端口-适配器）
-
-- `src/core/` 是**纯领域内核**：零 DOM、零 IO、零随机（mulberry32 种子显式传递）。
-  任何 PR 若触碰内核签名，必须先说明理由；特效/演出层（`src/ui/`）**只消费**
-  `engine.emit` 事件，不反向写入。
-- `src/adapters/` 是端口实现（audio/tts/voice/storage/platform）。
-- `src/ui/` 渲染与演出：模板字符串直渲 + `src/ui/fx/` 演出编排（FxDirector）。
-- 设计决策的单一事实源：`docs/docs/exec-plans/completed/REDESIGN-PLAN.md`（P0–P5 历史）与
-  `docs/docs/exec-plans/completed/FX-UPGRADE-PLAN.md`（P6 三期完成）及 `docs/docs/exec-plans/completed/CONTENT-EXPANSION-PLAN.md`（P7 三幕深耕）与 `docs/docs/exec-plans/completed/BUILDCRAFT-PLAN.md`（P8-A 构筑成型）、`docs/docs/exec-plans/completed/ENCOUNTER-EVOLUTION-PLAN.md`（P8-B 对手进化）、`docs/docs/exec-plans/completed/VOICE-MASTERY-PLAN.md`（P8-C 语音深化）、`docs/docs/exec-plans/completed/LEARNING-LOOP-PLAN.md`（P8-D 学习闭环）、`docs/docs/exec-plans/completed/RELEASE-READINESS-PLAN.md`（P8-E 发布与设备验收）与
-  `docs/docs/exec-plans/completed/COUNTER-ATTACK-PLAN.md`（P9 守势反击）、`docs/docs/exec-plans/completed/GROWTH-PLAN.md`（P10–P15 丰富度总路线）与
-  `docs/docs/exec-plans/completed/ROSTER-PLAN.md`（P10 名伶登场）、`docs/docs/exec-plans/completed/ULTIMATE-PLAN.md`（P11 声动九霄）、
-  `docs/docs/exec-plans/completed/P12-CHALLENGE-PLAN.md`（P12 切磋码）、`docs/docs/exec-plans/completed/P13-WORDBOOK-PLAN.md`（P13 词林拾遗）、
-  `docs/docs/exec-plans/completed/P14-REFINE-PLAN.md`（P14 声之细织）、`docs/docs/exec-plans/completed/P15-FORGE-PLAN.md`（P15 铸剑炉）与
-  `docs/docs/exec-plans/completed/P16-LEARN-FAST-PLAN.md`（P16 乐学快打·学习体验调优）与
-  `docs/docs/exec-plans/completed/P17-LEXICON-PLAN.md`（P17 词海·内容大扩容）。
-- 内容兼容：缺失 `ruleset` 的旧局按 legacy；P7 新内容只经 `skillsFor/eventsFor/itemsFor` 进入对应新局。
-  不直接修改基础内容表或用扩展池替换基础池。新增参数须审查组合根包装器是否完整转发。
-- 构筑独立版本 `buildVersion:1` 仅用于新战役；缺失时保留旧玩法。升级按 `upgradedSlots` 记录具体牌组槽位，
-  不改原 skillId；删牌必须重映射槽位；P8 施法必须从 UI/模拟器传入 deckIndex，不能按同名技能猜副本。
-
-- 对手独立版本 `encounterVersion:1` 仅用于p7新战役；与build版本分离。第五个startCampaign参数必须经组合根完整转发。
-  Boss半血只标记pending，本回合旧意图结算后才提交阶段；不能中途换招/锁血/重放读档切换。阶段pattern必须克隆。
-  预测与实际受击共用纯规则，龙鳞逐段触发，穿甲不耗甲、不补甲；新平衡只改P8-B曲线。
-- P8-C 音节诊断只解释已有调准结果，不能改 DTW 分数或战斗权重。`detectedTones` 只在异调斜率与距离优势均显著时报告；
-  Web Speech / QTE 不伪造 F0 结论。SRS 沿用 v1 键并补齐 `toneMastery`，只存分数聚合，禁止持久化录音或 F0 帧。
-- P8-D 日历历史只保留最多 90 个练习日的分数聚合和不同技能 ID；每日目标按 3 个不同短句计数，连续天数不提供战斗加成。
-  学习档案固定 `kind: voice-tower-learning` / `version: 1`，严格白名单、上限 1 MiB；导入须预览后二次确认并覆盖恢复，不盲目累加聚合数据。
-- P8-E 发布必须同时通过默认相对 base 与 GitHub Pages `/voicedragon/` 产物契约；CSP 变更须保留同源 Worker、Blob AudioWorklet/WASM 与 Hugging Face CDN 下载。
-  Playwright WebKit 模拟不等于 Safari 真机；离线模拟器限制必须明确 skip 并留在 `docs/docs/exec-plans/completed/DEVICE-TEST-MATRIX.md`，不得写成已通过。
-- P9 反击独立版本 `counterVersion:1` 仅用于新战役；与 build/encounter 版本分离。startCampaign 第六参数必须经组合根完整转发。
-  反击卡只经 `skillsFor(act,"p7",1)` 进入卡池；Skill.counter 是数据化字段，旧内容缺省无。
-  还击纯规则在 `src/core/counter.ts`，预测与实际结算共用；穿甲不触发不消耗、无伤害回合保留姿态、guardAttack 先得甲再吃还击。
-  还击结算次序：敌方行动完全结算后、层甲词缀与状态递减前；可击杀、可跨 Boss 半血（同回合提交二阶段）。
-  新平衡只调 P9 自有参数（技能威力/ratio/Bot 估值），不改 P8-B 曲线；`npm run sim:p9` 独立分报。
-- P10 名伶独立版本 `rosterVersion:1` 仅用于新战役；与 build/encounter/counter 版本分离。startCampaign 新首选
-  `CampaignConfig` 参数对象（旧位置签名等价转发，加参数一律走 config 不再加位置参数）；组合根归一化两种形态。
-  角色被动纯规则在 `src/core/roster.ts`，一次性标记存 `combat.passives`（回合标记 endTurn 重置）；
-  签名技只经 `skillsFor(act,"p7",counter,character)` 进对应角色池。花旦被动依赖 toneScore（无声通道诚实不触发）；
-  丑生被动仅 QTE 通道。新战役 UI 入口先弹名伶选择（E2E 走 UI 入口需补选角步骤）。
-  新平衡只调角色自有参数（牌组/被动阈值/签名技），`npm run sim:p10` 独立分报（花旦=牌组下限、丑生=qte 乐观界，报告如实标注）。
-- P11 绝技独立版本 `ultimateVersion:1` 仅用于新战役（ruleset "p7"）；与 roster 版本分离，config 参数对象直通。
-  彩规则看**裸分**（≥85 蓄/<65 断/其间保持，封顶 3，每场绝技一次）；纯规则 `src/core/bravo.ts` 预测与结算共用。
-  绝技句在 `src/core/content/ultimates.ts`，只进 ALL_SKILLS（图鉴/练习场/SRS），**不进任何 skillsFor 卡池**。
-  sim Bot 发动绝技被守卫拒绝时必须回落出牌（否则 once-per-battle 死循环）。`npm run sim:p11` 独立分报。
-- P12 切磋码独立版本 `challengeVersion:1` 只出现在经码开局的局；`GameState.duel` 记录码身份（码/哈希/模式/幕/种子），
-  旧局无此字段 = 零漂移。编解码与校验全部在 `src/core/challenge.ts` 纯函数：**拒绝路径不抛异常、不改状态**，
-  版本束不支持（`unsupported`）或内容世代重算不符（`mismatch`）一律 `ok:false`，UI 明确拒绝，**不静默降级**。
-  码内白名单只含 幕/种子/规则集/版本束/角色/日期键/词缀/自适应加成——不含昵称、时间与设备信息。
-  切磋局不读本机自适应节律：难度随码内 `adaptiveBoost`（百分点整数，缺省 0），保证同码同难；
-  幕间续行摘掉 `duel`（码只约定它写明的那一幕）。战绩簿 `voice-tower-challenge-v1` 只存本机同码最佳（上限 50），
-  无云端、无排行榜；起手路径（startCampaign/startEndless/startDaily/startNew）语义逐位不变。
-- P13 词林力量化独立版本 `masteryPowerVersion:1` 仅用于 p7 新局（`masteryEnabled` 同时校验规则集），legacy/未开启一律零接触。
-  定案是**判定保底**（不是加威力）：`skillMasteryView` 三档判定（tier1 每音节 ≥2 次且均分 ≥80；tier2 ≥3 次且 ≥92），
-  `masteryJudgeScore` 只抬「取档位用的分数」到不低于 65，**保底值一律 < 正音线 85**（词林不制造正音；裸分/彩/统计逐位不变），
-  加成来源经 `masteryProvider` 注入（组合根读本地 SRS；音节数不符按 0），引擎内核零 IO；`engine.masterySaves` 只是仿真仪表。
-  逐音节聚合存 `SrsStore.syllables`（整数），只经 `accumulateSyllableMastery` 写入；听辨走独立通道：
-  `recordListeningAttempt` 只累计 listening 计数，`enqueueListeningMiss` 只进错词本、**不动**发音统计。
-  听音题池 `quizPoolFor(ruleset, voiceAvailable)` 三态（legacy 18 / p7 有粤语音色 48 / 无音色 18 并如实报跳过），
-  播放只在用户点按时发生（`canSpeakCantonese` 探针，无音色禁用并说明）。词林奖励（点数/称号/主题）不含战斗字段（契约白名单锁定）。
-  `npm run sim:p13` 独立分报，掌握关行须与 P11 基线逐位一致。
-- P14 端侧自动断句：端点策略在 `src/core/endpoint.ts`（纯函数：32ms 窗 / 400ms 开口 / 300ms 收口），
-  worker 只喂 VAD 结果并按事件 flush；`autoCapture=false` 时 worker **不构造策略**（关闭 = 逐位等价旧行为），
-  8 秒兜底（`VOICE_CAPTURE_MAX_MS`）保留为最终防线。时延只在**策略级**量（CI 无麦克风），端到端须真机复核。
-- P14 自适应难度 2.0：`src/core/difficulty.ts` 纯规则（Elo 式在线更新、±15% 钳制、按 经典/无尽/幕1..3 分开记账）。
-  采样点在**建局**（`createRunState(seed, {campaign,act}|{endless})`），续行换幕重采样；每日与切磋局仍钉 0 / 取码内值。
-  `AdaptiveProvider` 带可选上下文（零参实现仍合法）；`profile.stats.adaptiveStreak` 仅存档兼容、不再驱动难度。
-  难度数据只存 `voice-tower-difficulty-v1`（评级 + 胜负计数），契约白名单锁定；文案一律称「本地启发式」，不许叫 ML。
-- P15 铸剑炉内容独立版本 `forgeVersion:1` 仅用于 p7 新局：事件 26→38、问答 +30 文化题只经
-  `eventsFor/quizPoolFor` 第三参进入；**六件流派遗物不入任何随机抽取池**（防池稀释定案），
-  在锻造局首胜按（角色×幕）槽位确定性授予一件（`finishCombatVictory`，`forgeRelicGranted` 一局一件）。
-  遗物 `school` 为展示字段不参与判定；「每场一次」钩子走 `combat.forgeUsed`。切磋码版本束增列 `forge`（字段 `f`），
-  旧码无此字段 = 旧内容池逐位同局（零破坏）。属性测试（fast-check，dev-only）与视觉回归（Playwright 截图门）只加门不放宽旧门。
-- P16 乐学快打（学习体验优先的 Owner 调参，见 `docs/docs/exec-plans/completed/P16-LEARN-FAST-PLAN.md`）：档位倍率入门 0.88 / 未稳 0.62
-  （只减少低分档惩罚，正音/清晰档不变）；敌人基础血量按幕调（幕1–2 小怪 −20%、幕3 −10%、各幕精英 −10%、Boss 不动）；
-  凤冠花旦「水袖回风」叠甲 12→2（叠甲×沉默曾构成磨甲死锁，真实玩家同样受困）。
-  **平衡门换带**：基线三幕贪心胜率 55–75%（旧 45–65），变体门（p7/构筑/进化/反击/名伶/绝技/词林/锻造）55–85%，
-  基线快照 `BASELINE_WINS` 已按 P16 数值回填；仿真单场安全阀 60→90 回合（真实游戏无回合上限，阀门只抓死锁）。
-  新短句只进 `EXPANSION_SKILLS`（基础表只读红线不变），题库 8→16、问答节点每图 3–4；
-  档位浮字（正音！/清晰/入门/未稳）在 `src/ui/fx/plans.ts` 纯计划层（`tierFloaterFor`），不新增演出系统。
-  调参必先 `npm run sim` 对表 `docs/docs/exec-plans/completed/BALANCE-REPORT.md`，禁止凭直觉改。
-- P17 词海内容独立版本 `lexiconVersion:1` 仅用于 p7 新局：+220 短句只经 `skillsFor` 第五参、
-  +80 问答只经 `quizPoolFor` 第四参进入；数据全部在 `src/core/content/p17/`（基础表/EXPANSION 只读）。
-  切磋码版本束增列 `lexicon`（字段 `l`，PAYLOAD_KEYS 白名单登记；旧码无字段 = 旧池逐位同局）。
-  全库 269 卡 / 266 句 / 156 题，唯一汉字 370（指标口径以句/题为主，见方案 §0 目标修正）。
-  基线零漂移由 `tests/sim/p17-balance.test.ts` 直接锁定（不带 lexicon 的 wins=[191,202,215]）。
-  粤拼 LSHK 方案人工编写，**待母语审校**；修正只改 p17/ 数据文件，契约自动跟随。
-  顺手修复：`challengeFromRun` 现随码携带 forge（P15 缺口：锻造局发码曾丢 f 字段）。
-- P17-F2 奖励保底新句：词海局（lexiconVersion=1）奖励三选一经 `rewardSkillChoices` 保底 1 张
-  本局未学过的词海句（`freshLexiconSkills` 纯规则、中位放置、rng 走引擎 = 同种子同奖励）；
-  非词海局/词海句耗尽走原路径**逐位不变**。改奖励逻辑勿绕过此方法。
-
-## 2. 黄金契约与确定性
-
-- 引擎行为由 `tests/contract/` 十六个黄金契约测试文件锁定：**改行为先改契约并获得确认**。
-- 同一规则版本下 (act, seed) 必须同一局；特效随机走独立种子流，禁止消费游戏 `rngState`。
-
-## 3. 质量门（每次提交前全绿）
+## 2. 怎么跑（全部从仓库根）
 
 ```bash
-npx biome check .          # 风格（或 npm run check:fix）
-npx tsc --noEmit           # 严格类型
-npx vitest run             # 单测+契约+仿真+属性测试（现 588 条，含 P17 词海契约门/平衡门/奖励保底门）
-npx vite build && npx vite-node scripts/perf-budget.ts   # 首包 ≤350KB gzip（现 106.4）
-npx vite-node scripts/release-readiness.ts               # dist PWA/路径/安全头 44 项契约
-npm run sim:p8b           # 对手进化参考门45–65%、零超时；随机Bot异常须如实记录
-npm run sim:p9            # 守势反击门45–65%、零超时、每幕 counterHits>0
-npm run sim:p10           # 名伶门：每角色三幕45–65%、零超时
-npm run sim:p11           # 绝技门：默认行=P10 基线逐位、高声韵行 ultimateCasts>0、零超时
-npm run sim:p13           # 词林门：三档×三角色×三幕 45–65%、掌握关行=P11 基线逐位（须 300 局，120 局噪声误报）
-# P14 无独立平衡仿真（不改曲线）；端点时延报表走 npx vitest run tests/sim/p14-latency.test.ts
-npm run sim:p15           # 铸剑炉门：锻造行三角色×三幕 45–65%、零超时；基线行=P11 基线逐位；事件 12/12 遗物 6/6 入局
-npm run test:visual       # 视觉回归门：4 屏×2 视口×reduce-motion 开/关 = 16 基线（仅 Chromium；更新须人工过目）
-npm run sim:p8            # 构筑版独立仿真（含真实升级/删牌计数）
-npm run sim:p7            # 扩展版独立平衡报表（基础版仍用 npm run sim）
-npx playwright install --with-deps chromium firefox webkit  # 新环境一次性安装
-npx playwright test        # Chromium 业务 E2E（现 55 条）
-npm run test:release      # Chromium/Firefox/WebKit 发布矩阵（现 19 通过、1 明确跳过）
-npm run test:lighthouse   # 移动端+桌面四类分数及 LCP/TBT/CLS 硬预算
-npm run release:check      # 提交发布前串行执行全部门（需先安装三种 Playwright 浏览器）；P9 起每期另跑期次仿真（sim:p9 / sim:p10 / sim:p11 / sim:p13）
+npm ci                        # node_modules 不进快照，新环境先装
+npm run gate                  # 全量门禁：lint + typecheck + 测试 + 两个 build + harness 检查
+npm run minigame:preview      # 构建并起 http 预览（端口 4190，含 /audio-check.html 试听页）
+node minigame/build.mjs --web # 只构建小游戏（dist=提审包，preview=浏览器预览）
+npx vitest run                # 单测（tests/**，含 street 六章内容表校验与 sim 平衡带）
 ```
 
-## 4. 不可触碰的红线
+沙箱被重置后的修复链见 `docs/references/sandbox-repair.md`。
 
-- **性能预算**：首包游戏本体 JS ≤ 350 KB gzip，perf-budget 一票否决；新依赖先报体积。
-- **资产边界**：界面与特效仍程序化生成；P21 为完成用户指定的粤语语音教学，允许内置用户试听选声后生成的首章 MP3。须保留来源/哈希清单、标注合成与待母语审校、纳入离线与解码测试。此例外不授权随意引入其他大型素材。
-- **隐私**：新手塔录音/存档不出设备，不引遥测；原版 Web Speech 可能使用浏览器在线识别服务，不可宣称所有引擎均离线。codegraph 已关 telemetry。
-- **无障碍**：所有动效必须尊重 `body.reduce-motion`（降级而非消失：信息保留、动效归零）。
-- **自动播放合规**：AudioContext 只能在首次用户手势后创建/恢复。
+## 3. 关键位置
 
-## 5. 提交规范
+| 要改什么 | 去哪 |
+|---|---|
+| 加/改句子卡、街坊、事件、遗物 | `src/street/content/chN.ts`（每章一文件）+ `src/street/types.ts` Tag + `src/street/data.ts` 合并 + `chapters.ts` 登记 |
+| 战斗/意图/遗物数值规则 | `src/street/engine.ts`（纯函数，web 与小游戏共用，改前跑 `tests/street-*`） |
+| 小游戏屏幕渲染与交互 | `minigame/src/game.ts`（阶段4将按屏拆分至 `minigame/src/screens/`） |
+| 平台 API（录音/广告/存储/分包） | `minigame/src/platform-wx.ts`；浏览器对应 `platform-web.ts` |
+| 音频资产 | `minigame/assets/audio/street/<key>.mp3`；key=`c-<卡id>`/`n-<街坊id>-<i>`；SOP 见 `docs/references/tts-pipeline.md` |
+| 立绘/背景 | `public/street/*.png`、`public/street/bg/*.jpg`（Q版手绘风格基线） |
+| 数值平衡 | `src/street/sim.ts` + `tests/street-sim.test.ts` 胜率带断言，流程 `docs/design-docs/balance.md` |
+| 上线/合规/提审 | `docs/design-docs/V1-RELEASE.md`；政策结论 `docs/references/wx-compliance.md` |
 
-- 中文 conventional 风格：`P6-F2 xxx：要点`（期号-里程碑 + 冒号 + 摘要），正文列模块与测试数字。
-- 提交信息里带上测试与预算结果（如 `174 单测全绿，预算 61.0/350 KB`）。
-- 凭据永不入库、不进提交信息；CI 密钥走 GitHub Secrets。
+## 4. 硬性不变量（有 CI 门禁拦截，红叉别看心情）
 
-## P21 完整首章发布增补
-- v0.3.0：内置10段合成粤语音频；终层3轮对话；学习手账备份确认恢复。
-- `release:check` 包含视觉矩阵；P8-B 独立脚本采用已存在的P16/P17测试契约55–85%，不另改平衡。
-- 战斗截图从页面顶部以fullPage捕捉，等待toast消失，避免地图滚动锚定造成截取偏移。
-- Pages仅在main的ci成功后或管理员手动触发时部署，所检出SHA必须与成功CI一致；Git SSH授权不等于Pages管理员授权。
+1. **微信主包 ≤ 4096KB**（第 3 章起资源自动进 `resN/` 分包；分包清单注入 game.json，勿手改）。
+2. **行为回归**：改动战斗/UI 后必须过 `tests/` 全绿 + 手测清单 `docs/HARNESS-PLAN §6`（迁移中，最终在 exec-plans 路径）。
+3. **单文件 ≤ 800 行**（存量豁免见 `docs/harness/baseline.json`，只减不增）。
+4. **内容表完整性**：jp 字段只允许小写字母数字空格；新章必须过 `tests/street-chN.test.ts` 五件套（参照 ch6）。
+5. **不碰**：`minigame/src/audio-manifest.ts`（构建生成物）、`dist/`、`preview/`、`docs/generated/`。
+6. **commit**：小粒度、带 H 编号前缀（harness 期间）、message 写「验证:」行。
+
+## 5. 代码理解
+
+仓库已配 codegraph（离线代码图谱）：`npm run codegraph` 建图，
+`npx codegraph query|node|callers|impact|context` 先查图再读码。
+
+## 6. 文档地图（记录系统）
+
+- `docs/exec-plans/active/` —— 进行中的执行计划（当前：HARNESS-PLAN.md，五阶段）
+- `docs/exec-plans/completed/` —— 历史计划归档（web 线 P 系列全部在此，status: done）
+- `docs/design-docs/` —— 现行设计：路线图 minigame-roadmap.md、提审 V1-RELEASE.md
+- `docs/references/` —— 口传知识落库：TTS 切分 SOP、微信合规、真机测试、沙箱修复
+- `docs/harness/` —— 改造台账：SCAN-REPORT.md（20 项问题）、registry.json、baseline.json
+- `docs/ARCHITECTURE.md` —— 依赖方向与目录职责的正式版
+
+新会话第一读：本文件 → `docs/exec-plans/active/HARNESS-PLAN.md`（看当前阶段）→ 相应 docs 深链。

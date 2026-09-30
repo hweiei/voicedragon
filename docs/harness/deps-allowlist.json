@@ -1,0 +1,13 @@
+{
+  "$comment": "docs/ARCHITECTURE.md §2 的机器版；改边先改本表+文档，同 PR。from 目录的 import 解析到仓库相对路径后，必须以 allow 前缀之一开头；相对导入以解析结果为准。tests/ 与 scripts/ 全放行。",
+  "rules": {
+    "minigame/src": ["src/street/", "src/adapters/voice/", "src/core/tone", "minigame/"],
+    "minigame": ["minigame/", "src/street/"],
+    "src/street": ["src/street/"],
+    "src/core": ["src/core/"],
+    "src/ui": ["src/ui/", "src/core/", "src/adapters/"],
+    "src/beginner": ["src/beginner/", "src/core/", "src/ui/", "src/adapters/"],
+    "src/adapters": ["src/adapters/", "src/core/"]
+  },
+  "skipDirs": ["node_modules", "dist", "preview", "tests", "scripts", "docs", "public", ".github"]
+}
