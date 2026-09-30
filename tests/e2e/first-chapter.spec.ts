@@ -65,7 +65,9 @@ test("十段粤语音频均可解码，正常与慢速播放无需系统音色",
   }
   await page.locator('[data-action="slow"]').click();
   // CI 环境无音频资产时走离线 fallback，两态均为正确行为
-  await expect(page.locator("#notice")).toContainText(/正在播放内置粤语合成示范|示范音频暂时无法播放/);
+  await expect(page.locator("#notice")).toContainText(
+    /正在播放内置粤语合成示范|示范音频暂时无法播放/
+  );
 });
 
 test("示范加载失败给出可操作提示，不假装播放成功", async ({ page }) => {
@@ -88,7 +90,9 @@ test("三轮老板对话可中途恢复，混合阅读不计完整录音", async
   await expect(page.locator(".boss-rounds .current")).toContainText("礼貌回应");
   await page.locator('[data-action="npc-listen"]').click();
   // CI 环境无音频资产时走离线 fallback，两态均为正确行为
-  await expect(page.locator("#notice")).toContainText(/正在播放内置粤语合成示范|示范音频暂时无法播放/);
+  await expect(page.locator("#notice")).toContainText(
+    /正在播放内置粤语合成示范|示范音频暂时无法播放/
+  );
   await page.locator('[data-answer="2"]').click();
   await page.locator('[data-action="next"]').click();
   await expect(page.locator(".summary")).toBeVisible();

@@ -102,7 +102,9 @@ test("没有系统粤语声音时仍播放内置粤语示范", async ({ page }) 
   await page.goto("/?mode=beginner");
   await page.locator('[data-action="listen"]').click();
   // CI 环境无音频资产时走离线 fallback，两态均为正确行为
-  await expect(page.locator("#notice")).toContainText(/正在播放内置粤语合成示范|示范音频暂时无法播放/);
+  await expect(page.locator("#notice")).toContainText(
+    /正在播放内置粤语合成示范|示范音频暂时无法播放/
+  );
   expect(errors).toEqual([]);
 });
 

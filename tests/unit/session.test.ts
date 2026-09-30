@@ -1,7 +1,7 @@
 /** src/street/session.ts 编排单测：成功/失败/胜利三路 + boss/普通两路结算 */
 import { describe, expect, it, vi } from "vitest";
-import { playBeat, winBeat } from "../../src/street/session";
 import type { Run } from "../../src/street/engine";
+import { playBeat, winBeat } from "../../src/street/session";
 
 function fakeRun(patch: Partial<Run> = {}): Run {
   return {
