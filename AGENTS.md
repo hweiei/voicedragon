@@ -38,7 +38,7 @@ npx vitest run                # 单测（tests/**，含 street 六章内容表�
 | 音频资产 | `minigame/assets/audio/street/<key>.mp3`；key=`c-<卡id>`/`n-<街坊id>-<i>`；SOP 见 `docs/references/tts-pipeline.md` |
 | 立绘/背景 | `public/street/*.png`、`public/street/bg/*.jpg`（Q版手绘风格基线） |
 | 数值平衡 | `src/street/sim.ts` + `tests/street-sim.test.ts` 胜率带断言，流程 `docs/design-docs/balance.md` |
-| 上线/合规/提审 | `docs/design-docs/V1-RELEASE.md`；后台填写速查 `docs/references/submission-cheatsheet.md`；政策结论 `docs/references/wx-compliance.md` |
+| 上线/合规/提审 | `docs/design-docs/V1-RELEASE.md`；后台速查 `docs/references/submission-cheatsheet.md`；备案报告草稿 `docs/references/filing-selfcheck.md`；变现冷启动 `docs/references/growth-coldstart.md`；政策结论 `docs/references/wx-compliance.md` |
 
 ## 4. 硬性不变量（有 CI 门禁拦截，红叉别看心情）
 
